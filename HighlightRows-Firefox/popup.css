@@ -10,9 +10,9 @@
     --border: #e7e6e2;
     --text: #1f2430;
     --muted: #8a8a96;
-    --accent: #eb9483;        /* пастельний кораловий */
+    --accent: #2a3f5f;        /* синій (як кнопка «Зберегти») */
     --accent-2: #d4604a;
-    --accent-weak: rgba(235, 148, 131, 0.16);
+    --accent-weak: rgba(42, 63, 95, 0.12);
     --primary: #2a3f5f;
     --primary-weak: rgba(42, 63, 95, 0.10);
     --danger: #d33b2f;
@@ -29,7 +29,7 @@
     :root:not([data-theme="light"]) {
         --bg: #16181d; --surface: #1f2229; --surface-2: #272b33; --border: #343842;
         --text: #ecedf0; --muted: #9298a4;
-        --accent: #e3a08e; --accent-2: #de7a64; --accent-weak: rgba(227, 160, 142, 0.18);
+        --accent: #4e6da0; --accent-2: #de7a64; --accent-weak: rgba(78, 109, 160, 0.18);
         --primary: #4e6da0; --primary-weak: rgba(78, 109, 160, 0.18);
         --danger: #ff6b5e; --ok: #6bd58a;
         --shadow: 0 2px 8px rgba(0, 0, 0, 0.4); --shadow-lg: 0 8px 22px rgba(0, 0, 0, 0.5);
@@ -38,7 +38,7 @@
 :root[data-theme="dark"] {
     --bg: #16181d; --surface: #1f2229; --surface-2: #272b33; --border: #343842;
     --text: #ecedf0; --muted: #9298a4;
-    --accent: #e3a08e; --accent-2: #de7a64; --accent-weak: rgba(227, 160, 142, 0.18);
+    --accent: #4e6da0; --accent-2: #de7a64; --accent-weak: rgba(78, 109, 160, 0.18);
     --primary: #4e6da0; --primary-weak: rgba(78, 109, 160, 0.18);
     --danger: #ff6b5e; --ok: #6bd58a;
     --shadow: 0 2px 8px rgba(0, 0, 0, 0.4); --shadow-lg: 0 8px 22px rgba(0, 0, 0, 0.5);

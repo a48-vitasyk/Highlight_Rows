@@ -53,7 +53,6 @@
         <label for="repeatMinutes">Повтор (хв):</label>
         <input type="number" id="repeatMinutes" min="0" step="0.1">
         <label class="icon-label"><input type="checkbox" id="soundEnabled"> Звук</label>
-        <span class="hint">0 — раз</span>
     </div>
 </div>
 
@@ -64,7 +63,6 @@
     </div>
     <div id="tagRules"></div>
     <button type="button" class="add" id="addTagRule">+ Додати правило</button>
-    <div class="hint">Збіг — якщо тема містить тег. 🔔 сповіщення, 🔊 звук, остання комірка — повтор (хв, 0 = один раз).</div>
 </div>
 
 <div class="card" data-card="service">
@@ -73,13 +71,12 @@
         <h2 class="card-title">Послуга в тікеті</h2>
         <label class="icon-label"><input type="checkbox" id="trafficEnabled"> Показувати</label>
     </div>
-    <div class="hint">У картці відкритого тікета показує дані прив'язаної послуги. Оберіть, що показувати:</div>
     <div class="field svc-fields">
         <label class="icon-label"><input type="checkbox" id="show_status"> Статус</label>
         <label class="icon-label"><input type="checkbox" id="show_os"> ОС</label>
-        <label class="icon-label"><input type="checkbox" id="show_cost"> Вартість (♻️/🚫 автопродовження)</label>
+        <label class="icon-label"><input type="checkbox" id="show_cost"> Вартість</label>
         <label class="icon-label"><input type="checkbox" id="show_expiredate"> Діє до</label>
-        <label class="icon-label"><input type="checkbox" id="show_traffic"> Трафік (use / paid TB)</label>
+        <label class="icon-label"><input type="checkbox" id="show_traffic"> Трафік</label>
     </div>
 </div>
 
@@ -96,7 +93,6 @@
     </div>
     <div id="reminders"></div>
     <button type="button" class="add" id="addReminder">+ Додати будильник</button>
-    <div class="hint">ID тікета + час; спрацьовує за 5 хв до часу.</div>
 </div>
 
 <div class="card" data-card="stale">
