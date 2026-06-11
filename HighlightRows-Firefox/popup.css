@@ -90,10 +90,11 @@ body[data-view="panel"] { width: auto; max-width: 440px; }
 .account .icon-only { flex: none; display: inline-flex; align-items: center; padding: 5px 7px; }
 .account .icon-only svg { display: block; }
 #loginBtn {
-    background: var(--accent); color: #fff; border: none;
-    border-radius: var(--radius-sm); padding: 5px 13px; font-weight: 600;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 5px 8px;
 }
-#loginBtn:hover { filter: brightness(1.06); color: #fff; }
+#loginBtn:hover { border-color: var(--accent); }
+#loginBtn svg { display: block; }
 #logoutBtn { border-radius: var(--radius-sm); }
 
 /* --- Вкладки --- */
