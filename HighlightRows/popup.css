@@ -278,6 +278,8 @@ body[data-view="panel"] .stale-list { max-height: 300px; }
 .svc-fields { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px 8px; margin-top: 6px; }
 .svc-fields .icon-label { font-weight: 500; min-width: 0; }
 .svc-fields .soon { color: var(--muted); opacity: 0.55; cursor: default; }
+.soon { color: var(--muted); opacity: 0.6; }
+.soon input { cursor: not-allowed; }
 
 /* --- Sticky-футер --- */
 .footer {
