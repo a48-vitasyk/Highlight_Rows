@@ -10,6 +10,8 @@
             font-size: 13px;
             margin: 12px;
         }
+        /* У бічній панелі/сайдбарі ширину задає браузер — знімаємо фіксовану. */
+        body[data-view="panel"] { width: auto; }
         h1 { font-size: 14px; margin: 0 0 10px; }
         h2 {
             font-size: 12px;
@@ -81,7 +83,10 @@
     </style>
 </head>
 <body>
-<h1>Highlight Rows</h1>
+<div class="row" style="margin-bottom:10px">
+    <h1 style="flex:1;margin:0">Highlight Rows</h1>
+    <button type="button" class="small" id="expandBtn" title="Відкрити у бічній панелі">⇲ Збоку</button>
+</div>
 
 <div class="field row">
     <span id="accountInfo" class="hint" style="flex:1">Не залогінено</span>

@@ -20,6 +20,11 @@ const DEFAULT_SETTINGS = {
 
 const $ = (id) => document.getElementById(id);
 
+// Контекст відображення: 'panel' (бічна панель Chrome / сайдбар Firefox) задаємо
+// через ?view=panel у side_panel/sidebar_action маніфесту. У попапі параметра немає.
+const IS_PANEL = new URLSearchParams(location.search).get('view') === 'panel';
+if (IS_PANEL && document.body) document.body.dataset.view = 'panel';
+
 function genId() {
     return 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 }
@@ -246,7 +251,7 @@ function makeClickable(item, url) {
     item.style.cursor = 'pointer';
     item.addEventListener('click', () => {
         chrome.tabs.update({ url: u });
-        window.close();
+        if (!IS_PANEL) window.close(); // у панелі window.close() закрив би саму панель
     });
 }
 
@@ -317,6 +322,24 @@ if ($('logoutBtn')) $('logoutBtn').addEventListener('click', async () => {
     await renderAccount();
     loadForm();
 });
+
+// «Відкрити збоку»: попап → бічна панель (Chrome) / сайдбар (Firefox). У самій
+// панелі кнопка зайва — ховаємо. Виклик відкриття має йти від жесту (тут — клік).
+if ($('expandBtn')) {
+    if (IS_PANEL) $('expandBtn').style.display = 'none';
+    $('expandBtn').addEventListener('click', async () => {
+        try {
+            if (chrome.sidePanel) {
+                const win = await chrome.windows.getCurrent();
+                await chrome.sidePanel.open({ windowId: win.id });
+                window.close();
+            } else if (typeof browser !== 'undefined' && browser.sidebarAction) {
+                await browser.sidebarAction.open();
+                window.close();
+            }
+        } catch (e) { /* ignore */ }
+    });
+}
 
 // Список «без відповіді»: показати поточний і оновлювати наживо.
 let refreshTimeout = null;
