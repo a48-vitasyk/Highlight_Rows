@@ -400,22 +400,21 @@ function makeClickable(item, url) {
 
 async function renderAccount() {
     const sess = (typeof SB !== 'undefined') ? await SB.getSession() : null;
-    const info = $('accountInfo');
-    const icon = $('accountIcon');
+    const name = $('accountName');
     const loginBtn = $('loginBtn');
     const logoutBtn = $('logoutBtn');
-    if (!info) return;
     if (sess) {
-        info.textContent = (sess.user && sess.user.email) ? sess.user.email : 'Залогінено';
-        info.title = info.textContent;
-        if (icon) icon.innerHTML = IC.user16;
-        loginBtn.style.display = 'none';
-        if (logoutBtn) { logoutBtn.innerHTML = IC.logout; logoutBtn.style.display = ''; }
+        const email = (sess.user && sess.user.email) || '';
+        if (name) {
+            name.textContent = email ? email.split('@')[0] : 'акаунт'; // частина до @
+            name.title = email || 'Залогінено';
+            name.style.display = '';
+        }
+        if (loginBtn) loginBtn.style.display = 'none';
+        if (logoutBtn) { logoutBtn.title = email ? ('Вийти — ' + email) : 'Вийти'; logoutBtn.style.display = ''; }
     } else {
-        info.textContent = 'Локальні будильники';
-        info.title = 'Не залогінено — будильники лише на цьому пристрої';
-        if (icon) icon.innerHTML = IC.userOff16;
-        loginBtn.style.display = '';
+        if (name) { name.style.display = 'none'; name.textContent = ''; }
+        if (loginBtn) loginBtn.style.display = '';
         if (logoutBtn) logoutBtn.style.display = 'none';
     }
 }

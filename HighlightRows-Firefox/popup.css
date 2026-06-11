@@ -75,7 +75,6 @@ body[data-view="panel"] { width: auto; max-width: 440px; }
     background: var(--surface); cursor: pointer; font-size: 12px;
 }
 #themeBtn:hover, #expandBtn:hover { border-color: var(--accent); }
-#expandBtn { width: auto; padding: 0 10px; gap: 4px; }
 
 /* --- Акаунт --- */
 .account {
@@ -85,10 +84,9 @@ body[data-view="panel"] { width: auto; max-width: 440px; }
     border-radius: var(--radius); box-shadow: var(--shadow);
 }
 .account #accountInfo { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 11.5px; }
-.account-ic { flex: none; display: inline-flex; align-items: center; color: var(--muted); }
-.account-ic svg { display: block; }
-.account .icon-only { flex: none; display: inline-flex; align-items: center; padding: 5px 7px; }
-.account .icon-only svg { display: block; }
+.acc-name { flex: none; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 11px; }
+.icon-only { flex: none; display: inline-flex; align-items: center; padding: 5px 7px; }
+.icon-only svg { display: block; }
 #loginBtn {
     background: var(--surface); border: 1px solid var(--border);
     border-radius: var(--radius-sm); padding: 5px 8px;
