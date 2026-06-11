@@ -91,6 +91,7 @@ let alive = true;
 let observerRef = null;
 let intervalRef = null;
 let staleIntervalRef = null;
+let sbPullIntervalRef = null;
 let debounceTimer = null;
 let reminderAudio = null;
 
@@ -106,6 +107,7 @@ function teardown() {
     alive = false;
     if (intervalRef) { clearInterval(intervalRef); intervalRef = null; }
     if (staleIntervalRef) { clearInterval(staleIntervalRef); staleIntervalRef = null; }
+    if (sbPullIntervalRef) { clearInterval(sbPullIntervalRef); sbPullIntervalRef = null; }
     if (matchIntervalRef) { clearInterval(matchIntervalRef); matchIntervalRef = null; }
     if (observerRef) { observerRef.disconnect(); observerRef = null; }
     clearTimeout(debounceTimer);
@@ -380,9 +382,21 @@ function removeReminderBanner() {
     if (banner) banner.remove();
 }
 
-// «Заглушити»: відкладає всі активні будильники на 10 хв. Снуз пишемо в
-// reminderState (storage.local), щоб діяло й між вкладками та переживало
-// перезавантаження сторінки.
+// Надсилає sb-повідомлення у background (спільна база) — лише якщо є сесія.
+// Усі мережеві виклики Supabase живуть у background (CSP сторінки не заважає).
+function sbSend(msg) {
+    try {
+        chrome.storage.local.get('sbSession', (d) => {
+            if (d && d.sbSession) {
+                try { chrome.runtime.sendMessage(msg, () => { void chrome.runtime.lastError; }); } catch (e) { /* ignore */ }
+            }
+        });
+    } catch (e) { /* ignore */ }
+}
+
+// «Заглушити»: відкладає всі активні будильники на snoozeMinutes. Локально
+// пишемо одразу (миттєвий ефект), а якщо залогінений — снуз стає спільним
+// (background пише snooze_until у базу й оновлює дзеркало для всіх).
 function snoozeActiveReminders() {
     const now = Date.now();
     const active = computeActiveReminders(now);
@@ -397,6 +411,7 @@ function snoozeActiveReminders() {
         teardown();
         return;
     }
+    sbSend({ sb: 'snooze', ids: active.map((r) => r.id), until });
     stopReminderAudio();
     removeReminderBanner();
     refresh();
@@ -1178,6 +1193,11 @@ function init() {
             // Збіги по всій черзі (теги/блокування/будильники).
             setTimeout(scanMatches, 8000);
             matchIntervalRef = setInterval(scanMatches, MATCH_POLL_INTERVAL_MS);
+
+            // Спільні будильники: періодично підтягувати зі спільної бази
+            // (фактичний fetch робить background; тут лише тригеримо).
+            setTimeout(() => sbSend({ sb: 'pull' }), 4000);
+            sbPullIntervalRef = setInterval(() => sbSend({ sb: 'pull' }), MATCH_POLL_INTERVAL_MS);
         } catch (e) {
             teardown();
         }
