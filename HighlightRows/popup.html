@@ -8,6 +8,7 @@
 <body>
 <div class="app-header">
     <h1>Highlight Rows</h1>
+    <button type="button" class="small" id="themeBtn" title="Перемкнути тему">🌙</button>
     <button type="button" class="small" id="expandBtn" title="Відкрити у бічній панелі">⇲ Збоку</button>
 </div>
 
@@ -31,10 +32,7 @@
     <div class="card-head">
         <span class="card-icon">🔒</span>
         <h2 class="card-title">Заблокований запит</h2>
-    </div>
-    <div class="field row">
-        <input type="checkbox" id="enabled">
-        <label for="enabled">Увімкнено</label>
+        <label class="icon-label"><input type="checkbox" id="enabled"> Увімкнено</label>
     </div>
     <div class="field">
         <label for="names">Імена для підсвітки</label>
@@ -46,13 +44,11 @@
         <label for="color">Колір:</label>
         <input type="color" id="color">
     </div>
-    <div class="field">
-        <div class="row">
-            <label for="repeatMinutes">Повтор (хв):</label>
-            <input type="number" id="repeatMinutes" min="0" step="0.1">
-            <label class="icon-label"><input type="checkbox" id="soundEnabled"> Звук</label>
-        </div>
-        <span class="hint">0 — нагадати лише один раз.</span>
+    <div class="field row">
+        <label for="repeatMinutes">Повтор (хв):</label>
+        <input type="number" id="repeatMinutes" min="0" step="0.1">
+        <label class="icon-label"><input type="checkbox" id="soundEnabled"> Звук</label>
+        <span class="hint">0 — раз</span>
     </div>
 </div>
 
@@ -68,15 +64,18 @@
 
 <div class="card">
     <div class="card-head">
-        <span class="card-icon">📊</span>
-        <h2 class="card-title">Трафік</h2>
-        <button type="button" class="small" id="refreshTraffic">Оновити</button>
+        <span class="card-icon">📦</span>
+        <h2 class="card-title">Послуга в тікеті</h2>
+        <label class="icon-label"><input type="checkbox" id="trafficEnabled"> Показувати</label>
     </div>
-    <div class="field row">
-        <input type="checkbox" id="trafficEnabled">
-        <label for="trafficEnabled">Показувати в тікеті</label>
+    <div class="hint">У картці відкритого тікета показує дані прив'язаної послуги. Оберіть, що показувати:</div>
+    <div class="field svc-fields">
+        <label class="icon-label"><input type="checkbox" id="show_status"> Статус</label>
+        <label class="icon-label"><input type="checkbox" id="show_os"> ОС</label>
+        <label class="icon-label"><input type="checkbox" id="show_cost"> Вартість (♻️/🚫 автопродовження)</label>
+        <label class="icon-label"><input type="checkbox" id="show_expiredate"> Діє до</label>
+        <label class="icon-label"><input type="checkbox" id="show_traffic"> Трафік (use / paid TB)</label>
     </div>
-    <div class="hint">При відкритті тікета вписує «Трафік X.XX / Y.YY TB» у блок «Информация о запросе».</div>
 </div>
 
 <div class="card">

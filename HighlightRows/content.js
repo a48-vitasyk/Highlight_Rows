@@ -66,8 +66,9 @@ const DEFAULT_SETTINGS = {
     // «без відповіді понад N год» — список у popup
     staleEnabled: false, // вимкнено за замовч.: скан відкриває тікети й гасить позначку нового повідомлення
     staleHours: 4,
-    // показувати трафік клієнта в тікеті
+    // показувати дані послуги в тікеті (майстер-тогл) + які саме поля
     trafficEnabled: false,
+    serviceShow: { status: true, os: true, cost: true, expiredate: true, traffic: true },
 };
 
 // Кеш у пам'яті, щоб refresh() був синхронним і без гонок.
@@ -144,6 +145,11 @@ function normalizeSettings(raw) {
     s.staleHours = Number(s.staleHours);
     if (!(s.staleHours > 0)) s.staleHours = DEFAULT_SETTINGS.staleHours;
     s.trafficEnabled = !!s.trafficEnabled;
+    {
+        const raw = (s.serviceShow && typeof s.serviceShow === 'object') ? s.serviceShow : {};
+        s.serviceShow = {};
+        for (const k of ['status', 'os', 'cost', 'expiredate', 'traffic']) s.serviceShow[k] = raw[k] !== false;
+    }
 
     s.reminderColor = String(s.reminderColor || DEFAULT_SETTINGS.reminderColor);
     s.snoozeMinutes = Number(s.snoozeMinutes);
@@ -925,7 +931,9 @@ function injectServiceDom() {
     for (const f of SERVICE_FIELDS) {
         const val = trafficData.service[f.key];
         let item = box.querySelector('.' + SERVICE_ITEM_CLASS + '[data-hr-field="' + f.key + '"]');
-        if (val == null || val === '' || val === '-') {
+        // Поле вимкнене в налаштуваннях або порожнє — прибрати й пропустити.
+        const hidden = settings.serviceShow && settings.serviceShow[f.key] === false;
+        if (hidden || val == null || val === '' || val === '-') {
             if (item) item.remove();
             continue;
         }
@@ -966,6 +974,12 @@ function injectTrafficDom() {
     if (!trafficData) return;
     const box = findServiceInfoItems(); // «Трафік» тепер у блоці «Информация об услуге»
     if (!box) return; // блок ще не відрендерився
+    // Трафік вимкнено в налаштуваннях — прибрати, якщо був.
+    if (settings.serviceShow && settings.serviceShow.traffic === false) {
+        const existing = box.querySelector('.' + TRAFFIC_ITEM_CLASS);
+        if (existing) existing.remove();
+        return;
+    }
     let item = box.querySelector('.' + TRAFFIC_ITEM_CLASS);
     if (!item) {
         item = document.createElement('div');

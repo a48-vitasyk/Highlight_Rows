@@ -18,8 +18,10 @@
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
+/* Темні токени: вживаються коли система темна (і користувач не вибрав світлу),
+   або коли явно обрано темну тему через data-theme="dark". */
 @media (prefers-color-scheme: dark) {
-    :root {
+    :root:not([data-theme="light"]) {
         --bg: #1b1d20;
         --surface: #25282c;
         --surface-2: #2d3036;
@@ -32,6 +34,19 @@
         --ok: #6bd58a;
         --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
     }
+}
+:root[data-theme="dark"] {
+    --bg: #1b1d20;
+    --surface: #25282c;
+    --surface-2: #2d3036;
+    --border: #383c42;
+    --text: #e6e8eb;
+    --muted: #9aa0a6;
+    --accent: #4c9aff;
+    --accent-weak: rgba(76, 154, 255, 0.16);
+    --danger: #ff6b5e;
+    --ok: #6bd58a;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
 }
 
 * { box-sizing: border-box; }
@@ -184,14 +199,19 @@ body[data-view="panel"] .stale-list { max-height: 300px; }
 }
 .scope-opt.active { background: var(--accent); color: #fff; }
 
-/* --- Рядок правила за тегом --- */
+/* --- Рядок правила за тегом (один рядок, × не переноситься) --- */
 .rule-row {
-    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    display: flex; align-items: center; gap: 6px; flex-wrap: nowrap;
     padding: 8px; margin-bottom: 8px;
     background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
 }
-.rule-row .tr-query { flex: 1 1 auto; min-width: 0; }
-.rule-row .tr-repeat { width: 54px; }
+.rule-row .tr-query { flex: 1 1 auto; min-width: 40px; }
+.rule-row .tr-repeat { width: 48px; flex: none; }
+.rule-row .icon-label, .rule-row input[type="color"], .rule-row .remove { flex: none; }
+
+/* --- Перелік полів «Послуга в тікеті» --- */
+.svc-fields { display: flex; flex-direction: column; gap: 5px; margin-top: 6px; }
+.svc-fields .icon-label { font-weight: 400; }
 .rule-row .remove {
     border: 1px solid transparent; background: transparent; color: var(--muted);
     border-radius: var(--radius-sm); padding: 2px 6px; cursor: pointer; line-height: 1;

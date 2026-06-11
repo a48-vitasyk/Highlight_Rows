@@ -16,7 +16,10 @@ const DEFAULT_SETTINGS = {
     staleEnabled: false,
     staleHours: 4,
     trafficEnabled: false,
+    serviceShow: { status: true, os: true, cost: true, expiredate: true, traffic: true },
 };
+
+const SERVICE_KEYS = ['status', 'os', 'cost', 'expiredate', 'traffic'];
 
 const $ = (id) => document.getElementById(id);
 
@@ -24,6 +27,30 @@ const $ = (id) => document.getElementById(id);
 // через ?view=panel у side_panel/sidebar_action маніфесту. У попапі параметра немає.
 const IS_PANEL = new URLSearchParams(location.search).get('view') === 'panel';
 if (IS_PANEL && document.body) document.body.dataset.view = 'panel';
+
+// --- Тема (світла/темна) -------------------------------------------------
+// hrTheme у storage.local: 'light' | 'dark' | відсутнє (= за системою).
+function effectiveTheme(stored) {
+    if (stored === 'light' || stored === 'dark') return stored;
+    return (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+}
+function applyTheme(stored) {
+    if (stored === 'light' || stored === 'dark') document.documentElement.setAttribute('data-theme', stored);
+    else document.documentElement.removeAttribute('data-theme');
+    const btn = $('themeBtn');
+    if (btn) {
+        const eff = effectiveTheme(stored);
+        btn.textContent = eff === 'dark' ? '☀️' : '🌙';
+        btn.title = eff === 'dark' ? 'Світла тема' : 'Темна тема';
+    }
+}
+chrome.storage.local.get('hrTheme', (d) => applyTheme(d && d.hrTheme));
+if ($('themeBtn')) $('themeBtn').addEventListener('click', () => {
+    chrome.storage.local.get('hrTheme', (d) => {
+        const next = effectiveTheme(d && d.hrTheme) === 'dark' ? 'light' : 'dark';
+        chrome.storage.local.set({ hrTheme: next }, () => applyTheme(next));
+    });
+});
 
 function genId() {
     return 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
@@ -235,6 +262,8 @@ function fillForm(s, reminderState) {
     $('staleEnabled').checked = s.staleEnabled;
     $('staleHours').value = s.staleHours || DEFAULT_SETTINGS.staleHours;
     $('trafficEnabled').checked = s.trafficEnabled;
+    const sv = s.serviceShow || {};
+    SERVICE_KEYS.forEach((k) => { const el = $('show_' + k); if (el) el.checked = sv[k] !== false; });
     $('reminderColor').value = s.reminderColor || DEFAULT_SETTINGS.reminderColor;
     $('snoozeMinutes').value = s.snoozeMinutes || DEFAULT_SETTINGS.snoozeMinutes;
 
@@ -275,6 +304,13 @@ function readForm() {
         staleEnabled: $('staleEnabled').checked,
         staleHours: Number($('staleHours').value) > 0 ? Number($('staleHours').value) : DEFAULT_SETTINGS.staleHours,
         trafficEnabled: $('trafficEnabled').checked,
+        serviceShow: {
+            status: $('show_status').checked,
+            os: $('show_os').checked,
+            cost: $('show_cost').checked,
+            expiredate: $('show_expiredate').checked,
+            traffic: $('show_traffic').checked,
+        },
         tagRules,
         reminderColor: $('reminderColor').value,
         snoozeMinutes: Number($('snoozeMinutes').value) > 0 ? Number($('snoozeMinutes').value) : DEFAULT_SETTINGS.snoozeMinutes,
@@ -490,9 +526,6 @@ $('refreshStale').addEventListener('click', () => {
         });
     });
 });
-
-// Ручне оновлення трафіку у відкритому тікеті.
-$('refreshTraffic').addEventListener('click', () => sendToActiveTab('refreshTraffic'));
 
 $('addTagRule').addEventListener('click', () => addTagRuleRow());
 $('addReminder').addEventListener('click', () => { addReminderRow(); markRemindersDirty(); });
