@@ -10,9 +10,9 @@
     --border: #e7e6e2;
     --text: #1f2430;          /* near-navy */
     --muted: #8a8a96;
-    --accent: #ff6b4a;        /* кораловий — CTA/активне/чипи */
-    --accent-2: #e2483d;      /* глибший червоний */
-    --accent-weak: rgba(255, 107, 74, 0.12);
+    --accent: #eb9483;        /* пастельний кораловий — CTA/активне/чипи */
+    --accent-2: #d4604a;      /* глибший (попередження) */
+    --accent-weak: rgba(235, 148, 131, 0.16);
     --primary: #2a3f5f;       /* темно-синій — первинна дія */
     --primary-weak: rgba(42, 63, 95, 0.10);
     --danger: #d33b2f;
@@ -33,9 +33,9 @@
         --border: #343842;
         --text: #ecedf0;
         --muted: #9298a4;
-        --accent: #ff7a5c;
-        --accent-2: #ff5e4d;
-        --accent-weak: rgba(255, 122, 92, 0.16);
+        --accent: #e3a08e;
+        --accent-2: #de7a64;
+        --accent-weak: rgba(227, 160, 142, 0.18);
         --primary: #4e6da0;
         --primary-weak: rgba(78, 109, 160, 0.18);
         --danger: #ff6b5e;
@@ -51,9 +51,9 @@
     --border: #343842;
     --text: #ecedf0;
     --muted: #9298a4;
-    --accent: #ff7a5c;
-    --accent-2: #ff5e4d;
-    --accent-weak: rgba(255, 122, 92, 0.16);
+    --accent: #e3a08e;
+    --accent-2: #de7a64;
+    --accent-weak: rgba(227, 160, 142, 0.18);
     --primary: #4e6da0;
     --primary-weak: rgba(78, 109, 160, 0.18);
     --danger: #ff6b5e;
@@ -117,7 +117,9 @@ body[data-view="panel"] { width: auto; max-width: 480px; }
 .tabs {
     display: flex; gap: 2px; margin-bottom: 14px;
     border-bottom: 1px solid var(--border); overflow-x: auto;
+    scrollbar-width: none; /* Firefox — без смужки прокрутки в меню */
 }
+.tabs::-webkit-scrollbar { width: 0; height: 0; display: none; }
 .tab {
     flex: none; cursor: pointer; background: transparent; border: none;
     border-bottom: 2.5px solid transparent; margin-bottom: -1px;
@@ -161,6 +163,7 @@ label { font-weight: 600; }
 .row { display: flex; align-items: center; gap: 8px; }
 .row.wrap { flex-wrap: wrap; row-gap: 6px; }
 .row label { font-weight: 600; margin: 0; }
+.row .grow { flex: 1 1 auto; min-width: 0; }
 .hint { font-weight: 400; color: var(--muted); font-size: 11px; }
 .icon-label { font-weight: 500; display: inline-flex; align-items: center; gap: 4px; }
 
@@ -203,7 +206,7 @@ button.add:hover { background: var(--accent); color: #fff; }
 /* Дрібні іконкові кнопки в рядках будильників */
 .rem-row .mute, .rem-row .remove {
     border: 1px solid transparent; background: transparent;
-    border-radius: var(--pill); padding: 3px 7px; cursor: pointer; line-height: 1;
+    border-radius: var(--pill); padding: 6px 10px; font-size: 16px; cursor: pointer; line-height: 1;
 }
 .rem-row .mute:hover { background: var(--surface); }
 .rem-row .remove { color: var(--muted); }
@@ -266,7 +269,7 @@ body[data-view="panel"] .stale-list { max-height: 320px; }
 .rule-row .icon-label, .rule-row input[type="color"], .rule-row .remove { flex: none; }
 .rule-row .remove {
     border: 1px solid transparent; background: transparent; color: var(--muted);
-    border-radius: var(--pill); padding: 3px 7px; cursor: pointer; line-height: 1;
+    border-radius: var(--pill); padding: 6px 10px; font-size: 16px; cursor: pointer; line-height: 1;
 }
 .rule-row .remove:hover { background: var(--surface); color: var(--danger); }
 

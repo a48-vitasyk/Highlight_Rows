@@ -254,7 +254,7 @@ function toggleMute(id, btn) {
 
 function fillForm(s, reminderState) {
     $('enabled').checked = s.enabled;
-    $('names').value = (s.names || []).join('\n');
+    $('names').value = (s.names || [])[0] || '';
     $('thresholdMinutes').value = s.thresholdMinutes;
     $('repeatMinutes').value = s.repeatMinutes;
     $('color').value = s.color || DEFAULT_SETTINGS.color;
@@ -296,7 +296,7 @@ function readForm() {
 
     return {
         enabled: $('enabled').checked,
-        names: $('names').value.split('\n').map((n) => n.trim()).filter(Boolean),
+        names: $('names').value.trim() ? [$('names').value.trim()] : [],
         thresholdMinutes: Number($('thresholdMinutes').value) || DEFAULT_SETTINGS.thresholdMinutes,
         repeatMinutes: Math.max(0, Number($('repeatMinutes').value) || 0),
         color: $('color').value,
