@@ -379,7 +379,7 @@ function ensureReminderBanner(active) {
     const textEl = banner.querySelector('.hr-reminder-banner-text');
     if (textEl.textContent !== full) textEl.textContent = full;
     const btnEl = banner.querySelector('.hr-reminder-banner-btn');
-    const btnLabel = 'Заглушити (снуз ' + settings.snoozeMinutes + ' хв)';
+    const btnLabel = 'Відкласти на ' + settings.snoozeMinutes + ' хв';
     if (btnEl.textContent !== btnLabel) btnEl.textContent = btnLabel;
 }
 

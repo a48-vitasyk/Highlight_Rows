@@ -75,23 +75,24 @@ function isUuid(s) {
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(s || ''));
 }
 
-// Сегмент типу будильника: 🔒 особистий (лише ви) / 👥 загальний (бачать усі).
-// Стан тримаємо в row.dataset.scope; клік перемикає активну кнопку.
-function buildScopeSeg(row) {
-    const seg = makeEl('div', { className: 'scope-seg' });
-    const opts = [
-        { v: 'personal', icon: '🔒', t: 'Особистий (лише ви)' },
-        { v: 'shared', icon: '👥', t: 'Загальний (бачать усі)' },
-    ];
-    const sync = () => [...seg.children].forEach((c) => c.classList.toggle('active', c.dataset.scope === row.dataset.scope));
-    opts.forEach((o) => {
-        const b = makeEl('button', { type: 'button', className: 'scope-opt', textContent: o.icon, title: o.t });
-        b.dataset.scope = o.v;
-        b.addEventListener('click', () => { row.dataset.scope = o.v; sync(); markRemindersDirty(); });
-        seg.appendChild(b);
+// Тип будильника — одна кнопка-тоглер, що МІНЯЄ іконку: 🔒 особистий / 👥 загальний.
+// Прозора (як інші тоглери), тож іконка завжди видима; стан — у row.dataset.scope.
+function buildScopeToggle(row) {
+    const b = makeEl('button', { type: 'button', className: 'itoggle on' });
+    const render = () => {
+        const shared = row.dataset.scope === 'shared';
+        b.textContent = shared ? '👥' : '🔒';
+        b.title = shared
+            ? 'Загальний (бачать усі) — клік: зробити особистим'
+            : 'Особистий (лише ви) — клік: зробити загальним';
+    };
+    render();
+    b.addEventListener('click', () => {
+        row.dataset.scope = row.dataset.scope === 'shared' ? 'personal' : 'shared';
+        render();
+        markRemindersDirty();
     });
-    sync();
-    return seg;
+    return b;
 }
 
 function showReloadLink() {
@@ -205,7 +206,7 @@ function addReminderRow(reminder, muted) {
     const row = makeEl('div', { className: 'rem-row' });
     row.dataset.id = id;
     row.dataset.scope = scope;
-    const scopeSeg = buildScopeSeg(row);
+    const scopeSeg = buildScopeToggle(row);
 
     // Рядок 1: тікет, час, група дій (сегмент типу + заглушити + видалити).
     // Дії — один блок (.rem-actions), тож переносяться РАЗОМ, а поля тікета/часу
@@ -237,7 +238,7 @@ function isMutedToday(state, id) {
 
 // Кнопка показує ПОТОЧНИЙ стан: 🔔 — активний, 🔕 — заглушено на сьогодні.
 function setMuteBtn(btn, muted) {
-    btn.textContent = muted ? '🔕' : '🔔';
+    btn.textContent = muted ? '🔇' : '🔊';
     btn.title = muted
         ? 'Заглушено сьогодні — клікніть, щоб увімкнути'
         : 'Активний — клікніть, щоб заглушити на сьогодні';
