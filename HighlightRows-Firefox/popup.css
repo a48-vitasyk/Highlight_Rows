@@ -1,135 +1,114 @@
 /* popup.css — дизайн-система попапа Highlight Rows.
-   Стиль за референсом «bao»: помаранчево-кораловий акцент + темно-синій,
+   Стиль за референсом «bao»: пастельно-кораловий акцент + темно-синій,
    pill-кнопки, uppercase-заголовки з лінією, pill-чипи, повітряні картки.
    Buildless. Усі функціональні id/класи з popup.js збережені. */
 
 :root {
-    --bg: #f4f2ef;            /* теплий off-white, як у референсі */
+    --bg: #f4f2ef;
     --surface: #ffffff;
     --surface-2: #f3f4f6;
     --border: #e7e6e2;
-    --text: #1f2430;          /* near-navy */
+    --text: #1f2430;
     --muted: #8a8a96;
-    --accent: #eb9483;        /* пастельний кораловий — CTA/активне/чипи */
-    --accent-2: #d4604a;      /* глибший (попередження) */
+    --accent: #eb9483;        /* пастельний кораловий */
+    --accent-2: #d4604a;
     --accent-weak: rgba(235, 148, 131, 0.16);
-    --primary: #2a3f5f;       /* темно-синій — первинна дія */
+    --primary: #2a3f5f;
     --primary-weak: rgba(42, 63, 95, 0.10);
     --danger: #d33b2f;
     --ok: #2e7d32;
-    --radius: 14px;
-    --radius-sm: 9px;
+    --radius: 11px;
+    --radius-sm: 7px;
     --pill: 999px;
-    --shadow: 0 2px 10px rgba(20, 25, 40, 0.06), 0 1px 2px rgba(20, 25, 40, 0.04);
-    --shadow-lg: 0 8px 24px rgba(20, 25, 40, 0.12);
+    --shadow: 0 2px 8px rgba(20, 25, 40, 0.06), 0 1px 2px rgba(20, 25, 40, 0.04);
+    --shadow-lg: 0 8px 22px rgba(20, 25, 40, 0.12);
     --font: 'Inter', 'Helvetica Neue', 'Segoe UI', system-ui, Arial, sans-serif;
 }
 
 @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-        --bg: #16181d;
-        --surface: #1f2229;
-        --surface-2: #272b33;
-        --border: #343842;
-        --text: #ecedf0;
-        --muted: #9298a4;
-        --accent: #e3a08e;
-        --accent-2: #de7a64;
-        --accent-weak: rgba(227, 160, 142, 0.18);
-        --primary: #4e6da0;
-        --primary-weak: rgba(78, 109, 160, 0.18);
-        --danger: #ff6b5e;
-        --ok: #6bd58a;
-        --shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
-        --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+        --bg: #16181d; --surface: #1f2229; --surface-2: #272b33; --border: #343842;
+        --text: #ecedf0; --muted: #9298a4;
+        --accent: #e3a08e; --accent-2: #de7a64; --accent-weak: rgba(227, 160, 142, 0.18);
+        --primary: #4e6da0; --primary-weak: rgba(78, 109, 160, 0.18);
+        --danger: #ff6b5e; --ok: #6bd58a;
+        --shadow: 0 2px 8px rgba(0, 0, 0, 0.4); --shadow-lg: 0 8px 22px rgba(0, 0, 0, 0.5);
     }
 }
 :root[data-theme="dark"] {
-    --bg: #16181d;
-    --surface: #1f2229;
-    --surface-2: #272b33;
-    --border: #343842;
-    --text: #ecedf0;
-    --muted: #9298a4;
-    --accent: #e3a08e;
-    --accent-2: #de7a64;
-    --accent-weak: rgba(227, 160, 142, 0.18);
-    --primary: #4e6da0;
-    --primary-weak: rgba(78, 109, 160, 0.18);
-    --danger: #ff6b5e;
-    --ok: #6bd58a;
-    --shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
-    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+    --bg: #16181d; --surface: #1f2229; --surface-2: #272b33; --border: #343842;
+    --text: #ecedf0; --muted: #9298a4;
+    --accent: #e3a08e; --accent-2: #de7a64; --accent-weak: rgba(227, 160, 142, 0.18);
+    --primary: #4e6da0; --primary-weak: rgba(78, 109, 160, 0.18);
+    --danger: #ff6b5e; --ok: #6bd58a;
+    --shadow: 0 2px 8px rgba(0, 0, 0, 0.4); --shadow-lg: 0 8px 22px rgba(0, 0, 0, 0.5);
 }
 
 * { box-sizing: border-box; }
 
 body {
-    width: 360px;
+    width: 330px;
     margin: 0;
-    padding: 14px 14px 72px;
+    padding: 11px 11px 54px;
     font-family: var(--font);
-    font-size: 13px;
-    line-height: 1.45;
+    font-size: 12px;
+    line-height: 1.4;
     color: var(--text);
     background: var(--bg);
 }
-body[data-view="panel"] { width: auto; max-width: 480px; }
+body[data-view="panel"] { width: auto; max-width: 440px; }
 
 /* --- Шапка / вордмарк --- */
-.app-header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.app-header { display: flex; align-items: center; gap: 7px; margin-bottom: 10px; }
 .app-header h1 {
-    flex: 1; margin: 0; font-size: 16px; font-weight: 800;
-    letter-spacing: -0.01em; display: inline-flex; align-items: center; gap: 7px;
+    flex: 1; margin: 0; font-size: 14px; font-weight: 800;
+    letter-spacing: -0.01em; display: inline-flex; align-items: center; gap: 6px;
 }
 .app-header h1::before {
-    content: ''; width: 9px; height: 9px; border-radius: 50%;
-    background: var(--accent); box-shadow: 0 0 0 3px var(--accent-weak);
+    content: ''; width: 8px; height: 8px; border-radius: 50%;
+    background: var(--accent); box-shadow: 0 0 0 2px var(--accent-weak);
 }
-
-/* Круглі іконкові кнопки в шапці (тема, бічна панель) */
 #themeBtn, #expandBtn {
-    width: 30px; height: 30px; padding: 0; flex: none;
+    width: 26px; height: 26px; padding: 0; flex: none;
     display: inline-flex; align-items: center; justify-content: center;
     border-radius: var(--pill); border: 1px solid var(--border);
-    background: var(--surface); cursor: pointer; font-size: 13px;
+    background: var(--surface); cursor: pointer; font-size: 12px;
 }
 #themeBtn:hover, #expandBtn:hover { border-color: var(--accent); }
-#expandBtn { width: auto; padding: 0 12px; gap: 4px; }
+#expandBtn { width: auto; padding: 0 10px; gap: 4px; }
 
 /* --- Акаунт --- */
 .account {
-    display: flex; align-items: center; gap: 8px;
-    padding: 9px 12px; margin-bottom: 12px;
+    display: flex; align-items: center; gap: 7px;
+    padding: 7px 10px; margin-bottom: 10px;
     background: var(--surface); border: 1px solid var(--border);
     border-radius: var(--radius); box-shadow: var(--shadow);
 }
 .account #accountInfo { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
-/* Коралова pill-кнопка входу (як «Login» у референсі) */
 #loginBtn {
     background: var(--accent); color: #fff; border: none;
-    border-radius: var(--pill); padding: 6px 16px; font-weight: 600;
+    border-radius: var(--pill); padding: 5px 13px; font-weight: 600;
 }
 #loginBtn:hover { filter: brightness(1.06); color: #fff; }
 #logoutBtn { border-radius: var(--pill); }
 
 /* --- Вкладки --- */
 .tabs {
-    display: flex; gap: 2px; margin-bottom: 14px;
+    display: flex; gap: 2px; margin-bottom: 11px;
     border-bottom: 1px solid var(--border); overflow-x: auto;
-    scrollbar-width: none; /* Firefox — без смужки прокрутки в меню */
+    scrollbar-width: none;
 }
 .tabs::-webkit-scrollbar { width: 0; height: 0; display: none; }
 .tab {
     flex: none; cursor: pointer; background: transparent; border: none;
-    border-bottom: 2.5px solid transparent; margin-bottom: -1px;
+    border-bottom: 2px solid transparent; margin-bottom: -1px;
     color: var(--muted); font: inherit; font-weight: 700;
-    font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase;
-    padding: 9px 13px; white-space: nowrap;
+    font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase;
+    padding: 7px 11px; white-space: nowrap;
 }
 .tab:hover { color: var(--text); }
 .tab.active { color: var(--text); border-bottom-color: var(--accent); }
-.tab-empty { color: var(--muted); text-align: center; padding: 40px 12px; font-size: 12px; }
+.tab-empty { color: var(--muted); text-align: center; padding: 34px 12px; font-size: 12px; }
 
 /* --- Картки секцій --- */
 .card {
@@ -137,34 +116,34 @@ body[data-view="panel"] { width: auto; max-width: 480px; }
     border: 1px solid var(--border);
     border-radius: var(--radius);
     box-shadow: var(--shadow);
-    padding: 14px;
-    margin-bottom: 12px;
+    padding: 11px;
+    margin-bottom: 9px;
 }
 .card.dragging { opacity: 0.4; box-shadow: var(--shadow-lg); }
 .card-head {
-    display: flex; align-items: center; gap: 8px;
-    margin: -2px 0 12px; padding-bottom: 9px;
+    display: flex; align-items: center; gap: 7px;
+    margin: -1px 0 9px; padding-bottom: 7px;
     border-bottom: 1px solid var(--border);
 }
-.card-grip { cursor: grab; color: var(--muted); user-select: none; font-size: 13px; line-height: 1; padding: 0 2px; }
+.card-grip { cursor: grab; color: var(--muted); user-select: none; font-size: 12px; line-height: 1; padding: 0 2px; }
 .card-grip:active { cursor: grabbing; }
 .card-icon { display: inline-flex; align-items: center; color: var(--primary); }
-.card-icon svg { display: block; }
+.card-icon svg { display: block; width: 15px; height: 15px; }
 .card-title {
-    flex: 1; margin: 0; font-size: 11px; font-weight: 800; letter-spacing: 0.06em;
+    flex: 1; margin: 0; font-size: 10.5px; font-weight: 800; letter-spacing: 0.06em;
     text-transform: uppercase; color: var(--primary);
 }
 
 /* --- Поля --- */
-.field { margin-bottom: 12px; }
+.field { margin-bottom: 9px; }
 .field:last-child { margin-bottom: 0; }
-.field > label { display: block; margin-bottom: 5px; }
+.field > label { display: block; margin-bottom: 4px; }
 label { font-weight: 600; }
-.row { display: flex; align-items: center; gap: 8px; }
+.row { display: flex; align-items: center; gap: 7px; }
 .row.wrap { flex-wrap: wrap; row-gap: 6px; }
 .row label { font-weight: 600; margin: 0; }
 .row .grow { flex: 1 1 auto; min-width: 0; }
-.hint { font-weight: 400; color: var(--muted); font-size: 11px; }
+.hint { font-weight: 400; color: var(--muted); font-size: 10.5px; }
 .icon-label { font-weight: 500; display: inline-flex; align-items: center; gap: 4px; }
 
 input[type="text"], input[type="number"], input[type="time"], textarea, select {
@@ -172,57 +151,48 @@ input[type="text"], input[type="number"], input[type="time"], textarea, select {
     background: var(--surface-2);
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
-    padding: 7px 9px;
+    padding: 5px 8px;
 }
 input[type="text"], textarea { box-sizing: border-box; }
-input[type="number"] { width: 66px; }
+input[type="number"] { width: 56px; }
 textarea { width: 100%; resize: vertical; }
 input:focus, textarea:focus, select:focus, button:focus-visible {
     outline: none; border-color: var(--accent);
-    box-shadow: 0 0 0 3px var(--accent-weak);
+    box-shadow: 0 0 0 2.5px var(--accent-weak);
 }
 input[type="color"] {
-    width: 30px; height: 30px; padding: 2px;
+    width: 26px; height: 26px; padding: 2px;
     background: var(--surface-2); border: 1px solid var(--border);
     border-radius: var(--radius-sm); cursor: pointer; vertical-align: middle;
 }
-input[type="checkbox"] { accent-color: var(--accent); width: 15px; height: 15px; }
+input[type="checkbox"] { accent-color: var(--accent); width: 14px; height: 14px; }
 
 /* --- Кнопки --- */
 button { font: inherit; color: var(--text); }
 button.small, .btn {
-    padding: 6px 14px; cursor: pointer; font-weight: 600;
+    padding: 5px 11px; cursor: pointer; font-weight: 600;
     background: var(--surface); color: var(--text);
     border: 1px solid var(--border); border-radius: var(--pill);
 }
 button.small:hover, .btn:hover { border-color: var(--accent); color: var(--accent); }
 button.add {
-    margin-top: 8px; padding: 7px 16px; cursor: pointer; font-weight: 700;
+    margin-top: 6px; padding: 6px 13px; cursor: pointer; font-weight: 700;
     background: transparent; color: var(--accent);
     border: 1.5px solid var(--accent); border-radius: var(--pill);
 }
 button.add:hover { background: var(--accent); color: #fff; }
 
-/* Дрібні іконкові кнопки в рядках будильників */
-.rem-row .mute, .rem-row .remove {
-    border: 1px solid transparent; background: transparent;
-    border-radius: var(--pill); padding: 6px 10px; font-size: 16px; cursor: pointer; line-height: 1;
-}
-.rem-row .mute:hover { background: var(--surface); }
-.rem-row .remove { color: var(--muted); }
-.rem-row .remove:hover { background: var(--surface); color: var(--danger); }
-
 /* --- Списки тікетів --- */
 .stale-list {
-    max-height: 150px; overflow-y: auto;
+    max-height: 140px; overflow-y: auto;
     background: var(--surface-2);
     border: 1px solid var(--border); border-radius: var(--radius-sm);
-    padding: 5px;
+    padding: 4px;
 }
-body[data-view="panel"] .stale-list { max-height: 320px; }
+body[data-view="panel"] .stale-list { max-height: 300px; }
 .stale-item {
-    display: flex; align-items: center; gap: 7px;
-    font-size: 12px; padding: 6px 8px; border-radius: var(--radius-sm);
+    display: flex; align-items: center; gap: 6px;
+    font-size: 11.5px; padding: 4px 7px; border-radius: var(--radius-sm);
     white-space: nowrap; overflow: hidden;
 }
 .stale-item:hover { background: var(--accent-weak); }
@@ -231,65 +201,72 @@ body[data-view="panel"] .stale-list { max-height: 320px; }
 .ti-chips { display: inline-flex; gap: 3px; flex: none; }
 .chip {
     display: inline-flex; align-items: center; justify-content: center;
-    min-width: 20px; height: 20px; padding: 0 5px; border-radius: var(--pill); font-size: 11px;
+    min-width: 18px; height: 18px; padding: 0 5px; border-radius: var(--pill); font-size: 10.5px;
 }
 .chip-tag { background: var(--accent-weak); }
 .chip-blocked { background: rgba(211, 59, 47, 0.16); }
 .chip-reminder { background: var(--primary-weak); }
-.ti-age { flex: none; font-variant-numeric: tabular-nums; color: var(--muted); font-size: 11px; }
+.ti-age { flex: none; font-variant-numeric: tabular-nums; color: var(--muted); font-size: 10.5px; }
 .ti-age--warn { color: var(--accent-2); font-weight: 700; }
-.list-empty { color: var(--muted); text-align: center; padding: 14px 0; font-size: 11px; }
+.list-empty { color: var(--muted); text-align: center; padding: 12px 0; font-size: 10.5px; }
 
-/* --- Рядок будильника (дворядкова міні-картка) --- */
+/* --- Рядок будильника (поля стискаються, дії переносяться разом) --- */
 .rem-row {
-    display: flex; flex-wrap: wrap; align-items: center; gap: 7px;
-    padding: 10px; margin-bottom: 8px;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+    padding: 8px; margin-bottom: 7px;
     background: var(--surface-2); border: 1px solid var(--border);
     border-radius: var(--radius-sm);
 }
-.rem-row .rm-ticket { width: 96px; }
-.rem-row .rm-time { width: 100px; }
+.rem-row .rm-ticket { flex: 1 1 72px; min-width: 54px; width: auto; }
+.rem-row .rm-time { flex: 0 1 auto; min-width: 0; width: auto; }
 .rem-row .rm-note { flex: 1 1 100%; min-width: 0; }
-.rem-row .rem-spacer { flex: 1; }
+.rem-actions { display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto; margin-left: auto; }
 .rem-author { flex: 1 1 100%; font-size: 10px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rem-row .mute, .rem-row .remove {
+    border: 1px solid transparent; background: transparent;
+    border-radius: var(--pill); padding: 5px 8px; font-size: 15px; cursor: pointer; line-height: 1;
+}
+.rem-row .mute:hover { background: var(--surface); }
+.rem-row .remove { color: var(--muted); }
+.rem-row .remove:hover { background: var(--surface); color: var(--danger); }
 
 /* Сегмент типу: 🔒 особистий / 👥 загальний (pill) */
-.scope-seg { display: inline-flex; border: 1px solid var(--border); border-radius: var(--pill); overflow: hidden; background: var(--surface); }
-.scope-opt { border: none; background: transparent; cursor: pointer; padding: 6px 13px; font-size: 14px; line-height: 1.15; color: var(--muted); }
+.scope-seg { display: inline-flex; border: 1px solid var(--border); border-radius: var(--pill); overflow: hidden; background: var(--surface); flex: none; }
+.scope-opt { border: none; background: transparent; cursor: pointer; padding: 5px 11px; font-size: 13px; line-height: 1.15; color: var(--muted); }
 .scope-opt.active { background: var(--accent); color: #fff; }
 
 /* --- Рядок правила за тегом (один рядок) --- */
 .rule-row {
-    display: flex; align-items: center; gap: 7px; flex-wrap: nowrap;
-    padding: 10px; margin-bottom: 8px;
+    display: flex; align-items: center; gap: 6px; flex-wrap: nowrap;
+    padding: 8px; margin-bottom: 7px;
     background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
 }
-.rule-row .tr-query { flex: 1 1 auto; min-width: 40px; }
-.rule-row .tr-repeat { width: 48px; flex: none; }
+.rule-row .tr-query { flex: 1 1 auto; min-width: 36px; }
+.rule-row .tr-repeat { width: 46px; flex: none; }
 .rule-row .icon-label, .rule-row input[type="color"], .rule-row .remove { flex: none; }
 .rule-row .remove {
     border: 1px solid transparent; background: transparent; color: var(--muted);
-    border-radius: var(--pill); padding: 6px 10px; font-size: 16px; cursor: pointer; line-height: 1;
+    border-radius: var(--pill); padding: 5px 8px; font-size: 15px; cursor: pointer; line-height: 1;
 }
 .rule-row .remove:hover { background: var(--surface); color: var(--danger); }
 
 /* --- Перелік полів «Послуга в тікеті» --- */
-.svc-fields { display: flex; flex-direction: column; gap: 7px; margin-top: 8px; }
+.svc-fields { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
 .svc-fields .icon-label { font-weight: 500; }
 
 /* --- Sticky-футер --- */
 .footer {
     position: sticky; bottom: 0; left: 0; right: 0;
-    margin: 12px -14px 0; padding: 12px 14px;
+    margin: 10px -11px 0; padding: 10px 11px;
     background: var(--surface); border-top: 1px solid var(--border);
 }
 button#save {
-    width: 100%; padding: 11px; font-weight: 700; cursor: pointer; font-size: 13px;
+    width: 100%; padding: 9px; font-weight: 700; cursor: pointer; font-size: 12.5px;
     color: #fff; background: var(--primary); letter-spacing: 0.02em;
     border: none; border-radius: var(--radius-sm);
-    box-shadow: 0 4px 14px rgba(42, 63, 95, 0.28);
+    box-shadow: 0 4px 12px rgba(42, 63, 95, 0.26);
 }
 button#save:hover { filter: brightness(1.08); }
-#status { min-height: 14px; color: var(--ok); font-size: 11px; margin-top: 7px; text-align: center; }
+#status { min-height: 14px; color: var(--ok); font-size: 10.5px; margin-top: 6px; text-align: center; }
 
 #reloadHint { cursor: pointer; color: var(--accent); font-weight: 700; padding: 4px 0; margin-bottom: 6px; }
