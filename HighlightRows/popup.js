@@ -138,6 +138,9 @@ const IC = {
     lock12: svgIcon('<rect x="4.5" y="11" width="15" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>', 12),
     clock12: svgIcon('<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/>', 12),
     user12: svgIcon('<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>', 12),
+    user16: svgIcon('<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>'),
+    userOff16: svgIcon('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="17" y1="8" x2="22" y2="13"/><line x1="22" y1="8" x2="17" y2="13"/>'),
+    logout: svgIcon('<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>'),
 };
 
 // Кнопка-тоглер: іконка показує стан (swap SVG), без заливки.
@@ -398,17 +401,22 @@ function makeClickable(item, url) {
 async function renderAccount() {
     const sess = (typeof SB !== 'undefined') ? await SB.getSession() : null;
     const info = $('accountInfo');
+    const icon = $('accountIcon');
     const loginBtn = $('loginBtn');
     const logoutBtn = $('logoutBtn');
     if (!info) return;
     if (sess) {
         info.textContent = (sess.user && sess.user.email) ? sess.user.email : 'Залогінено';
+        info.title = info.textContent;
+        if (icon) icon.innerHTML = IC.user16;
         loginBtn.style.display = 'none';
-        logoutBtn.style.display = '';
+        if (logoutBtn) { logoutBtn.innerHTML = IC.logout; logoutBtn.style.display = ''; }
     } else {
-        info.textContent = 'Не залогінено (локальні будильники)';
+        info.textContent = 'Локальні будильники';
+        info.title = 'Не залогінено — будильники лише на цьому пристрої';
+        if (icon) icon.innerHTML = IC.userOff16;
         loginBtn.style.display = '';
-        logoutBtn.style.display = 'none';
+        if (logoutBtn) logoutBtn.style.display = 'none';
     }
 }
 
