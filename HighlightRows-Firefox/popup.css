@@ -182,14 +182,15 @@ button.add {
 }
 button.add:hover { background: var(--accent); color: #fff; }
 
-/* Іконкова кнопка-тоглер (🔔 сповіщення / 🔊 звук) замість галочки */
+/* Іконкова кнопка-тоглер — стан показує сама іконка (🔔↔🔕, 🔊↔🔇),
+   поведінка як у кнопки заглушення в «Будильниках»: прозоро, без заливки. */
 .itoggle {
-    border: 1px solid var(--border); background: var(--surface);
-    color: var(--muted); cursor: pointer; line-height: 1;
-    padding: 5px 9px; border-radius: var(--radius-sm); font-size: 14px;
+    border: 1px solid transparent; background: transparent;
+    color: var(--text); cursor: pointer; line-height: 1;
+    padding: 5px 8px; border-radius: var(--radius-sm); font-size: 15px;
 }
-.itoggle:hover { border-color: var(--accent); }
-.itoggle.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+.itoggle:hover { background: var(--surface); }
+.itoggle:not(.on) { color: var(--muted); opacity: 0.8; }
 
 /* --- Списки тікетів --- */
 .stale-list {
