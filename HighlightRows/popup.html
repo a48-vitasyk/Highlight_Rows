@@ -44,13 +44,12 @@
     <div class="field row">
         <label for="names">Ім'я:</label>
         <input type="text" id="names" class="grow" placeholder="Ім'я для підсвітки">
-        <label for="color">Колір:</label>
-        <input type="color" id="color">
+        <input type="color" id="color" title="Колір підсвітки">
     </div>
-    <div class="field row wrap">
-        <label for="thresholdMinutes">Поріг (хв):</label>
+    <div class="field row">
+        <label for="thresholdMinutes">Поріг:</label>
         <input type="number" id="thresholdMinutes" min="0" step="0.1">
-        <label for="repeatMinutes">Повтор (хв):</label>
+        <label for="repeatMinutes">Повтор:</label>
         <input type="number" id="repeatMinutes" min="0" step="0.1">
         <button type="button" id="soundEnabled" class="itoggle" title="Звук сигналу">🔊</button>
     </div>
