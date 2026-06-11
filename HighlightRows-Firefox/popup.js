@@ -429,8 +429,11 @@ $('save').addEventListener('click', async () => {
         if (loggedIn) {
             status.textContent = 'Збереження…';
             // Будильники — у спільну базу (решта налаштувань лишається локальною).
-            try { await SB.syncReminders(settings.reminders); status.textContent = 'Збережено (спільне)'; }
-            catch (e) { status.textContent = 'Збережено локально; синк не вдався'; }
+            try {
+                await SB.syncReminders(settings.reminders);
+                status.textContent = 'Збережено (спільне)';
+                loadForm(); // перемалювати рядки з реальними id (uuid) з бази — щоб mute/зміни працювали одразу
+            } catch (e) { status.textContent = 'Збережено локально; синк не вдався'; }
         } else {
             status.textContent = 'Збережено';
         }
