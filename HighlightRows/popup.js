@@ -75,24 +75,26 @@ function isUuid(s) {
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(s || ''));
 }
 
-// Тип будильника — одна кнопка-тоглер, що МІНЯЄ іконку: 🔒 особистий / 👥 загальний.
-// Прозора (як інші тоглери), тож іконка завжди видима; стан — у row.dataset.scope.
-function buildScopeToggle(row) {
-    const b = makeEl('button', { type: 'button', className: 'itoggle on' });
-    const render = () => {
-        const shared = row.dataset.scope === 'shared';
-        b.textContent = shared ? '👥' : '🔒';
-        b.title = shared
-            ? 'Загальний (бачать усі) — клік: зробити особистим'
-            : 'Особистий (лише ви) — клік: зробити загальним';
-    };
-    render();
-    b.addEventListener('click', () => {
-        row.dataset.scope = row.dataset.scope === 'shared' ? 'personal' : 'shared';
-        render();
-        markRemindersDirty();
+// Тип будильника — сегмент-пілоу з двох опцій: 🔒 особистий / 👥 загальний.
+// Монохромні SVG (currentColor): активна опція білим на акценті — контрастно.
+const SVG_LOCK = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="11" width="15" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>';
+const SVG_USERS = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>';
+
+function buildScopeSeg(row) {
+    const seg = makeEl('div', { className: 'scope-seg' });
+    const opts = [
+        { v: 'personal', svg: SVG_LOCK, t: 'Особистий (лише ви)' },
+        { v: 'shared', svg: SVG_USERS, t: 'Загальний (бачать усі)' },
+    ];
+    const sync = () => [...seg.children].forEach((c) => c.classList.toggle('active', c.dataset.scope === row.dataset.scope));
+    opts.forEach((o) => {
+        const b = makeEl('button', { type: 'button', className: 'scope-opt', title: o.t, innerHTML: o.svg });
+        b.dataset.scope = o.v;
+        b.addEventListener('click', () => { row.dataset.scope = o.v; sync(); markRemindersDirty(); });
+        seg.appendChild(b);
     });
-    return b;
+    sync();
+    return seg;
 }
 
 function showReloadLink() {
@@ -206,7 +208,7 @@ function addReminderRow(reminder, muted) {
     const row = makeEl('div', { className: 'rem-row' });
     row.dataset.id = id;
     row.dataset.scope = scope;
-    const scopeSeg = buildScopeToggle(row);
+    const scopeSeg = buildScopeSeg(row);
 
     // Рядок 1: тікет, час, група дій (сегмент типу + заглушити + видалити).
     // Дії — один блок (.rem-actions), тож переносяться РАЗОМ, а поля тікета/часу
