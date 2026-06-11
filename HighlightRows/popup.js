@@ -40,7 +40,7 @@ function applyTheme(stored) {
     const btn = $('themeBtn');
     if (btn) {
         const eff = effectiveTheme(stored);
-        btn.textContent = eff === 'dark' ? '☀️' : '🌙';
+        btn.innerHTML = eff === 'dark' ? IC.sun : IC.moon;
         btn.title = eff === 'dark' ? 'Світла тема' : 'Темна тема';
     }
 }
@@ -122,18 +122,34 @@ function makeEl(tag, props, children) {
     return el;
 }
 
-// Іконкова кнопка-тоглер замість галочки — поведінка як у заглушенні будильника:
-// сама ІКОНКА відображає стан (🔔↔🔕, 🔊↔🔇), без заливки.
+// Монохромні SVG-іконки (currentColor) — єдиний стиль для всього попапа.
+function svgIcon(inner, size) {
+    return '<svg viewBox="0 0 24 24" width="' + (size || 16) + '" height="' + (size || 16) +
+        '" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + inner + '</svg>';
+}
+const IC = {
+    bell: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>'),
+    bellOff: svgIcon('<path d="M13.73 21a2 2 0 0 1-3.46 0"/><path d="M18.63 13A17.9 17.9 0 0 1 18 8"/><path d="M6.26 6.26A5.9 5.9 0 0 0 6 8c0 7-3 9-3 9h14"/><path d="M18 8a6 6 0 0 0-9.33-5"/><line x1="2" y1="2" x2="22" y2="22"/>'),
+    vol: svgIcon('<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>'),
+    volX: svgIcon('<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/>'),
+    moon: svgIcon('<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>'),
+    sun: svgIcon('<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.2" y1="4.2" x2="5.6" y2="5.6"/><line x1="18.4" y1="18.4" x2="19.8" y2="19.8"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.2" y1="19.8" x2="5.6" y2="18.4"/><line x1="18.4" y1="5.6" x2="19.8" y2="4.2"/>'),
+    tag12: svgIcon('<path d="M20.59 13.41 13.42 20.59a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>', 12),
+    lock12: svgIcon('<rect x="4.5" y="11" width="15" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>', 12),
+    clock12: svgIcon('<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/>', 12),
+    user12: svgIcon('<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>', 12),
+};
+
+// Кнопка-тоглер: іконка показує стан (swap SVG), без заливки.
 function setToggle(btn, on) {
     btn.classList.toggle('on', !!on);
     btn.setAttribute('aria-pressed', on ? 'true' : 'false');
-    const onI = btn.dataset.onIcon, offI = btn.dataset.offIcon;
-    if (onI || offI) btn.textContent = on ? (onI || '') : (offI || '');
+    if (btn._onHtml || btn._offHtml) btn.innerHTML = on ? (btn._onHtml || '') : (btn._offHtml || '');
 }
 function wireToggle(btn) { btn.addEventListener('click', () => setToggle(btn, !btn.classList.contains('on'))); }
-function makeToggle(onIcon, offIcon, on, title) {
+function makeToggle(onHtml, offHtml, on, title) {
     const b = makeEl('button', { type: 'button', className: 'itoggle', title: title || '' });
-    b.dataset.onIcon = onIcon; b.dataset.offIcon = offIcon;
+    b._onHtml = onHtml; b._offHtml = offHtml;
     setToggle(b, on); wireToggle(b); return b;
 }
 
@@ -178,9 +194,9 @@ function addTagRuleRow(rule) {
     const r = rule || { query: '', color: '#ffac5a', notify: true, sound: true, repeatMinutes: 0 };
     const query = makeEl('input', { type: 'text', className: 'tr-query', value: r.query, placeholder: '[TAG]' });
     const color = makeEl('input', { type: 'color', className: 'tr-color', value: r.color || '#ffac5a' });
-    const notify = makeToggle('🔔', '🔕', !!r.notify, 'Сповіщення');
+    const notify = makeToggle(IC.bell, IC.bellOff, !!r.notify, 'Сповіщення');
     notify.classList.add('tr-notify');
-    const sound = makeToggle('🔊', '🔇', !!r.sound, 'Звук');
+    const sound = makeToggle(IC.vol, IC.volX, !!r.sound, 'Звук');
     sound.classList.add('tr-sound');
     const repeat = makeEl('input', {
         type: 'number', className: 'tr-repeat', value: r.repeatMinutes || 0,
@@ -219,7 +235,9 @@ function addReminderRow(reminder, muted) {
     row.appendChild(actions);
     row.appendChild(note);
     if (r.creatorEmail && scope === 'shared') {
-        row.appendChild(makeEl('div', { className: 'rem-author', textContent: '👤 ' + r.creatorEmail }));
+        const auth = makeEl('div', { className: 'rem-author', innerHTML: IC.user12 });
+        auth.appendChild(document.createTextNode(' ' + r.creatorEmail));
+        row.appendChild(auth);
     }
 
     [ticket, time, note].forEach((el) => el.addEventListener('input', markRemindersDirty));
@@ -240,7 +258,7 @@ function isMutedToday(state, id) {
 
 // Кнопка показує ПОТОЧНИЙ стан: 🔔 — активний, 🔕 — заглушено на сьогодні.
 function setMuteBtn(btn, muted) {
-    btn.textContent = muted ? '🔇' : '🔊';
+    btn.innerHTML = muted ? IC.volX : IC.vol;
     btn.title = muted
         ? 'Заглушено сьогодні — клікніть, щоб увімкнути'
         : 'Активний — клікніть, щоб заглушити на сьогодні';
@@ -355,7 +373,7 @@ function renderStaleTickets(arr) {
         item.appendChild(makeEl('span', { className: 'ti-num', textContent: '#' + t.ticketId }));
         item.appendChild(makeEl('span', {
             className: 'ti-age' + (t.noReply ? ' ti-age--warn' : ''),
-            textContent: fmtHours(t.hours) + (t.noReply ? ' ⚠' : ''),
+            textContent: fmtHours(t.hours),
         }));
         item.appendChild(makeEl('span', { className: 'ti-text', textContent: truncate(t.subject, 30) }));
         makeClickable(item, t.url);
@@ -424,10 +442,10 @@ async function initPopup() {
     }
     loadForm();
 }
+{ const se = $('soundEnabled'); if (se) { se._onHtml = IC.vol; se._offHtml = IC.volX; wireToggle(se); } }
 initPopup();
 initCardDnD();
 initTabs();
-if ($('soundEnabled')) wireToggle($('soundEnabled'));
 
 // --- Верхні вкладки (активна зберігається локально) -----------------------
 function initTabs() {
@@ -558,11 +576,6 @@ function setRefreshing(on) {
 
 // --- Список збігів (теги/блокування/будильники, усі сторінки) ------------
 
-function kindIcons(kinds) {
-    const map = { tag: '🏷', blocked: '🔒', reminder: '⏰' };
-    return (kinds || []).map((k) => map[k] || '').join('');
-}
-
 function renderMatchTickets(arr) {
     const box = $('matchTickets');
     box.innerHTML = '';
@@ -570,11 +583,11 @@ function renderMatchTickets(arr) {
         box.appendChild(makeEl('div', { className: 'list-empty', textContent: 'Поки порожньо' }));
         return;
     }
-    const map = { tag: '🏷', blocked: '🔒', reminder: '⏰' };
+    const map = { tag: IC.tag12, blocked: IC.lock12, reminder: IC.clock12 };
     arr.forEach((m) => {
         const item = makeEl('div', { className: 'stale-item', title: m.subject });
         const chips = makeEl('span', { className: 'ti-chips' });
-        (m.kinds || []).forEach((k) => chips.appendChild(makeEl('span', { className: 'chip chip-' + k, textContent: map[k] || '' })));
+        (m.kinds || []).forEach((k) => chips.appendChild(makeEl('span', { className: 'chip chip-' + k, innerHTML: map[k] || '' })));
         item.appendChild(chips);
         item.appendChild(makeEl('span', { className: 'ti-num', textContent: '#' + m.ticketId }));
         item.appendChild(makeEl('span', { className: 'ti-text', textContent: truncate(m.subject, 32) }));

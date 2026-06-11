@@ -185,12 +185,16 @@ button.add:hover { background: var(--accent); color: #fff; }
 /* Іконкова кнопка-тоглер — стан показує сама іконка (🔔↔🔕, 🔊↔🔇),
    поведінка як у кнопки заглушення в «Будильниках»: прозоро, без заливки. */
 .itoggle {
+    display: inline-flex; align-items: center; justify-content: center;
     border: 1px solid transparent; background: transparent;
-    color: var(--text); cursor: pointer; line-height: 1;
-    padding: 5px 8px; border-radius: var(--radius-sm); font-size: 15px;
+    color: var(--text); cursor: pointer; line-height: 0;
+    padding: 5px 8px; border-radius: var(--radius-sm);
 }
+.itoggle svg { display: block; }
 .itoggle:hover { background: var(--surface); }
 .itoggle:not(.on) { color: var(--muted); opacity: 0.8; }
+#themeBtn svg, #expandBtn svg, .chip svg, .rem-row .mute svg { display: block; }
+.rem-row .mute { display: inline-flex; align-items: center; justify-content: center; }
 
 /* --- Списки тікетів --- */
 .stale-list {
@@ -232,6 +236,7 @@ body[data-view="panel"] .stale-list { max-height: 300px; }
 .rem-row .rm-note { flex: 1 1 100%; min-width: 0; }
 .rem-actions { display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto; margin-left: auto; }
 .rem-author { flex: 1 1 100%; font-size: 10px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rem-author svg { vertical-align: -2px; }
 .rem-row .mute, .rem-row .remove {
     border: 1px solid transparent; background: transparent;
     border-radius: var(--radius-sm); padding: 5px 8px; font-size: 15px; cursor: pointer; line-height: 1;
