@@ -18,6 +18,13 @@
     <button type="button" class="small" id="logoutBtn" style="display:none">Вийти</button>
 </div>
 
+<div class="tabs" role="tablist">
+    <button type="button" class="tab active" data-tab="home">Головна</button>
+    <button type="button" class="tab" data-tab="tickets">Мої тікети</button>
+    <button type="button" class="tab" data-tab="settings">Налаштування</button>
+</div>
+
+<div class="tab-panel" data-panel="home">
 <div id="cards">
 <div class="card" data-card="matches">
     <div class="card-head">
@@ -111,6 +118,14 @@
     <div class="hint">Тікети, де від останньої відповіді підтримки минуло більше порога. ~кожні 15 хв, поки відкрита панель.</div>
     <div class="hint">⚠️ Сканує чергу, відкриваючи тікети через API — знімає позначку нового повідомлення (p-newmsg). Вимкнено за замовч.</div>
 </div>
+</div>
+</div>
+
+<div class="tab-panel" data-panel="tickets" hidden>
+    <div class="tab-empty">Скоро тут будуть ваші тікети</div>
+</div>
+<div class="tab-panel" data-panel="settings" hidden>
+    <div class="tab-empty">Скоро тут будуть налаштування</div>
 </div>
 
 <div class="footer">

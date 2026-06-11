@@ -414,6 +414,26 @@ async function initPopup() {
 }
 initPopup();
 initCardDnD();
+initTabs();
+
+// --- Верхні вкладки (активна зберігається локально) -----------------------
+function initTabs() {
+    const tabs = [...document.querySelectorAll('.tab')];
+    const panels = [...document.querySelectorAll('.tab-panel')];
+    if (!tabs.length) return;
+    const activate = (name) => {
+        tabs.forEach((t) => t.classList.toggle('active', t.dataset.tab === name));
+        panels.forEach((p) => { p.hidden = p.dataset.panel !== name; });
+    };
+    tabs.forEach((t) => t.addEventListener('click', () => {
+        activate(t.dataset.tab);
+        try { chrome.storage.local.set({ activeTab: t.dataset.tab }); } catch (e) { /* ignore */ }
+    }));
+    chrome.storage.local.get('activeTab', (d) => {
+        const name = (d && d.activeTab) || 'home';
+        if (tabs.some((t) => t.dataset.tab === name)) activate(name);
+    });
+}
 
 // --- Перетягування блоків (порядок зберігається локально, для кожного) ----
 function saveCardOrder(container) {
