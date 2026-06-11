@@ -111,6 +111,7 @@ function teardown() {
     clearTimeout(debounceTimer);
     stopReminderAudio();
     removeReminderBanner();
+    removeUnlockListeners();
 }
 
 // --- Налаштування --------------------------------------------------------
@@ -256,6 +257,30 @@ function targetTimeToday(hhmm) {
 }
 
 // --- Звук і сповіщення ---------------------------------------------------
+
+// Autoplay: браузер блокує програмний звук, поки користувач не взаємодіяв зі
+// сторінкою (тому раніше грав лише системний звук Windows зі сповіщення, а
+// beep.wav мовчав). Після ПЕРШОГО жесту «прогріваємо» аудіо тихим програвом —
+// далі beep.wav і звук будильника грають нормально.
+let audioUnlocked = false;
+
+function removeUnlockListeners() {
+    document.removeEventListener('pointerdown', unlockAudio, true);
+    document.removeEventListener('keydown', unlockAudio, true);
+}
+
+function unlockAudio() {
+    if (audioUnlocked) return;
+    audioUnlocked = true;
+    removeUnlockListeners();
+    try {
+        const a = new Audio(chrome.runtime.getURL('beep.wav'));
+        a.volume = 0;
+        a.play().then(() => { a.pause(); a.currentTime = 0; }).catch(() => {});
+    } catch (e) { /* ігноруємо */ }
+    // Якщо будильник уже активний, але звук був заблокований — увімкнути зараз.
+    if (alive) refresh();
+}
 
 function playBeep() {
     try {
@@ -1131,6 +1156,10 @@ function init() {
                 else if (req.action === 'scanMatches') scanMatches(true);
                 else if (req.action === 'refreshTraffic') loadTraffic(true);
             });
+
+            // Розблокування звуку після першого жесту користувача (autoplay).
+            document.addEventListener('pointerdown', unlockAudio, true);
+            document.addEventListener('keydown', unlockAudio, true);
 
             observerRef = new MutationObserver(scheduleRefresh);
             observerRef.observe(document.body, { childList: true, subtree: true });
