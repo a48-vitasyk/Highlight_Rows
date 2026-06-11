@@ -36,6 +36,43 @@ function makeEl(tag, props, children) {
     return el;
 }
 
+// У Firefox нативний діалог кольору (input[type=color]) відкривається окремим
+// вікном і popup закривається. Тож у Firefox замінюємо такі поля на інлайн-
+// пікер: прев'ю + hex-поле + пресети (id/клас зберігаємо, щоб форма читалась).
+const IS_FIREFOX = /firefox/i.test(navigator.userAgent || '');
+const COLOR_PRESETS = ['#ffac5a', '#ff5a5a', '#ffd93b', '#7be25b', '#5ab0ff', '#c08bff', '#ffffff', '#b0b0b0'];
+
+function firefoxifyColor(input) {
+    if (!IS_FIREFOX || !input || input.type !== 'color') return;
+    const val = input.value || '#ffac5a';
+
+    const swatch = document.createElement('span');
+    swatch.style.cssText = 'display:inline-block;width:16px;height:16px;border:1px solid #999;border-radius:3px;vertical-align:middle;margin-right:4px;background:' + val;
+
+    const text = document.createElement('input');
+    text.type = 'text';
+    text.id = input.id;
+    text.className = input.className;
+    text.value = val;
+    text.maxLength = 7;
+    text.placeholder = '#rrggbb';
+    text.style.width = '70px';
+    text.style.verticalAlign = 'middle';
+
+    const palette = document.createElement('span');
+    palette.style.cssText = 'display:inline-flex;gap:3px;margin-left:6px;vertical-align:middle';
+    COLOR_PRESETS.forEach((c) => {
+        const sq = document.createElement('span');
+        sq.title = c;
+        sq.style.cssText = 'display:inline-block;width:14px;height:14px;border:1px solid #999;border-radius:3px;cursor:pointer;background:' + c;
+        sq.addEventListener('click', () => { text.value = c; swatch.style.background = c; });
+        palette.appendChild(sq);
+    });
+
+    text.addEventListener('input', () => { swatch.style.background = text.value; });
+    input.replaceWith(swatch, text, palette);
+}
+
 function addTagRuleRow(rule) {
     const r = rule || { query: '', color: '#ffac5a', notify: true, sound: true, repeatMinutes: 0 };
     const query = makeEl('input', { type: 'text', className: 'tr-query', value: r.query, placeholder: '[TAG]' });
@@ -58,6 +95,7 @@ function addTagRuleRow(rule) {
     ]);
     remove.addEventListener('click', () => row.remove());
     $('tagRules').appendChild(row);
+    firefoxifyColor(color); // Firefox: інлайн-пікер замість нативного діалогу
 }
 
 function addReminderRow(reminder, muted) {
@@ -212,6 +250,9 @@ chrome.storage.local.get('reminderState', (local) => {
         } else {
             fillForm(DEFAULT_SETTINGS, reminderState);
         }
+        // Firefox: статичні поля кольору — на інлайн-пікер.
+        firefoxifyColor($('color'));
+        firefoxifyColor($('reminderColor'));
     });
 });
 

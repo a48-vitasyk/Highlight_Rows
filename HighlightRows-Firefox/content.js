@@ -391,13 +391,17 @@ function clearRow(tr) {
 // --- Збіги ---------------------------------------------------------------
 
 function blockedNameForRow(tr) {
-    // Тултип «<хто заблокував>» лежить у пропі blocked_by; шукаємо в ньому
-    // налаштоване ім'я (без прив'язки до локалізованого префікса).
+    // Тултип = "<локалізований префікс>: <Хто заблокував>, <дата>". Ім'я
+    // блокувальника — після першого ": ". Матчимо за ПОЧАТКОМ цього імені, щоб
+    // введене ім'я не збігалося як підрядок усередині імені іншої людини.
     const props = tr.querySelectorAll(BLOCKED_PROP_SELECTOR);
     for (const p of props) {
         const tip = p.getAttribute('data-ispui-tooltip-text') || '';
+        const idx = tip.indexOf(': ');
+        const blocker = (idx >= 0 ? tip.slice(idx + 2) : tip).trim();
         for (const name of settings.names) {
-            if (name && tip.includes(name)) return name;
+            const n = String(name || '').trim();
+            if (n && blocker.toLowerCase().startsWith(n.toLowerCase())) return name;
         }
     }
     return null;
