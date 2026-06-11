@@ -1,0 +1,218 @@
+/* popup.css — дизайн-система попапа Highlight Rows (картки, світла/темна тема).
+   Buildless: чистий CSS зі змінними. Усі функціональні id/класи з popup.js
+   зберігаються — тут лише вигляд і розкладка. */
+
+:root {
+    --bg: #f5f6f8;
+    --surface: #ffffff;
+    --surface-2: #f0f2f5;
+    --border: #e3e6ea;
+    --text: #1c1e21;
+    --muted: #6b7280;
+    --accent: #1a76e2;
+    --accent-weak: rgba(26, 118, 226, 0.12);
+    --danger: #d33b2f;
+    --ok: #2e7d32;
+    --radius: 10px;
+    --radius-sm: 6px;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg: #1b1d20;
+        --surface: #25282c;
+        --surface-2: #2d3036;
+        --border: #383c42;
+        --text: #e6e8eb;
+        --muted: #9aa0a6;
+        --accent: #4c9aff;
+        --accent-weak: rgba(76, 154, 255, 0.16);
+        --danger: #ff6b5e;
+        --ok: #6bd58a;
+        --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+    }
+}
+
+* { box-sizing: border-box; }
+
+body {
+    width: 340px;
+    margin: 0;
+    padding: 12px 12px 64px; /* місце під sticky-футер */
+    font-family: system-ui, sans-serif;
+    font-size: 13px;
+    line-height: 1.4;
+    color: var(--text);
+    background: var(--bg);
+}
+body[data-view="panel"] { width: auto; max-width: 460px; }
+
+/* --- Шапка --- */
+.app-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.app-header h1 { flex: 1; margin: 0; font-size: 15px; font-weight: 700; }
+
+.account {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 10px; margin-bottom: 12px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); box-shadow: var(--shadow);
+}
+.account #accountInfo { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* --- Картки секцій --- */
+.card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 12px;
+    margin-bottom: 10px;
+}
+.card-head { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; }
+.card-title {
+    flex: 1; margin: 0;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.04em;
+    text-transform: uppercase; color: var(--muted);
+}
+.card-icon { font-size: 13px; }
+
+/* --- Поля --- */
+.field { margin-bottom: 10px; }
+.field:last-child { margin-bottom: 0; }
+.field > label { display: block; margin-bottom: 4px; }
+label { font-weight: 600; }
+.row { display: flex; align-items: center; gap: 8px; }
+.row label { font-weight: 600; margin: 0; }
+.hint { font-weight: 400; color: var(--muted); font-size: 11px; }
+.icon-label { font-weight: 400; display: inline-flex; align-items: center; gap: 3px; }
+
+input[type="text"], input[type="number"], input[type="time"], textarea, select {
+    font: inherit; color: var(--text);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 5px 7px;
+}
+input[type="text"], textarea { box-sizing: border-box; }
+input[type="number"] { width: 64px; }
+textarea { width: 100%; resize: vertical; }
+input:focus, textarea:focus, select:focus, button:focus-visible {
+    outline: none; border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-weak);
+}
+input[type="color"] {
+    width: 28px; height: 26px; padding: 2px;
+    background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); cursor: pointer; vertical-align: middle;
+}
+input[type="checkbox"] { accent-color: var(--accent); }
+
+/* --- Кнопки --- */
+button { font: inherit; color: var(--text); }
+button.small, .btn {
+    padding: 4px 10px; cursor: pointer;
+    background: var(--surface-2); color: var(--text);
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+}
+button.small:hover, .btn:hover { border-color: var(--accent); color: var(--accent); }
+button.add {
+    margin-top: 6px; padding: 5px 10px; cursor: pointer;
+    background: transparent; color: var(--accent);
+    border: 1px dashed var(--border); border-radius: var(--radius-sm);
+}
+button.add:hover { border-color: var(--accent); background: var(--accent-weak); }
+
+/* Дрібні іконкові кнопки в рядках (mute / remove) */
+.rem-row .mute, .rem-row .remove {
+    border: 1px solid transparent; background: transparent;
+    border-radius: var(--radius-sm); padding: 2px 6px; cursor: pointer; line-height: 1;
+}
+.rem-row .mute:hover { background: var(--surface-2); }
+.rem-row .remove { color: var(--muted); }
+.rem-row .remove:hover { background: var(--surface-2); color: var(--danger); }
+
+/* --- Списки тікетів --- */
+.stale-list {
+    max-height: 140px; overflow-y: auto;
+    background: var(--surface-2);
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    padding: 4px;
+}
+body[data-view="panel"] .stale-list { max-height: 300px; }
+.stale-item {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px; padding: 4px 6px; border-radius: var(--radius-sm);
+    white-space: nowrap; overflow: hidden;
+}
+.stale-item:hover { background: var(--accent-weak); }
+.ti-num { font-weight: 700; color: var(--accent); flex: none; }
+.ti-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
+.ti-chips { display: inline-flex; gap: 2px; flex: none; }
+.chip {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 18px; height: 18px; border-radius: 5px; font-size: 11px;
+}
+.chip-tag { background: rgba(255, 172, 90, 0.22); }
+.chip-blocked { background: rgba(211, 59, 47, 0.18); }
+.chip-reminder { background: rgba(76, 154, 255, 0.20); }
+.ti-age { flex: none; font-variant-numeric: tabular-nums; color: var(--muted); }
+.ti-age--warn { color: var(--danger); font-weight: 600; }
+.list-empty { color: var(--muted); text-align: center; padding: 8px 0; font-size: 11px; }
+
+/* --- Рядок будильника (дворядкова міні-картка) --- */
+.rem-row {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+    padding: 8px; margin-bottom: 8px;
+    background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+}
+.rem-row .rm-ticket { width: 92px; }
+.rem-row .rm-time { width: 96px; }
+.rem-row .rm-note { flex: 1 1 100%; min-width: 0; }
+.rem-row .rem-spacer { flex: 1; }
+.rem-author {
+    flex: 1 1 100%; font-size: 10px; color: var(--muted);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* Сегмент типу: 🔒 особистий / 👥 загальний */
+.scope-seg { display: inline-flex; border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
+.scope-opt {
+    border: none; background: transparent; cursor: pointer;
+    padding: 3px 7px; line-height: 1; color: var(--muted);
+}
+.scope-opt.active { background: var(--accent); color: #fff; }
+
+/* --- Рядок правила за тегом --- */
+.rule-row {
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    padding: 8px; margin-bottom: 8px;
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+}
+.rule-row .tr-query { flex: 1 1 auto; min-width: 0; }
+.rule-row .tr-repeat { width: 54px; }
+.rule-row .remove {
+    border: 1px solid transparent; background: transparent; color: var(--muted);
+    border-radius: var(--radius-sm); padding: 2px 6px; cursor: pointer; line-height: 1;
+}
+.rule-row .remove:hover { background: var(--surface); color: var(--danger); }
+
+/* --- Sticky-футер --- */
+.footer {
+    position: sticky; bottom: 0; left: 0; right: 0;
+    margin: 10px -12px 0; padding: 10px 12px;
+    background: var(--surface); border-top: 1px solid var(--border);
+}
+button#save {
+    width: 100%; padding: 9px; font-weight: 700; cursor: pointer;
+    color: #fff; background: var(--accent);
+    border: none; border-radius: var(--radius-sm);
+}
+button#save:hover { filter: brightness(1.06); }
+#status { min-height: 14px; color: var(--ok); font-size: 11px; margin-top: 6px; text-align: center; }
+
+#reloadHint {
+    cursor: pointer; color: var(--accent); font-weight: 600;
+    padding: 4px 0; margin-bottom: 6px;
+}

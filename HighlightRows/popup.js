@@ -48,13 +48,23 @@ function isUuid(s) {
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(s || ''));
 }
 
-// Перемикач типу будильника: 👥 загальний (бачать усі) / 🔒 особистий (лише ви).
-function setScopeBtn(btn, scope) {
-    const shared = scope === 'shared';
-    btn.textContent = shared ? '👥' : '🔒';
-    btn.title = shared
-        ? 'Загальний (бачать усі) — клік зробити особистим'
-        : 'Особистий (лише ви) — клік зробити загальним';
+// Сегмент типу будильника: 🔒 особистий (лише ви) / 👥 загальний (бачать усі).
+// Стан тримаємо в row.dataset.scope; клік перемикає активну кнопку.
+function buildScopeSeg(row) {
+    const seg = makeEl('div', { className: 'scope-seg' });
+    const opts = [
+        { v: 'personal', icon: '🔒', t: 'Особистий (лише ви)' },
+        { v: 'shared', icon: '👥', t: 'Загальний (бачать усі)' },
+    ];
+    const sync = () => [...seg.children].forEach((c) => c.classList.toggle('active', c.dataset.scope === row.dataset.scope));
+    opts.forEach((o) => {
+        const b = makeEl('button', { type: 'button', className: 'scope-opt', textContent: o.icon, title: o.t });
+        b.dataset.scope = o.v;
+        b.addEventListener('click', () => { row.dataset.scope = o.v; sync(); markRemindersDirty(); });
+        seg.appendChild(b);
+    });
+    sync();
+    return seg;
 }
 
 function showReloadLink() {
@@ -150,24 +160,29 @@ function addReminderRow(reminder, muted) {
     const scope = r.scope === 'shared' ? 'shared' : 'personal';
     const ticket = makeEl('input', { type: 'text', className: 'rm-ticket', value: r.ticketId, placeholder: 'ID тікета' });
     const time = makeEl('input', { type: 'time', className: 'rm-time', value: r.time });
-    const note = makeEl('input', { type: 'text', className: 'rm-note', value: r.note, placeholder: 'текст' });
-    const scopeBtn = makeEl('button', { type: 'button', className: 'small scope' });
+    const note = makeEl('input', { type: 'text', className: 'rm-note', value: r.note, placeholder: 'текст нагадування' });
     const mute = makeEl('button', { type: 'button', className: 'small mute' });
     setMuteBtn(mute, !!muted);
     const remove = makeEl('button', { type: 'button', className: 'small remove', textContent: '×', title: 'Видалити' });
 
-    const row = makeEl('div', { className: 'rem-row' }, [ticket, time, note, scopeBtn, mute, remove]);
+    const row = makeEl('div', { className: 'rem-row' });
     row.dataset.id = id;
     row.dataset.scope = scope;
-    setScopeBtn(scopeBtn, scope);
-    if (r.creatorEmail) row.title = 'Створив: ' + r.creatorEmail; // автор (для загальних)
+    const scopeSeg = buildScopeSeg(row);
 
-    scopeBtn.addEventListener('click', () => {
-        const next = row.dataset.scope === 'shared' ? 'personal' : 'shared';
-        row.dataset.scope = next;
-        setScopeBtn(scopeBtn, next);
-        markRemindersDirty();
-    });
+    // Рядок 1: тікет, час, [розпір], сегмент типу, заглушити, видалити.
+    // .rm-note має flex-basis:100% → переноситься на рядок 2; автор — рядок 3.
+    row.appendChild(ticket);
+    row.appendChild(time);
+    row.appendChild(makeEl('span', { className: 'rem-spacer' }));
+    row.appendChild(scopeSeg);
+    row.appendChild(mute);
+    row.appendChild(remove);
+    row.appendChild(note);
+    if (r.creatorEmail && scope === 'shared') {
+        row.appendChild(makeEl('div', { className: 'rem-author', textContent: '👤 ' + r.creatorEmail }));
+    }
+
     [ticket, time, note].forEach((el) => el.addEventListener('input', markRemindersDirty));
     mute.addEventListener('click', () => toggleMute(id, mute));
     remove.addEventListener('click', () => {
@@ -284,16 +299,17 @@ function renderStaleTickets(arr) {
     const box = $('staleTickets');
     box.innerHTML = '';
     if (!arr || !arr.length) {
-        box.appendChild(makeEl('div', { className: 'hint', textContent: 'Поки порожньо.' }));
+        box.appendChild(makeEl('div', { className: 'list-empty', textContent: 'Поки порожньо' }));
         return;
     }
     arr.forEach((t) => {
-        const age = t.noReply ? `${fmtHours(t.hours)} (без відп.)` : fmtHours(t.hours);
-        const item = makeEl('div', {
-            className: 'stale-item',
-            textContent: `#${t.ticketId} · ${age} · ${truncate(t.subject, 36)}`,
-            title: t.subject + (t.client ? ' — ' + t.client : ''),
-        });
+        const item = makeEl('div', { className: 'stale-item', title: t.subject + (t.client ? ' — ' + t.client : '') });
+        item.appendChild(makeEl('span', { className: 'ti-num', textContent: '#' + t.ticketId }));
+        item.appendChild(makeEl('span', {
+            className: 'ti-age' + (t.noReply ? ' ti-age--warn' : ''),
+            textContent: fmtHours(t.hours) + (t.noReply ? ' ⚠' : ''),
+        }));
+        item.appendChild(makeEl('span', { className: 'ti-text', textContent: truncate(t.subject, 30) }));
         makeClickable(item, t.url);
         box.appendChild(item);
     });
@@ -421,15 +437,17 @@ function renderMatchTickets(arr) {
     const box = $('matchTickets');
     box.innerHTML = '';
     if (!arr || !arr.length) {
-        box.appendChild(makeEl('div', { className: 'hint', textContent: 'Поки порожньо.' }));
+        box.appendChild(makeEl('div', { className: 'list-empty', textContent: 'Поки порожньо' }));
         return;
     }
+    const map = { tag: '🏷', blocked: '🔒', reminder: '⏰' };
     arr.forEach((m) => {
-        const item = makeEl('div', {
-            className: 'stale-item',
-            textContent: `#${m.ticketId} ${kindIcons(m.kinds)} ${truncate(m.subject, 30)}`,
-            title: m.subject,
-        });
+        const item = makeEl('div', { className: 'stale-item', title: m.subject });
+        const chips = makeEl('span', { className: 'ti-chips' });
+        (m.kinds || []).forEach((k) => chips.appendChild(makeEl('span', { className: 'chip chip-' + k, textContent: map[k] || '' })));
+        item.appendChild(chips);
+        item.appendChild(makeEl('span', { className: 'ti-num', textContent: '#' + m.ticketId }));
+        item.appendChild(makeEl('span', { className: 'ti-text', textContent: truncate(m.subject, 32) }));
         makeClickable(item, m.url);
         box.appendChild(item);
     });
