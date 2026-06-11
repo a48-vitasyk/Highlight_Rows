@@ -1,0 +1,49 @@
+{
+  "manifest_version": 3,
+  "name": "Highlight Rows",
+  "version": "3.7.0",
+  "description": "Ticket helper for the Zomro panel: highlight by blocked request and subject tags, manual time reminders, a 'no support reply > N h' monitor, and client traffic/service info in the ticket. (Firefox build)",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "highlightrows@zomro.local",
+      "strict_min_version": "142.0",
+      "data_collection_permissions": {
+        "required": ["none"]
+      }
+    }
+  },
+  "permissions": [
+    "storage",
+    "notifications"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "images/icon16.png",
+      "48": "images/icon48.png",
+      "128": "images/icon128.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.zomro.com/*",
+        "*://*.omro.host/*"
+      ],
+      "js": ["content.js"],
+      "css": ["styles.css"]
+    }
+  ],
+  "background": {
+    "scripts": ["background.js"]
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["beep.wav"],
+      "matches": [
+        "*://*.zomro.com/*",
+        "*://*.omro.host/*"
+      ]
+    }
+  ]
+}
