@@ -146,6 +146,13 @@
 <button type="button" class="add" id="addReminder">+ Додати будильник</button>
 <div class="hint">ID тікета + час. Спрацьовує за 5 хв до часу. 🔔 активний / 🔕 заглушено (клік перемикає на сьогодні), × - видалити.</div>
 
+<h2>Монітор «Без відповіді»</h2>
+<div class="field row">
+    <input type="checkbox" id="staleEnabled">
+    <label for="staleEnabled">Увімкнути блок «Без відповіді»</label>
+</div>
+<div class="hint">⚠️ Сканує чергу, відкриваючи тікети через API — через це знімається позначка нового повідомлення (p-newmsg). Вимкнено за замовчуванням; вмикайте, лише якщо монітор потрібен.</div>
+
 <button id="save">Зберегти</button>
 <div id="status"></div>
 

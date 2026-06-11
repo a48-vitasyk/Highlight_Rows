@@ -64,6 +64,7 @@ const DEFAULT_SETTINGS = {
     reminderColor: '#ff5a5a',
     reminders: [], // { id, ticketId, time: "HH:MM", note }
     // «без відповіді понад N год» — список у popup
+    staleEnabled: false, // вимкнено за замовч.: скан відкриває тікети й гасить позначку нового повідомлення
     staleHours: 4,
     // показувати трафік клієнта в тікеті
     trafficEnabled: false,
@@ -136,6 +137,7 @@ function normalizeSettings(raw) {
         }))
         .filter((r) => r.query);
 
+    s.staleEnabled = !!s.staleEnabled;
     s.staleHours = Number(s.staleHours);
     if (!(s.staleHours > 0)) s.staleHours = DEFAULT_SETTINGS.staleHours;
     s.trafficEnabled = !!s.trafficEnabled;
@@ -577,6 +579,9 @@ let staleScanRunning = false;
 // дати створення. Результат пише в storage.local.staleTickets (читає popup).
 async function scanStaleTickets(force) {
     if (!alive || !extensionAlive() || !onBillmgr() || staleScanRunning) return;
+    // Вимкнено — не скануємо: інакше відкриття тікетів через ticket.edit гасить
+    // позначку нового повідомлення (p-newmsg). Стосується й ручного оновлення.
+    if (!settings.staleEnabled) return;
 
     // Дедуплікація між вкладками: не сканувати, якщо нещодавно вже сканували.
     // Ручне оновлення (force) ігнорує цей таймер.
@@ -1110,6 +1115,8 @@ function init() {
                 if (!alive) return;
                 if (area === 'sync' && changes.settings) {
                     settings = normalizeSettings(changes.settings.newValue);
+                    // Вимкнули монітор — прибираємо застарілий список у popup.
+                    if (!settings.staleEnabled) { try { chrome.storage.local.set({ staleTickets: [] }); } catch (e) {} }
                     refresh();
                 } else if (area === 'local' && changes.reminderState) {
                     reminderState = changes.reminderState.newValue || {};

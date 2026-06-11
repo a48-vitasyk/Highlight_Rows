@@ -12,6 +12,7 @@ const DEFAULT_SETTINGS = {
     tagRules: [],
     reminderColor: '#ff5a5a',
     reminders: [],
+    staleEnabled: false,
     staleHours: 4,
     trafficEnabled: false,
 };
@@ -149,6 +150,7 @@ function fillForm(s, reminderState) {
     $('repeatMinutes').value = s.repeatMinutes;
     $('color').value = s.color || DEFAULT_SETTINGS.color;
     $('soundEnabled').checked = s.soundEnabled;
+    $('staleEnabled').checked = s.staleEnabled;
     $('staleHours').value = s.staleHours || DEFAULT_SETTINGS.staleHours;
     $('trafficEnabled').checked = s.trafficEnabled;
     $('reminderColor').value = s.reminderColor || DEFAULT_SETTINGS.reminderColor;
@@ -186,6 +188,7 @@ function readForm() {
         repeatMinutes: Math.max(0, Number($('repeatMinutes').value) || 0),
         color: $('color').value,
         soundEnabled: $('soundEnabled').checked,
+        staleEnabled: $('staleEnabled').checked,
         staleHours: Number($('staleHours').value) > 0 ? Number($('staleHours').value) : DEFAULT_SETTINGS.staleHours,
         trafficEnabled: $('trafficEnabled').checked,
         tagRules,
