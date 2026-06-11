@@ -261,8 +261,9 @@ body[data-view="panel"] .stale-list { max-height: 300px; }
 .rule-row .remove:hover { background: var(--surface); color: var(--danger); border-color: var(--danger); }
 
 /* --- Перелік полів «Послуга в тікеті» --- */
-.svc-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; margin-top: 6px; }
-.svc-fields .icon-label { font-weight: 500; }
+.svc-fields { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px 8px; margin-top: 6px; }
+.svc-fields .icon-label { font-weight: 500; min-width: 0; }
+.svc-fields .soon { color: var(--muted); opacity: 0.55; cursor: default; }
 
 /* --- Sticky-футер --- */
 .footer {
