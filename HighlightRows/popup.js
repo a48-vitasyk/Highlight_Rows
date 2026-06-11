@@ -197,14 +197,13 @@ function addReminderRow(reminder, muted) {
     row.dataset.scope = scope;
     const scopeSeg = buildScopeSeg(row);
 
-    // Рядок 1: тікет, час, [розпір], сегмент типу, заглушити, видалити.
-    // .rm-note має flex-basis:100% → переноситься на рядок 2; автор — рядок 3.
+    // Рядок 1: тікет, час, група дій (сегмент типу + заглушити + видалити).
+    // Дії — один блок (.rem-actions), тож переносяться РАЗОМ, а поля тікета/часу
+    // стискаються першими. .rm-note має flex-basis:100% → рядок 2; автор — рядок 3.
+    const actions = makeEl('div', { className: 'rem-actions' }, [scopeSeg, mute, remove]);
     row.appendChild(ticket);
     row.appendChild(time);
-    row.appendChild(makeEl('span', { className: 'rem-spacer' }));
-    row.appendChild(scopeSeg);
-    row.appendChild(mute);
-    row.appendChild(remove);
+    row.appendChild(actions);
     row.appendChild(note);
     if (r.creatorEmail && scope === 'shared') {
         row.appendChild(makeEl('div', { className: 'rem-author', textContent: '👤 ' + r.creatorEmail }));
