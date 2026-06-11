@@ -63,3 +63,98 @@ chrome.runtime.onMessage.addListener((req, sender, sendResponse) => {
     })();
     return true; // відповідь асинхронна
 });
+
+// --- Realtime: миттєве поширення змін будильників ------------------------
+// WebSocket тримаємо у service worker (CSP сторінки не заважає). На будь-яку
+// зміну в reminders робимо повний SB.pull() — простіше й надійніше за розбір
+// події. Heartbeat кожні 20с тримає і Phoenix-канал, і живий MV3-воркер.
+let rtWs = null;
+let rtHeartbeat = null;
+let rtReconnect = null;
+let rtPullTimer = null;
+let rtJoinRef = 0;
+
+function rtSchedulePull() {
+    clearTimeout(rtPullTimer);
+    rtPullTimer = setTimeout(() => { try { SB.pull(); } catch (e) { /* ignore */ } }, 800);
+}
+
+function rtScheduleReconnect() {
+    clearTimeout(rtReconnect);
+    rtReconnect = setTimeout(async () => {
+        try { if (await SB.loggedIn()) rtConnect(); } catch (e) { /* ignore */ }
+    }, 5000);
+}
+
+function rtClose(stopReconnect) {
+    if (rtHeartbeat) { clearInterval(rtHeartbeat); rtHeartbeat = null; }
+    if (stopReconnect && rtReconnect) { clearTimeout(rtReconnect); rtReconnect = null; }
+    if (rtWs) { try { rtWs.onclose = null; rtWs.close(); } catch (e) { /* ignore */ } rtWs = null; }
+}
+
+async function rtConnect() {
+    if (typeof SB === 'undefined' || !SB.configured()) return;
+    let sess = await SB.getSession();
+    sess = await SB.refreshIfNeeded(sess);
+    if (!sess || !sess.access_token) return; // не залогінений — realtime не потрібен
+    rtClose(false);
+    try {
+        rtWs = new WebSocket(SB_URL.replace(/^http/, 'ws') +
+            '/realtime/v1/websocket?apikey=' + encodeURIComponent(SB_ANON) + '&vsn=2.0.0');
+    } catch (e) { rtScheduleReconnect(); return; }
+
+    rtWs.onopen = () => {
+        rtJoinRef++;
+        const ref = String(rtJoinRef);
+        rtWs.send(JSON.stringify([ref, ref, 'realtime:public.reminders', 'phx_join', {
+            config: {
+                broadcast: { ack: false, self: false },
+                presence: { enabled: false },
+                postgres_changes: [{ event: '*', schema: 'public', table: 'reminders' }],
+                private: false,
+            },
+            access_token: sess.access_token,
+        }]));
+        if (rtHeartbeat) clearInterval(rtHeartbeat);
+        rtHeartbeat = setInterval(() => {
+            if (rtWs && rtWs.readyState === WebSocket.OPEN) {
+                rtWs.send(JSON.stringify([null, String(Date.now()), 'phoenix', 'heartbeat', {}]));
+            }
+        }, 20000);
+        rtSchedulePull(); // початкова синхронізація після підключення
+    };
+    rtWs.onmessage = (ev) => {
+        try {
+            const msg = JSON.parse(ev.data);
+            const event = Array.isArray(msg) ? msg[3] : (msg && msg.event);
+            if (event === 'postgres_changes') rtSchedulePull();
+        } catch (e) { /* ignore */ }
+    };
+    rtWs.onclose = () => { if (rtHeartbeat) { clearInterval(rtHeartbeat); rtHeartbeat = null; } rtScheduleReconnect(); };
+    rtWs.onerror = () => { try { rtWs.close(); } catch (e) { /* ignore */ } };
+}
+
+// Відкривати/закривати realtime за станом сесії (логін/логаут).
+chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && changes.sbSession) {
+        if (changes.sbSession.newValue) rtConnect();
+        else rtClose(true);
+    }
+});
+
+// Фолбек-синхронізація через alarms (коли realtime/SW заснули чи Firefox).
+if (chrome.alarms && chrome.alarms.onAlarm) {
+    chrome.alarms.onAlarm.addListener((a) => {
+        if (a && a.name === 'sbpull' && typeof SB !== 'undefined') { try { SB.pull(); } catch (e) { /* ignore */ } }
+    });
+}
+
+// Старт (виконується при кожному «пробудженні» воркера).
+function sbBoot() {
+    if (typeof SB === 'undefined') return;
+    try { chrome.alarms.create('sbpull', { periodInMinutes: 1 }); } catch (e) { /* ignore */ }
+    SB.loggedIn().then((yes) => { if (yes) rtConnect(); }).catch(() => {});
+}
+if (chrome.runtime.onStartup) chrome.runtime.onStartup.addListener(sbBoot);
+if (chrome.runtime.onInstalled) chrome.runtime.onInstalled.addListener(sbBoot);
+sbBoot();

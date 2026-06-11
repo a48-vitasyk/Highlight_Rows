@@ -34,6 +34,45 @@ function todayStr() {
     return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
 }
 
+// --- Стан синку будильників ----------------------------------------------
+// Явно видалені (× по рядку з бази) — щоб синк видаляв ЛИШЕ їх, а не «всіх, кого
+// немає у формі» (інакше можна стерти чужі будильники, додані паралельно).
+let removedIds = new Set();
+// Незбережені правки в секції будильників — щоб live-оновлення не перетирало їх.
+let remindersDirty = false;
+function markRemindersDirty() { remindersDirty = true; }
+// Під час власного збереження ігноруємо storage-подію (щоб не блимав reload-лінк).
+let savingNow = false;
+
+function isUuid(s) {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(s || ''));
+}
+
+// Перемикач типу будильника: 👥 загальний (бачать усі) / 🔒 особистий (лише ви).
+function setScopeBtn(btn, scope) {
+    const shared = scope === 'shared';
+    btn.textContent = shared ? '👥' : '🔒';
+    btn.title = shared
+        ? 'Загальний (бачать усі) — клік зробити особистим'
+        : 'Особистий (лише ви) — клік зробити загальним';
+}
+
+function showReloadLink() {
+    if ($('reloadHint')) return;
+    const link = makeEl('div', {
+        id: 'reloadHint', className: 'hint',
+        textContent: '↻ Список будильників змінено — натисніть, щоб оновити',
+    });
+    link.style.cssText = 'cursor:pointer;color:#1a76e2;font-weight:600';
+    link.addEventListener('click', () => loadForm());
+    const box = $('reminders');
+    if (box && box.parentNode) box.parentNode.insertBefore(link, box);
+}
+function hideReloadLink() {
+    const el = $('reloadHint');
+    if (el) el.remove();
+}
+
 // --- Динамічні рядки -----------------------------------------------------
 
 function makeEl(tag, props, children) {
@@ -106,20 +145,36 @@ function addTagRuleRow(rule) {
 }
 
 function addReminderRow(reminder, muted) {
-    const r = reminder || { id: genId(), ticketId: '', time: '', note: '' };
+    const r = reminder || { id: genId(), ticketId: '', time: '', note: '', scope: 'personal' };
     const id = r.id || genId();
+    const scope = r.scope === 'shared' ? 'shared' : 'personal';
     const ticket = makeEl('input', { type: 'text', className: 'rm-ticket', value: r.ticketId, placeholder: 'ID тікета' });
     const time = makeEl('input', { type: 'time', className: 'rm-time', value: r.time });
     const note = makeEl('input', { type: 'text', className: 'rm-note', value: r.note, placeholder: 'текст' });
+    const scopeBtn = makeEl('button', { type: 'button', className: 'small scope' });
     const mute = makeEl('button', { type: 'button', className: 'small mute' });
     setMuteBtn(mute, !!muted);
     const remove = makeEl('button', { type: 'button', className: 'small remove', textContent: '×', title: 'Видалити' });
 
-    const row = makeEl('div', { className: 'rem-row' }, [ticket, time, note, mute, remove]);
+    const row = makeEl('div', { className: 'rem-row' }, [ticket, time, note, scopeBtn, mute, remove]);
     row.dataset.id = id;
+    row.dataset.scope = scope;
+    setScopeBtn(scopeBtn, scope);
+    if (r.creatorEmail) row.title = 'Створив: ' + r.creatorEmail; // автор (для загальних)
 
+    scopeBtn.addEventListener('click', () => {
+        const next = row.dataset.scope === 'shared' ? 'personal' : 'shared';
+        row.dataset.scope = next;
+        setScopeBtn(scopeBtn, next);
+        markRemindersDirty();
+    });
+    [ticket, time, note].forEach((el) => el.addEventListener('input', markRemindersDirty));
     mute.addEventListener('click', () => toggleMute(id, mute));
-    remove.addEventListener('click', () => row.remove());
+    remove.addEventListener('click', () => {
+        if (isUuid(row.dataset.id)) removedIds.add(row.dataset.id); // видалити в базі лише наявні там
+        markRemindersDirty();
+        row.remove();
+    });
     $('reminders').appendChild(row);
 }
 
@@ -191,6 +246,7 @@ function readForm() {
             ticketId: row.querySelector('.rm-ticket').value.trim(),
             time: row.querySelector('.rm-time').value.trim(),
             note: row.querySelector('.rm-note').value,
+            scope: row.dataset.scope === 'shared' ? 'shared' : 'personal',
         }))
         .filter((r) => r.ticketId && r.time);
 
@@ -277,6 +333,9 @@ async function renderAccount() {
 // --- Завантаження / збереження -------------------------------------------
 
 function loadForm() {
+    removedIds = new Set();
+    remindersDirty = false;
+    hideReloadLink();
     chrome.storage.local.get('reminderState', (local) => {
         const reminderState = (local && local.reminderState) || {};
         chrome.storage.sync.get(['settings', 'nameToHighlight'], (data) => {
@@ -418,11 +477,22 @@ $('refreshStale').addEventListener('click', () => {
 $('refreshTraffic').addEventListener('click', () => sendToActiveTab('refreshTraffic'));
 
 $('addTagRule').addEventListener('click', () => addTagRuleRow());
-$('addReminder').addEventListener('click', () => addReminderRow());
+$('addReminder').addEventListener('click', () => { addReminderRow(); markRemindersDirty(); });
+
+// Живе оновлення: коли спільні будильники змінились (синк/realtime оновив дзеркало),
+// перемалювати форму — але не перетирати незбережені правки (тоді лише підказка).
+chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'sync' && changes.settings) {
+        if (savingNow) return; // власне збереження — не реагуємо
+        if (remindersDirty) showReloadLink();
+        else loadForm();
+    }
+});
 
 $('save').addEventListener('click', async () => {
     const settings = readForm();
     const loggedIn = (typeof SB !== 'undefined') && await SB.loggedIn();
+    savingNow = true;
     chrome.storage.sync.set({ settings }, async () => {
         chrome.storage.sync.remove('nameToHighlight');
         const status = $('status');
@@ -430,13 +500,14 @@ $('save').addEventListener('click', async () => {
             status.textContent = 'Збереження…';
             // Будильники — у спільну базу (решта налаштувань лишається локальною).
             try {
-                await SB.syncReminders(settings.reminders);
+                await SB.syncReminders(settings.reminders, [...removedIds]);
                 status.textContent = 'Збережено (спільне)';
-                loadForm(); // перемалювати рядки з реальними id (uuid) з бази — щоб mute/зміни працювали одразу
+                loadForm(); // перемалювати рядки з реальними id (uuid) з бази — щоб mute/scope працювали одразу
             } catch (e) { status.textContent = 'Збережено локально; синк не вдався'; }
         } else {
             status.textContent = 'Збережено';
         }
+        savingNow = false;
         setTimeout(() => { status.textContent = ''; }, 1800);
     });
 });
