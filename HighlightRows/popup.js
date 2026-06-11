@@ -12,6 +12,7 @@ const DEFAULT_SETTINGS = {
     tagRules: [],
     reminderColor: '#ff5a5a',
     reminders: [],
+    snoozeMinutes: 10,
     staleEnabled: false,
     staleHours: 4,
     trafficEnabled: false,
@@ -154,6 +155,7 @@ function fillForm(s, reminderState) {
     $('staleHours').value = s.staleHours || DEFAULT_SETTINGS.staleHours;
     $('trafficEnabled').checked = s.trafficEnabled;
     $('reminderColor').value = s.reminderColor || DEFAULT_SETTINGS.reminderColor;
+    $('snoozeMinutes').value = s.snoozeMinutes || DEFAULT_SETTINGS.snoozeMinutes;
 
     $('tagRules').innerHTML = '';
     (s.tagRules || []).forEach(addTagRuleRow);
@@ -193,6 +195,7 @@ function readForm() {
         trafficEnabled: $('trafficEnabled').checked,
         tagRules,
         reminderColor: $('reminderColor').value,
+        snoozeMinutes: Number($('snoozeMinutes').value) > 0 ? Number($('snoozeMinutes').value) : DEFAULT_SETTINGS.snoozeMinutes,
         reminders,
     };
 }
