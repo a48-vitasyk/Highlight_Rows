@@ -242,7 +242,13 @@ body[data-view="panel"] .stale-list { max-height: 300px; }
 
 /* Сегмент типу: 🔒 особистий / 👥 загальний (pill) */
 .scope-seg { display: inline-flex; border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; background: var(--surface); flex: none; }
-.scope-opt { border: none; background: transparent; cursor: pointer; padding: 5px 11px; font-size: 13px; line-height: 1.15; color: var(--muted); }
+.scope-opt {
+    display: inline-flex; align-items: center; justify-content: center;
+    border: none; background: transparent; cursor: pointer;
+    padding: 5px 11px; line-height: 0; color: var(--muted);
+}
+.scope-opt svg { display: block; }
+.scope-opt:not(.active):hover { color: var(--text); }
 .scope-opt.active { background: var(--accent); color: #fff; }
 
 /* --- Рядок правила за тегом (один рядок) --- */
