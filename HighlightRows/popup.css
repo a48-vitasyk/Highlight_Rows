@@ -146,7 +146,8 @@ body[data-view="panel"] { width: auto; max-width: 480px; }
 }
 .card-grip { cursor: grab; color: var(--muted); user-select: none; font-size: 13px; line-height: 1; padding: 0 2px; }
 .card-grip:active { cursor: grabbing; }
-.card-icon { font-size: 14px; }
+.card-icon { display: inline-flex; align-items: center; color: var(--primary); }
+.card-icon svg { display: block; }
 .card-title {
     flex: 1; margin: 0; font-size: 11px; font-weight: 800; letter-spacing: 0.06em;
     text-transform: uppercase; color: var(--primary);
@@ -251,7 +252,7 @@ body[data-view="panel"] .stale-list { max-height: 320px; }
 
 /* Сегмент типу: 🔒 особистий / 👥 загальний (pill) */
 .scope-seg { display: inline-flex; border: 1px solid var(--border); border-radius: var(--pill); overflow: hidden; background: var(--surface); }
-.scope-opt { border: none; background: transparent; cursor: pointer; padding: 4px 9px; line-height: 1; color: var(--muted); }
+.scope-opt { border: none; background: transparent; cursor: pointer; padding: 6px 13px; font-size: 14px; line-height: 1.15; color: var(--muted); }
 .scope-opt.active { background: var(--accent); color: #fff; }
 
 /* --- Рядок правила за тегом (один рядок) --- */
