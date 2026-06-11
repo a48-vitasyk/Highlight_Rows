@@ -3,170 +3,121 @@
 <head>
     <meta charset="UTF-8">
     <title>Highlight Rows</title>
-    <style>
-        body {
-            width: 340px;
-            font-family: system-ui, sans-serif;
-            font-size: 13px;
-            margin: 12px;
-        }
-        /* У бічній панелі/сайдбарі ширину задає браузер — знімаємо фіксовану. */
-        body[data-view="panel"] { width: auto; }
-        h1 { font-size: 14px; margin: 0 0 10px; }
-        h2 {
-            font-size: 12px;
-            text-transform: uppercase;
-            color: #555;
-            margin: 16px 0 8px;
-            border-bottom: 1px solid #ddd;
-            padding-bottom: 3px;
-        }
-        label { font-weight: 600; }
-        .field { margin-bottom: 10px; }
-        .field > label { display: block; margin-bottom: 4px; }
-        textarea { width: 100%; box-sizing: border-box; resize: vertical; }
-        .row { display: flex; align-items: center; gap: 8px; }
-        .row label { font-weight: 600; margin: 0; }
-        input[type="number"] { width: 64px; }
-        input[type="text"] { box-sizing: border-box; }
-        .hint { font-weight: 400; color: #666; font-size: 11px; }
-
-        .rule-row, .rem-row {
-            display: flex;
-            align-items: center;
-            gap: 4px;
-            margin-bottom: 6px;
-        }
-        .rule-row .tr-query { flex: 1 1 auto; min-width: 0; }
-        .rule-row .tr-repeat { width: 48px; }
-        .rem-row .rm-ticket { width: 80px; }
-        .rem-row .rm-time { width: 92px; }
-        .rem-row .rm-note { flex: 1 1 auto; min-width: 0; }
-        .icon-label { font-weight: 400; display: inline-flex; align-items: center; gap: 2px; }
-        button.small {
-            padding: 2px 6px;
-            cursor: pointer;
-        }
-        button.add {
-            padding: 4px 8px;
-            cursor: pointer;
-            margin-top: 2px;
-        }
-        button#save {
-            width: 100%;
-            padding: 8px;
-            font-weight: 600;
-            cursor: pointer;
-            margin-top: 16px;
-        }
-        .stale-list {
-            max-height: 130px;
-            overflow-y: auto;
-            border: 1px solid #eee;
-            border-radius: 4px;
-            padding: 4px;
-        }
-        .stale-item {
-            font-size: 12px;
-            padding: 2px 0;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        #status {
-            min-height: 14px;
-            color: #2e7d32;
-            font-size: 11px;
-            margin-top: 6px;
-            text-align: center;
-        }
-    </style>
+    <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-<div class="row" style="margin-bottom:10px">
-    <h1 style="flex:1;margin:0">Highlight Rows</h1>
+<div class="app-header">
+    <h1>Highlight Rows</h1>
     <button type="button" class="small" id="expandBtn" title="Відкрити у бічній панелі">⇲ Збоку</button>
 </div>
 
-<div class="field row">
-    <span id="accountInfo" class="hint" style="flex:1">Не залогінено</span>
+<div class="account">
+    <span id="accountInfo" class="hint">Не залогінено</span>
     <button type="button" class="small" id="loginBtn">Увійти через Google</button>
     <button type="button" class="small" id="logoutBtn" style="display:none">Вийти</button>
 </div>
-<div class="hint">Залогінені бачать спільні будильники команди. Без входу — лише локальні.</div>
 
-<h2>Збіги (усі сторінки)</h2>
-<div class="field row">
-    <span class="hint" style="flex:1">🏷 тег · 🔒 блок · ⏰ будильник</span>
-    <button type="button" class="small" id="refreshMatches">Оновити</button>
-</div>
-<div id="matchTickets" class="stale-list"></div>
-<div class="hint">Тікети з усіх сторінок черги, що підпадають під теги / блокування / будильники. Клік — відкрити тікет.</div>
-
-<h2>Заблокований запит</h2>
-<div class="field row">
-    <input type="checkbox" id="enabled">
-    <label for="enabled">Увімкнено</label>
-</div>
-<div class="field">
-    <label for="names">Імена для підсвітки</label>
-    <textarea id="names" rows="2" placeholder="По одному в рядку"></textarea>
-</div>
-<div class="field row">
-    <label for="thresholdMinutes">Поріг (хв):</label>
-    <input type="number" id="thresholdMinutes" min="0" step="0.1">
-    <label for="color">Колір:</label>
-    <input type="color" id="color">
-</div>
-<div class="field">
-    <div class="row">
-        <label for="repeatMinutes">Повтор (хв):</label>
-        <input type="number" id="repeatMinutes" min="0" step="0.1">
-        <label class="icon-label"><input type="checkbox" id="soundEnabled"> Звук</label>
+<div class="card">
+    <div class="card-head">
+        <span class="card-icon">🎯</span>
+        <h2 class="card-title">Збіги (усі сторінки)</h2>
+        <button type="button" class="small" id="refreshMatches">Оновити</button>
     </div>
-    <span class="hint">0 - нагадати лише один раз.</span>
+    <div id="matchTickets" class="stale-list"></div>
+    <div class="hint">🏷 тег · 🔒 блок · ⏰ будильник. Клік — відкрити тікет.</div>
 </div>
 
-<h2>Правила за тегами</h2>
-<div id="tagRules"></div>
-<button type="button" class="add" id="addTagRule">+ Додати правило</button>
-<div class="hint">Збіг - якщо тема тікета містить тег. 🔔 - сповіщення, 🔊 - звук, остання комірка - повтор (хв, 0 = один раз).</div>
-
-<h2>Трафік</h2>
-<div class="field row">
-    <input type="checkbox" id="trafficEnabled">
-    <label for="trafficEnabled">Показувати в тікеті</label>
-    <button type="button" class="small" id="refreshTraffic">Оновити</button>
+<div class="card">
+    <div class="card-head">
+        <span class="card-icon">🔒</span>
+        <h2 class="card-title">Заблокований запит</h2>
+    </div>
+    <div class="field row">
+        <input type="checkbox" id="enabled">
+        <label for="enabled">Увімкнено</label>
+    </div>
+    <div class="field">
+        <label for="names">Імена для підсвітки</label>
+        <textarea id="names" rows="2" placeholder="По одному в рядку"></textarea>
+    </div>
+    <div class="field row">
+        <label for="thresholdMinutes">Поріг (хв):</label>
+        <input type="number" id="thresholdMinutes" min="0" step="0.1">
+        <label for="color">Колір:</label>
+        <input type="color" id="color">
+    </div>
+    <div class="field">
+        <div class="row">
+            <label for="repeatMinutes">Повтор (хв):</label>
+            <input type="number" id="repeatMinutes" min="0" step="0.1">
+            <label class="icon-label"><input type="checkbox" id="soundEnabled"> Звук</label>
+        </div>
+        <span class="hint">0 — нагадати лише один раз.</span>
+    </div>
 </div>
-<div class="hint">При відкритті тікета вписує «Трафік X.XX / Y.YY TB» у блок «Информация о запросе».</div>
 
-<h2>Будильники</h2>
-<div class="field row">
-    <label for="reminderColor">Колір будильника:</label>
-    <input type="color" id="reminderColor">
-    <label for="snoozeMinutes">Снуз (хв):</label>
-    <input type="number" id="snoozeMinutes" min="0.5" step="0.5">
+<div class="card">
+    <div class="card-head">
+        <span class="card-icon">🏷</span>
+        <h2 class="card-title">Правила за тегами</h2>
+    </div>
+    <div id="tagRules"></div>
+    <button type="button" class="add" id="addTagRule">+ Додати правило</button>
+    <div class="hint">Збіг — якщо тема містить тег. 🔔 сповіщення, 🔊 звук, остання комірка — повтор (хв, 0 = один раз).</div>
 </div>
-<div id="reminders"></div>
-<button type="button" class="add" id="addReminder">+ Додати будильник</button>
-<div class="hint">ID тікета + час. Спрацьовує за 5 хв до часу. 🔔 активний / 🔕 заглушено (клік перемикає на сьогодні), × - видалити.</div>
 
-<h2>Без відповіді</h2>
-<div class="field row">
-    <input type="checkbox" id="staleEnabled">
-    <label for="staleEnabled">Увімкнути моніторинг</label>
+<div class="card">
+    <div class="card-head">
+        <span class="card-icon">📊</span>
+        <h2 class="card-title">Трафік</h2>
+        <button type="button" class="small" id="refreshTraffic">Оновити</button>
+    </div>
+    <div class="field row">
+        <input type="checkbox" id="trafficEnabled">
+        <label for="trafficEnabled">Показувати в тікеті</label>
+    </div>
+    <div class="hint">При відкритті тікета вписує «Трафік X.XX / Y.YY TB» у блок «Информация о запросе».</div>
 </div>
-<div class="field row">
-    <label for="staleHours">Поріг (год):</label>
-    <input type="number" id="staleHours" min="0.5" step="0.5">
-    <button type="button" class="small" id="refreshStale">Оновити</button>
-</div>
-<div id="staleTickets" class="stale-list"></div>
-<div class="hint">Тікети, де від останньої відповіді підтримки минуло більше порога. Оновлюється ~кожні 15 хв, поки відкрита панель.</div>
-<div class="hint">⚠️ Сканує чергу, відкриваючи тікети через API — через це знімається позначка нового повідомлення (p-newmsg). Вимкнено за замовчуванням.</div>
 
-<button id="save">Зберегти</button>
-<div id="status"></div>
+<div class="card">
+    <div class="card-head">
+        <span class="card-icon">⏰</span>
+        <h2 class="card-title">Будильники</h2>
+    </div>
+    <div class="field row">
+        <label for="reminderColor">Колір:</label>
+        <input type="color" id="reminderColor">
+        <label for="snoozeMinutes">Снуз (хв):</label>
+        <input type="number" id="snoozeMinutes" min="0.5" step="0.5">
+    </div>
+    <div id="reminders"></div>
+    <button type="button" class="add" id="addReminder">+ Додати будильник</button>
+    <div class="hint">ID тікета + час (спрацьовує за 5 хв до часу). 🔒/👥 тип · 🔔/🔕 заглушення · × видалити.</div>
+</div>
+
+<div class="card">
+    <div class="card-head">
+        <span class="card-icon">⏳</span>
+        <h2 class="card-title">Без відповіді</h2>
+    </div>
+    <div class="field row">
+        <input type="checkbox" id="staleEnabled">
+        <label for="staleEnabled">Увімкнути моніторинг</label>
+    </div>
+    <div class="field row">
+        <label for="staleHours">Поріг (год):</label>
+        <input type="number" id="staleHours" min="0.5" step="0.5">
+        <button type="button" class="small" id="refreshStale">Оновити</button>
+    </div>
+    <div id="staleTickets" class="stale-list"></div>
+    <div class="hint">Тікети, де від останньої відповіді підтримки минуло більше порога. ~кожні 15 хв, поки відкрита панель.</div>
+    <div class="hint">⚠️ Сканує чергу, відкриваючи тікети через API — знімає позначку нового повідомлення (p-newmsg). Вимкнено за замовч.</div>
+</div>
+
+<div class="footer">
+    <button id="save">Зберегти</button>
+    <div id="status"></div>
+</div>
 
 <script src="sb.js"></script>
 <script src="popup.js"></script>
