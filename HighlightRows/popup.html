@@ -83,6 +83,13 @@
 <body>
 <h1>Highlight Rows</h1>
 
+<div class="field row">
+    <span id="accountInfo" class="hint" style="flex:1">Не залогінено</span>
+    <button type="button" class="small" id="loginBtn">Увійти через Google</button>
+    <button type="button" class="small" id="logoutBtn" style="display:none">Вийти</button>
+</div>
+<div class="hint">Залогінені бачать спільні будильники команди. Без входу — лише локальні.</div>
+
 <h2>Збіги (усі сторінки)</h2>
 <div class="field row">
     <span class="hint" style="flex:1">🏷 тег · 🔒 блок · ⏰ будильник</span>
@@ -156,6 +163,7 @@
 <button id="save">Зберегти</button>
 <div id="status"></div>
 
+<script src="sb.js"></script>
 <script src="popup.js"></script>
 </body>
 </html>

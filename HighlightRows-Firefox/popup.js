@@ -133,9 +133,15 @@ function setMuteBtn(btn, muted) {
 }
 
 function toggleMute(id, btn) {
-    chrome.storage.local.get('reminderState', (data) => {
+    chrome.storage.local.get('reminderState', async (data) => {
         const state = (data && data.reminderState) || {};
         const muted = isMutedToday(state, id);
+        // Залогінений — заглушення спільне (колонка muted_date у базі).
+        if (typeof SB !== 'undefined' && await SB.loggedIn()) {
+            try { await SB.setMute(id, muted ? null : todayStr()); await SB.pull(); setMuteBtn(btn, !muted); }
+            catch (e) { /* лишаємо як є */ }
+            return;
+        }
         if (muted) delete state[id];
         else state[id] = { mutedDate: todayStr() };
         chrome.storage.local.set({ reminderState: state }, () => setMuteBtn(btn, !muted));
@@ -244,22 +250,72 @@ function makeClickable(item, url) {
     });
 }
 
+// --- Акаунт (спільна база) -----------------------------------------------
+
+async function renderAccount() {
+    const sess = (typeof SB !== 'undefined') ? await SB.getSession() : null;
+    const info = $('accountInfo');
+    const loginBtn = $('loginBtn');
+    const logoutBtn = $('logoutBtn');
+    if (!info) return;
+    if (sess) {
+        info.textContent = (sess.user && sess.user.email) ? sess.user.email : 'Залогінено';
+        loginBtn.style.display = 'none';
+        logoutBtn.style.display = '';
+    } else {
+        info.textContent = 'Не залогінено (локальні будильники)';
+        loginBtn.style.display = '';
+        logoutBtn.style.display = 'none';
+    }
+}
+
 // --- Завантаження / збереження -------------------------------------------
 
-chrome.storage.local.get('reminderState', (local) => {
-    const reminderState = (local && local.reminderState) || {};
-    chrome.storage.sync.get(['settings', 'nameToHighlight'], (data) => {
-        if (data.settings) {
-            fillForm({ ...DEFAULT_SETTINGS, ...data.settings }, reminderState);
-        } else if (data.nameToHighlight) {
-            fillForm({ ...DEFAULT_SETTINGS, names: [data.nameToHighlight] }, reminderState);
-        } else {
-            fillForm(DEFAULT_SETTINGS, reminderState);
-        }
-        // Firefox: статичні поля кольору — на інлайн-пікер.
-        firefoxifyColor($('color'));
-        firefoxifyColor($('reminderColor'));
+function loadForm() {
+    chrome.storage.local.get('reminderState', (local) => {
+        const reminderState = (local && local.reminderState) || {};
+        chrome.storage.sync.get(['settings', 'nameToHighlight'], (data) => {
+            if (data.settings) {
+                fillForm({ ...DEFAULT_SETTINGS, ...data.settings }, reminderState);
+            } else if (data.nameToHighlight) {
+                fillForm({ ...DEFAULT_SETTINGS, names: [data.nameToHighlight] }, reminderState);
+            } else {
+                fillForm(DEFAULT_SETTINGS, reminderState);
+            }
+            // Firefox: статичні поля кольору — на інлайн-пікер.
+            firefoxifyColor($('color'));
+            firefoxifyColor($('reminderColor'));
+        });
     });
+}
+
+async function initPopup() {
+    await renderAccount();
+    if (typeof SB !== 'undefined' && SB.configured() && await SB.loggedIn()) {
+        try { await SB.pull(); } catch (e) { /* офлайн/помилка — покажемо локальне дзеркало */ }
+    }
+    loadForm();
+}
+initPopup();
+
+if ($('loginBtn')) $('loginBtn').addEventListener('click', async () => {
+    const status = $('status');
+    status.textContent = 'Вхід…';
+    try {
+        await SB.login();
+        status.textContent = 'Увійшли';
+        await renderAccount();
+        loadForm();
+    } catch (e) {
+        status.textContent = 'Помилка входу: ' + (e && e.message ? e.message : e);
+    }
+    setTimeout(() => { status.textContent = ''; }, 3000);
+});
+
+if ($('logoutBtn')) $('logoutBtn').addEventListener('click', async () => {
+    await SB.logout();
+    await renderAccount();
+    loadForm();
 });
 
 // Список «без відповіді»: показати поточний і оновлювати наживо.
@@ -341,12 +397,20 @@ $('refreshTraffic').addEventListener('click', () => sendToActiveTab('refreshTraf
 $('addTagRule').addEventListener('click', () => addTagRuleRow());
 $('addReminder').addEventListener('click', () => addReminderRow());
 
-$('save').addEventListener('click', () => {
+$('save').addEventListener('click', async () => {
     const settings = readForm();
-    chrome.storage.sync.set({ settings }, () => {
+    const loggedIn = (typeof SB !== 'undefined') && await SB.loggedIn();
+    chrome.storage.sync.set({ settings }, async () => {
         chrome.storage.sync.remove('nameToHighlight');
         const status = $('status');
-        status.textContent = 'Збережено';
-        setTimeout(() => { status.textContent = ''; }, 1500);
+        if (loggedIn) {
+            status.textContent = 'Збереження…';
+            // Будильники — у спільну базу (решта налаштувань лишається локальною).
+            try { await SB.syncReminders(settings.reminders); status.textContent = 'Збережено (спільне)'; }
+            catch (e) { status.textContent = 'Збережено локально; синк не вдався'; }
+        } else {
+            status.textContent = 'Збережено';
+        }
+        setTimeout(() => { status.textContent = ''; }, 1800);
     });
 });
