@@ -84,6 +84,12 @@ body[data-view="panel"] { width: auto; max-width: 460px; }
     padding: 12px;
     margin-bottom: 10px;
 }
+.card.dragging { opacity: 0.45; }
+.card-grip {
+    cursor: grab; color: var(--muted); user-select: none;
+    font-size: 13px; line-height: 1; padding: 0 2px;
+}
+.card-grip:active { cursor: grabbing; }
 .card-head { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; }
 .card-title {
     flex: 1; margin: 0;

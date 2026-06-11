@@ -413,6 +413,67 @@ async function initPopup() {
     loadForm();
 }
 initPopup();
+initCardDnD();
+
+// --- Перетягування блоків (порядок зберігається локально, для кожного) ----
+function saveCardOrder(container) {
+    const order = [...container.querySelectorAll('.card')].map((c) => c.dataset.card);
+    try { chrome.storage.local.set({ cardOrder: order }); } catch (e) { /* ignore */ }
+}
+
+function cardAfter(container, y) {
+    const items = [...container.querySelectorAll('.card:not(.dragging)')];
+    let closest = null, closestOffset = -Infinity;
+    for (const el of items) {
+        const r = el.getBoundingClientRect();
+        const offset = y - r.top - r.height / 2;
+        if (offset < 0 && offset > closestOffset) { closestOffset = offset; closest = el; }
+    }
+    return closest;
+}
+
+function initCardDnD() {
+    const container = $('cards');
+    if (!container) return;
+
+    // Відновити збережений порядок (storage.local — індивідуально на цей профіль).
+    chrome.storage.local.get('cardOrder', (d) => {
+        const order = (d && Array.isArray(d.cardOrder)) ? d.cardOrder : null;
+        if (order) order.forEach((key) => {
+            const c = container.querySelector('.card[data-card="' + key + '"]');
+            if (c) container.appendChild(c); // переносимо в кінець у збереженому порядку
+        });
+    });
+
+    let dragCard = null;
+    container.querySelectorAll('.card').forEach((card) => {
+        const head = card.querySelector('.card-head');
+        if (!head || head.querySelector('.card-grip')) return;
+        const grip = makeEl('span', { className: 'card-grip', textContent: '⠿', title: 'Перетягнути блок' });
+        grip.setAttribute('draggable', 'true');
+        head.insertBefore(grip, head.firstChild);
+        grip.addEventListener('dragstart', (e) => {
+            dragCard = card;
+            card.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+            try { e.dataTransfer.setData('text/plain', card.dataset.card || ''); } catch (x) { /* ignore */ }
+            try { e.dataTransfer.setDragImage(card, 20, 16); } catch (x) { /* ignore */ }
+        });
+        grip.addEventListener('dragend', () => {
+            card.classList.remove('dragging');
+            dragCard = null;
+            saveCardOrder(container);
+        });
+    });
+
+    container.addEventListener('dragover', (e) => {
+        if (!dragCard) return;
+        e.preventDefault();
+        const after = cardAfter(container, e.clientY);
+        if (after == null) container.appendChild(dragCard);
+        else if (after !== dragCard) container.insertBefore(dragCard, after);
+    });
+}
 
 if ($('loginBtn')) $('loginBtn').addEventListener('click', async () => {
     const status = $('status');
