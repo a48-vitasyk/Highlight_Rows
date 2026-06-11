@@ -119,6 +119,14 @@ function makeEl(tag, props, children) {
     return el;
 }
 
+// Іконкова кнопка-тоглер замість галочки: активна = акцент, неактивна = приглушена.
+function setToggle(btn, on) { btn.classList.toggle('on', !!on); btn.setAttribute('aria-pressed', on ? 'true' : 'false'); }
+function wireToggle(btn) { btn.addEventListener('click', () => setToggle(btn, !btn.classList.contains('on'))); }
+function makeToggle(icon, on, title) {
+    const b = makeEl('button', { type: 'button', className: 'itoggle', textContent: icon, title: title || '' });
+    setToggle(b, on); wireToggle(b); return b;
+}
+
 // У Firefox нативний діалог кольору (input[type=color]) відкривається окремим
 // вікном і popup закривається. Тож у Firefox замінюємо такі поля на інлайн-
 // пікер: прев'ю + hex-поле + пресети (id/клас зберігаємо, щоб форма читалась).
@@ -160,22 +168,17 @@ function addTagRuleRow(rule) {
     const r = rule || { query: '', color: '#ffac5a', notify: true, sound: true, repeatMinutes: 0 };
     const query = makeEl('input', { type: 'text', className: 'tr-query', value: r.query, placeholder: '[TAG]' });
     const color = makeEl('input', { type: 'color', className: 'tr-color', value: r.color || '#ffac5a' });
-    const notify = makeEl('input', { type: 'checkbox', className: 'tr-notify', checked: !!r.notify });
-    const sound = makeEl('input', { type: 'checkbox', className: 'tr-sound', checked: !!r.sound });
+    const notify = makeToggle('🔔', !!r.notify, 'Сповіщення');
+    notify.classList.add('tr-notify');
+    const sound = makeToggle('🔊', !!r.sound, 'Звук');
+    sound.classList.add('tr-sound');
     const repeat = makeEl('input', {
         type: 'number', className: 'tr-repeat', value: r.repeatMinutes || 0,
         min: 0, step: 0.1, title: 'Повтор сигналу, хв (0 = один раз)',
     });
     const remove = makeEl('button', { type: 'button', className: 'small remove', textContent: '×' });
 
-    const row = makeEl('div', { className: 'rule-row' }, [
-        query,
-        color,
-        makeEl('label', { className: 'icon-label' }, [notify, document.createTextNode('🔔')]),
-        makeEl('label', { className: 'icon-label' }, [sound, document.createTextNode('🔊')]),
-        repeat,
-        remove,
-    ]);
+    const row = makeEl('div', { className: 'rule-row' }, [query, color, notify, sound, repeat, remove]);
     remove.addEventListener('click', () => row.remove());
     $('tagRules').appendChild(row);
     firefoxifyColor(color); // Firefox: інлайн-пікер замість нативного діалогу
@@ -257,7 +260,7 @@ function fillForm(s, reminderState) {
     $('thresholdMinutes').value = s.thresholdMinutes;
     $('repeatMinutes').value = s.repeatMinutes;
     $('color').value = s.color || DEFAULT_SETTINGS.color;
-    $('soundEnabled').checked = s.soundEnabled;
+    setToggle($('soundEnabled'), s.soundEnabled);
     $('staleEnabled').checked = s.staleEnabled;
     $('staleHours').value = s.staleHours || DEFAULT_SETTINGS.staleHours;
     $('trafficEnabled').checked = s.trafficEnabled;
@@ -277,8 +280,8 @@ function readForm() {
         .map((row) => ({
             query: row.querySelector('.tr-query').value.trim(),
             color: row.querySelector('.tr-color').value,
-            notify: row.querySelector('.tr-notify').checked,
-            sound: row.querySelector('.tr-sound').checked,
+            notify: row.querySelector('.tr-notify').classList.contains('on'),
+            sound: row.querySelector('.tr-sound').classList.contains('on'),
             repeatMinutes: Math.max(0, Number(row.querySelector('.tr-repeat').value) || 0),
         }))
         .filter((r) => r.query);
@@ -299,7 +302,7 @@ function readForm() {
         thresholdMinutes: Number($('thresholdMinutes').value) || DEFAULT_SETTINGS.thresholdMinutes,
         repeatMinutes: Math.max(0, Number($('repeatMinutes').value) || 0),
         color: $('color').value,
-        soundEnabled: $('soundEnabled').checked,
+        soundEnabled: $('soundEnabled').classList.contains('on'),
         staleEnabled: $('staleEnabled').checked,
         staleHours: Number($('staleHours').value) > 0 ? Number($('staleHours').value) : DEFAULT_SETTINGS.staleHours,
         trafficEnabled: $('trafficEnabled').checked,
@@ -414,6 +417,7 @@ async function initPopup() {
 initPopup();
 initCardDnD();
 initTabs();
+if ($('soundEnabled')) wireToggle($('soundEnabled'));
 
 // --- Верхні вкладки (активна зберігається локально) -----------------------
 function initTabs() {
