@@ -119,11 +119,18 @@ function makeEl(tag, props, children) {
     return el;
 }
 
-// Іконкова кнопка-тоглер замість галочки: активна = акцент, неактивна = приглушена.
-function setToggle(btn, on) { btn.classList.toggle('on', !!on); btn.setAttribute('aria-pressed', on ? 'true' : 'false'); }
+// Іконкова кнопка-тоглер замість галочки — поведінка як у заглушенні будильника:
+// сама ІКОНКА відображає стан (🔔↔🔕, 🔊↔🔇), без заливки.
+function setToggle(btn, on) {
+    btn.classList.toggle('on', !!on);
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    const onI = btn.dataset.onIcon, offI = btn.dataset.offIcon;
+    if (onI || offI) btn.textContent = on ? (onI || '') : (offI || '');
+}
 function wireToggle(btn) { btn.addEventListener('click', () => setToggle(btn, !btn.classList.contains('on'))); }
-function makeToggle(icon, on, title) {
-    const b = makeEl('button', { type: 'button', className: 'itoggle', textContent: icon, title: title || '' });
+function makeToggle(onIcon, offIcon, on, title) {
+    const b = makeEl('button', { type: 'button', className: 'itoggle', title: title || '' });
+    b.dataset.onIcon = onIcon; b.dataset.offIcon = offIcon;
     setToggle(b, on); wireToggle(b); return b;
 }
 
@@ -168,9 +175,9 @@ function addTagRuleRow(rule) {
     const r = rule || { query: '', color: '#ffac5a', notify: true, sound: true, repeatMinutes: 0 };
     const query = makeEl('input', { type: 'text', className: 'tr-query', value: r.query, placeholder: '[TAG]' });
     const color = makeEl('input', { type: 'color', className: 'tr-color', value: r.color || '#ffac5a' });
-    const notify = makeToggle('🔔', !!r.notify, 'Сповіщення');
+    const notify = makeToggle('🔔', '🔕', !!r.notify, 'Сповіщення');
     notify.classList.add('tr-notify');
-    const sound = makeToggle('🔊', !!r.sound, 'Звук');
+    const sound = makeToggle('🔊', '🔇', !!r.sound, 'Звук');
     sound.classList.add('tr-sound');
     const repeat = makeEl('input', {
         type: 'number', className: 'tr-repeat', value: r.repeatMinutes || 0,
