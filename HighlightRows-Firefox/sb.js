@@ -73,15 +73,24 @@ const SB = {
 
     // --- CRUD будильників ---
     listReminders() { return SB.rest('reminders?select=*&order=updated_at.desc'); },
-    insertReminder(r) {
+    async insertReminder(r) {
+        const sess = await SB.getSession();
+        const email = (sess && sess.user && sess.user.email) || null;
         return SB.rest('reminders', {
             method: 'POST', headers: { Prefer: 'return=representation' },
-            body: JSON.stringify({ ticket_id: r.ticketId, time: r.time, note: r.note || '' }),
+            body: JSON.stringify({
+                ticket_id: r.ticketId, time: r.time, note: r.note || '',
+                scope: r.scope === 'shared' ? 'shared' : 'personal',
+                created_by_email: email,
+            }),
         });
     },
     updateReminder(r) {
         return SB.rest('reminders?id=eq.' + encodeURIComponent(r.id), {
-            method: 'PATCH', body: JSON.stringify({ ticket_id: r.ticketId, time: r.time, note: r.note || '' }),
+            method: 'PATCH', body: JSON.stringify({
+                ticket_id: r.ticketId, time: r.time, note: r.note || '',
+                scope: r.scope === 'shared' ? 'shared' : 'personal',
+            }),
         });
     },
     deleteReminder(id) { return SB.rest('reminders?id=eq.' + encodeURIComponent(id), { method: 'DELETE' }); },
@@ -99,7 +108,10 @@ const SB = {
     // --- Дзеркало у storage (щоб content.js працював без змін) ---
     async mirror(rows) {
         rows = rows || [];
-        const reminders = rows.map((x) => ({ id: x.id, ticketId: x.ticket_id, time: x.time, note: x.note || '' }));
+        const reminders = rows.map((x) => ({
+            id: x.id, ticketId: x.ticket_id, time: x.time, note: x.note || '',
+            scope: x.scope || 'personal', creatorEmail: x.created_by_email || '',
+        }));
         const reminderState = {};
         for (const x of rows) {
             const st = {};
@@ -126,18 +138,21 @@ const SB = {
         return rows;
     },
 
-    // Синхронізує масив будильників форми зі спільною базою (upsert + видалення
-    // тих, кого немає у формі), потім оновлює дзеркало. r: {id?, ticketId, time, note}.
-    async syncReminders(formReminders) {
+    // Синхронізує будильники форми зі спільною базою: upsert рядків форми та
+    // видалення ЛИШЕ явно прибраних (removedIds) — щоб не стерти чужі будильники,
+    // додані паралельно (їх просто немає у нашій формі). Потім оновлює дзеркало.
+    // r: {id?, ticketId, time, note, scope}.
+    async syncReminders(formReminders, removedIds) {
         if (!SB.configured() || !(await SB.loggedIn())) return null;
         const existing = (await SB.listReminders()) || [];
         const existingIds = new Set(existing.map((x) => x.id));
-        const keepIds = new Set();
         for (const r of formReminders) {
-            if (r.id && existingIds.has(r.id)) { await SB.updateReminder(r); keepIds.add(r.id); }
-            else { const ins = await SB.insertReminder(r); if (Array.isArray(ins) && ins[0]) keepIds.add(ins[0].id); }
+            if (r.id && existingIds.has(r.id)) await SB.updateReminder(r);
+            else await SB.insertReminder(r);
         }
-        for (const x of existing) if (!keepIds.has(x.id)) await SB.deleteReminder(x.id);
+        for (const id of (removedIds || [])) {
+            if (id && existingIds.has(id)) { try { await SB.deleteReminder(id); } catch (e) { /* ignore */ } }
+        }
         return SB.pull();
     },
 
