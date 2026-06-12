@@ -1335,11 +1335,17 @@ function maybeTraffic() {
     if (!onTicketView()) return; // не сторінка тікета
     const key = currentTicketKey();
     if (!key) return;
-    // Плагін НЕ тягне трафік сам — щоб не робити фонових запитів до білінгу й не
-    // міняти його фільтр (func=ticket.setfilter). Показуємо блок із кнопкою ↻;
-    // завантаження — лише за кліком користувача.
-    if (!trafficData || trafficData.key !== key) trafficData = { key, idle: true };
-    injectInfo();
+    if (trafficData && trafficData.key === key) { injectInfo(); return; }
+    // Новий тікет: «Информация об услуге» підтягується автоматично — один раз,
+    // лише з активної вкладки і лише якщо сесія білінга жива. Якщо сесія щойно
+    // злітала (cooldown) — показуємо плейсхолдер із ↻ (ручне завантаження),
+    // щоб не довбати білінг повторно.
+    if (tabVisible() && !sessionInCooldown()) {
+        loadTraffic(false);
+    } else {
+        trafficData = { key, idle: true };
+        injectInfo();
+    }
 }
 
 // --- Тригери refresh -----------------------------------------------------
