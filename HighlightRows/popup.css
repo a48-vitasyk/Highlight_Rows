@@ -318,5 +318,13 @@ button#save:hover { filter: brightness(1.08); }
     border-radius: 50%; background: #e23b2f; border: 2px solid var(--surface);
 }
 #updateInfo { color: var(--muted); }
+.upd-apply {
+    flex: none; display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 10px; border: none; border-radius: var(--pill);
+    background: var(--primary); color: #fff; font-size: 12px; font-weight: 600;
+    cursor: pointer;
+}
+.upd-apply:hover { filter: brightness(1.08); }
+.upd-apply svg { display: block; }
 
 #reloadHint { cursor: pointer; color: var(--accent); font-weight: 700; padding: 4px 0; margin-bottom: 6px; }

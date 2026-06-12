@@ -663,21 +663,26 @@ function renderUpdate(info) {
     const dot = $('updateDot');
     const txt = $('updateInfo');
     if (!txt) return;
+    const apply = $('reloadExtBtn');
     const cur = (chrome.runtime.getManifest && chrome.runtime.getManifest().version) || '';
     if (info && info.checking) { txt.textContent = 'Перевіряю…'; return; }
     if (info && info.hasUpdate) {
-        txt.textContent = 'Є нова: ' + (info.latest || '');
+        txt.textContent = 'Є нова: ' + (info.latest || '') + ' — перезавантажте, щоб застосувати';
         if (dot) dot.hidden = false;
+        if (apply) apply.hidden = false;
         return;
     }
     if (dot) dot.hidden = true;
-    if (info && info.error) txt.textContent = 'Не вдалось перевірити';
-    else if (info && info.latest) txt.textContent = 'Оновлень немає · v' + cur;
-    else txt.textContent = 'v' + cur;
+    if (apply) apply.hidden = true;
+    if (info && info.error) txt.textContent = 'Не вдалось перевірити · v' + cur;
+    else txt.textContent = 'Оновлень немає · v' + cur;
 }
 if ($('updateBtn')) $('updateBtn').addEventListener('click', () => {
     renderUpdate({ checking: true });
     try { chrome.runtime.sendMessage({ action: 'checkUpdate' }, () => { void chrome.runtime.lastError; }); } catch (e) { /* ignore */ }
+});
+if ($('reloadExtBtn')) $('reloadExtBtn').addEventListener('click', () => {
+    try { chrome.runtime.reload(); } catch (e) { /* ignore */ }
 });
 
 // Лічильник біля «Оновити» в «Особисті тікети»: скільки тікетів зараз у списку.
