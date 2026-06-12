@@ -68,6 +68,7 @@ body[data-view="panel"] { width: auto; max-width: 440px; }
     content: ''; width: 8px; height: 8px; border-radius: 50%;
     background: var(--accent); box-shadow: 0 0 0 2px var(--accent-weak);
 }
+.app-ver { font-size: 10px; font-weight: 600; color: var(--muted); letter-spacing: 0; }
 #themeBtn, #expandBtn {
     width: 26px; height: 26px; padding: 0; flex: none;
     display: inline-flex; align-items: center; justify-content: center;
