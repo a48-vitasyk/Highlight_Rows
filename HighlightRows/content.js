@@ -763,6 +763,10 @@ let sessionLostAt = 0;
 function noteSessionLost() { sessionLostAt = Date.now(); }
 function sessionInCooldown() { return Date.now() - sessionLostAt < SESSION_LOST_COOLDOWN_MS; }
 
+// Автоматичні мережеві скани робить лише видима (активна) вкладка — щоб reload
+// усіх вкладок Zomro не давав синхронного сплеску запитів до білінгу.
+function tabVisible() { return document.visibilityState === 'visible'; }
+
 async function fetchBillmgr(params) {
     const url = location.origin + '/billmgr?' + params + '&out=xjson';
     const resp = await fetch(url, { credentials: 'include', redirect: 'manual' });
@@ -797,6 +801,8 @@ async function scanStaleTickets(force) {
     if (!onBillmgr()) { if (force) setStaleStatus({ scanning: false, note: 'відкрийте сторінку панелі (billmgr)' }); return; }
     // Сесія нещодавно злетіла — не довбати білінг (ручний force усе ж пробує).
     if (!force && sessionInCooldown()) return;
+    // Авто-скан — лише з активної вкладки (фонові мовчать).
+    if (!force && !tabVisible()) return;
 
     // Дедуплікація між вкладками: не сканувати, якщо нещодавно вже сканували.
     // Ручне оновлення (force) ігнорує цей таймер.
@@ -1318,6 +1324,7 @@ function maybeTraffic() {
         return;
     }
     if (!onTicketView()) return; // не сторінка тікета
+    if (!tabVisible()) return; // авто-довантаження — лише з активної вкладки
     if (!trafficData || trafficData.key !== currentTicketKey()) {
         loadTraffic(false);
     } else {
@@ -1400,18 +1407,27 @@ function init() {
             intervalRef = setInterval(refresh, REFRESH_INTERVAL_MS);
 
             // «Без відповіді»: початкове сканування + періодичне (кожні 30 хв).
-            // Старт із затримкою — щоб коротке відкриття сторінки не запускало
-            // повний обхід черги (м'якше до WAF білінгу).
-            setTimeout(scanStaleTickets, 30000);
+            // Старт із затримкою + джитер — щоб reload усіх вкладок не давав
+            // синхронного обходу черги (м'якше до WAF білінгу).
+            setTimeout(scanStaleTickets, 30000 + Math.floor(Math.random() * 30000));
             staleIntervalRef = setInterval(scanStaleTickets, STALE_POLL_INTERVAL_MS);
 
             // Збіги по всій черзі (теги/блокування/«Особисті тікети») —
             // лише вручну, за кнопкою «Оновити» (без авто-обходу всіх сторінок).
 
             // Спільні будильники: періодично підтягувати зі спільної бази
-            // (фактичний fetch робить background; тут лише тригеримо).
-            setTimeout(() => sbSend({ sb: 'pull' }), 4000);
-            sbPullIntervalRef = setInterval(() => sbSend({ sb: 'pull' }), MATCH_POLL_INTERVAL_MS);
+            // (фактичний fetch робить background; тут лише тригеримо з активної вкладки).
+            setTimeout(() => { if (tabVisible()) sbSend({ sb: 'pull' }); }, 4000);
+            sbPullIntervalRef = setInterval(() => { if (tabVisible()) sbSend({ sb: 'pull' }); }, MATCH_POLL_INTERVAL_MS);
+
+            // Коли вкладка стає активною — довантажити що треба (кожен виклик
+            // поважає власний дедуп/кеш, тож без сплеску).
+            document.addEventListener('visibilitychange', () => {
+                if (!alive || !tabVisible()) return;
+                scanStaleTickets(false);
+                maybeTraffic();
+                sbSend({ sb: 'pull' });
+            });
         } catch (e) {
             teardown();
         }
