@@ -1360,16 +1360,15 @@ function init() {
             chrome.storage.onChanged.addListener((changes, area) => {
                 if (!alive) return;
                 if (area === 'sync' && changes.settings) {
-                    const wasStale = settings.staleEnabled;
                     const oldHours = settings.staleHours;
                     settings = normalizeSettings(changes.settings.newValue);
                     applyPanelTweaks();
                     if (!settings.staleEnabled) {
                         // Вимкнули монітор — прибираємо застарілий список і статус.
                         try { chrome.storage.local.set({ staleTickets: [], staleScanStatus: null }); } catch (e) {}
-                    } else if (!wasStale || settings.staleHours !== oldHours) {
-                        // Увімкнули або змінили поріг: миттєво прибрати ті, що вже не
-                        // підпадають (за збереженим віком), і запустити повний скан.
+                    } else if (settings.staleHours !== oldHours) {
+                        // Змінили поріг: лише локально прибрати ті, що вже не підпадають
+                        // (за збереженим віком). Повний скан — тільки за кнопкою «Оновити».
                         try {
                             chrome.storage.local.get('staleTickets', (d) => {
                                 const arr = (d && d.staleTickets) || [];
@@ -1377,7 +1376,6 @@ function init() {
                                 if (filtered.length !== arr.length) chrome.storage.local.set({ staleTickets: filtered });
                             });
                         } catch (e) { /* ignore */ }
-                        scanStaleTickets(true);
                     }
                     refresh();
                 } else if (area === 'local' && changes.reminderState) {
