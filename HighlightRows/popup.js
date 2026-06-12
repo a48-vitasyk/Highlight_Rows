@@ -603,11 +603,21 @@ function renderMatchTickets(arr) {
     });
 }
 
-chrome.storage.local.get(['staleTickets', 'matchTickets', 'staleScanStatus'], (d) => {
+chrome.storage.local.get(['staleTickets', 'matchTickets', 'staleScanStatus', 'matchScanStatus'], (d) => {
     renderStaleTickets((d && d.staleTickets) || []);
     renderMatchTickets((d && d.matchTickets) || []);
     renderStaleStatus(d && d.staleScanStatus);
+    renderMatchStatus(d && d.matchScanStatus);
 });
+
+// Лічильник біля «Оновити» в «Особисті тікети»: скільки тікетів зараз у списку.
+function renderMatchStatus(s) {
+    const el = $('matchStatus');
+    if (!el) return;
+    if (!s) { el.textContent = ''; return; }
+    if (s.note) { el.textContent = s.note; return; }
+    el.textContent = s.scanning ? 'Сканую…' : ('тікетів: ' + (s.count || 0));
+}
 
 // Індикатор біля «Оновити»: скільки тікетів просканували / пройшли поріг.
 function renderStaleStatus(s) {
@@ -629,9 +639,19 @@ chrome.storage.onChanged.addListener((changes, area) => {
         renderMatchTickets(changes.matchTickets.newValue || []);
     }
     if (changes.staleScanStatus) renderStaleStatus(changes.staleScanStatus.newValue);
+    if (changes.matchScanStatus) renderMatchStatus(changes.matchScanStatus.newValue);
 });
 
-$('refreshMatches').addEventListener('click', () => sendToActiveTab('scanMatches'));
+$('refreshMatches').addEventListener('click', () => {
+    renderMatchStatus({ scanning: true, count: 0 });
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        const tab = tabs && tabs[0];
+        if (!tab) return;
+        chrome.tabs.sendMessage(tab.id, { action: 'scanMatches' }, () => {
+            if (chrome.runtime.lastError) renderMatchStatus({ note: 'відкрийте вкладку панелі Zomro' });
+        });
+    });
+});
 
 // Надсилає дію активній вкладці панелі (де живе content.js).
 function sendToActiveTab(action) {

@@ -753,8 +753,11 @@ function tagRuleForSubject(subject) {
 
 let lastMatchJson = '';
 
+function setMatchStatus(o) { try { chrome.storage.local.set({ matchScanStatus: o }); } catch (e) { /* ignore */ } }
+
 async function scanMatches(force) {
-    if (!alive || !extensionAlive() || !onBillmgr() || matchScanRunning) return;
+    if (!alive || !extensionAlive() || matchScanRunning) return;
+    if (!onBillmgr()) { if (force) setMatchStatus({ scanning: false, note: 'відкрийте сторінку панелі (billmgr)' }); return; }
     if (!force) {
         const last = await loadFromStorage('local', 'matchPollAt', 0);
         if (Date.now() - (last || 0) < MATCH_POLL_DEDUP_MS) return;
@@ -762,7 +765,9 @@ async function scanMatches(force) {
     try { chrome.storage.local.set({ matchPollAt: Date.now() }); } catch (e) { return; }
 
     matchScanRunning = true;
+    let matchCount = 0;
     try {
+        setMatchStatus({ scanning: true, count: 0 });
         const tickets = await fetchAllTickets();
         const now = Date.now();
         const byId = {};
@@ -849,6 +854,7 @@ async function scanMatches(force) {
         if (stateDirty) { try { chrome.storage.local.set({ matchAlertState }); } catch (e) {} }
 
         const list = Object.values(byId).map((m) => ({ ...m, kinds: [...new Set(m.kinds)] }));
+        matchCount = list.length;
         const json = JSON.stringify(list);
         if (json !== lastMatchJson) {
             lastMatchJson = json;
@@ -859,6 +865,7 @@ async function scanMatches(force) {
         // мережа/парсинг — наступного разу
     } finally {
         matchScanRunning = false;
+        setMatchStatus({ scanning: false, count: matchCount });
     }
 }
 
