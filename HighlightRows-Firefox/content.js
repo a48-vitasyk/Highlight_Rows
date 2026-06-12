@@ -778,9 +778,13 @@ function tabVisible() { return document.visibilityState === 'visible'; }
 async function fetchBillmgr(params) {
     // sfrom=ajax — як рідні запити панелі: без нього billmgr віддає 301 на
     // ticket.edit і це ламає сесійну куку (панель кидає на логін). out=xjson — JSON.
-    const url = location.origin + '/billmgr?' + params + '&sfrom=ajax&out=xjson';
-    // redirect:'manual' — НЕ йдемо за 301 на cp.zomro.com (інакше браузер шле
-    // зайвий крос-доменний OPTIONS-preflight). Будь-який редірект = «не дотягли».
+    // Cache-buster: BunnyCDN/shield віддає КЕШОВАНИЙ 301 на наш сталий billmgr-URL
+    // (звідки редірект на cp.zomro.com). Унікальний параметр робить URL новим →
+    // CDN не має кешу → запит іде в origin і повертає 200 JSON (як панельні з elname).
+    const bust = '&_=' + Date.now() + Math.floor(Math.random() * 1e6);
+    const url = location.origin + '/billmgr?' + params + '&sfrom=ajax&out=xjson' + bust;
+    // redirect:'manual' — НЕ йдемо за 301 на cp (інакше зайвий крос-доменний
+    // OPTIONS-preflight). Будь-який редірект = «не дотягли».
     const resp = await fetch(url, { credentials: 'include', redirect: 'manual' });
     const ct = resp.headers ? (resp.headers.get('content-type') || '') : '';
     if (resp.type === 'opaqueredirect' || resp.redirected ||
