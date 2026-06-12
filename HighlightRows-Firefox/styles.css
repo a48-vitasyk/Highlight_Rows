@@ -59,21 +59,23 @@
     white-space: nowrap;
 }
 
-/* Кнопка «У будильник» у блоці «Информация о запросе». */
+/* Кнопка «У будильник» — нативна іконка під стрілкою згортання. */
 .hr-add-reminder {
     display: flex;
-    width: fit-content;
     align-items: center;
-    gap: 6px;
-    margin: 6px 0;
-    padding: 6px 12px;
+    justify-content: center;
+    width: fit-content;
+    margin: 4px 0 0;
+    padding: 2px;
     border: none;
-    background: #2a3f5f;
-    color: #fff;
-    border-radius: 8px;
+    background: transparent;
     cursor: pointer;
-    font: 600 12px/1.2 system-ui, sans-serif;
-    white-space: nowrap;
+    color: var(--isp-icon-main, currentColor);
+    transition: color .15s ease, opacity .15s ease;
 }
-.hr-add-reminder:hover { filter: brightness(1.12); }
-.hr-add-reminder:disabled { opacity: .6; cursor: default; }
+.hr-add-reminder svg { display: block; }
+.hr-add-reminder:hover { opacity: .7; }
+.hr-add-reminder:disabled { opacity: .5; cursor: default; }
+.hr-add-reminder.hr-ok { color: #2e7d32; }
+.hr-add-reminder.hr-dup { color: #b58a00; }
+.hr-add-reminder.hr-err { color: #d33b2f; }
