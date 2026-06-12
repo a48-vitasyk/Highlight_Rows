@@ -603,10 +603,21 @@ function renderMatchTickets(arr) {
     });
 }
 
-chrome.storage.local.get(['staleTickets', 'matchTickets'], (d) => {
+chrome.storage.local.get(['staleTickets', 'matchTickets', 'staleScanStatus'], (d) => {
     renderStaleTickets((d && d.staleTickets) || []);
     renderMatchTickets((d && d.matchTickets) || []);
+    renderStaleStatus(d && d.staleScanStatus);
 });
+
+// Індикатор біля «Оновити»: скільки тікетів просканували / пройшли поріг.
+function renderStaleStatus(s) {
+    const el = $('staleStatus');
+    if (!el) return;
+    if (!s) { el.textContent = ''; return; }
+    el.textContent = s.scanning
+        ? ('Сканую ' + (s.scanned || 0) + '/' + (s.total || 0) + ' · пройшло ' + (s.passed || 0))
+        : ('Скановано ' + (s.scanned || 0) + ' · без відп. ' + (s.passed || 0));
+}
 chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;
     if (changes.staleTickets) {
@@ -616,6 +627,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
     if (changes.matchTickets) {
         renderMatchTickets(changes.matchTickets.newValue || []);
     }
+    if (changes.staleScanStatus) renderStaleStatus(changes.staleScanStatus.newValue);
 });
 
 $('refreshMatches').addEventListener('click', () => sendToActiveTab('scanMatches'));
