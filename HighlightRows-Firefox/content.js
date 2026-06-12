@@ -526,37 +526,52 @@ function flashBtn(btn, state, title) {
 // Іконка-дзвіночок (нативний вигляд: тонкі лінії, currentColor — як стрілки панелі).
 const ADD_REM_ICON = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>';
 
-// Кнопку ставимо під стрілкою згортання (.toggle-wrapper з іконкою arrow_curve),
-// усередині самого wrapper — щоб трималась стрілки, а не відлітала в кінець сторінки.
+// Група «Информация о запросе» — та, що містить мітку «Код запроса».
+function findRequestInfoGroup() {
+    const wanted = (panelLabels.ticketIdLabel || DEFAULT_LABELS.ticketIdLabel);
+    const groups = document.querySelectorAll('isp-chat-summary-group, .isp-summary-group');
+    for (const g of groups) {
+        const labels = g.querySelectorAll('.isp-item-label');
+        for (const lbl of labels) {
+            if ((lbl.textContent || '').trim() === wanted) return g;
+        }
+    }
+    return null;
+}
+
+// Кнопку-дзвіночок ставимо в заголовок блока «Информация о запросе» — біля стрілки.
 function injectAddReminderButton() {
-    document.querySelectorAll('.toggle-wrapper').forEach((wrap) => {
-        if (!wrap.querySelector('.arrow_curve')) return; // не та стрілка
-        if (wrap.querySelector('.' + ADD_REM_BTN_CLASS)) return; // вже додано
+    const group = findRequestInfoGroup();
+    if (!group || group.querySelector('.' + ADD_REM_BTN_CLASS)) return;
+    const anchor = group.querySelector('.isp-summary-group__title') || group;
 
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = ADD_REM_BTN_CLASS;
-        btn.dataset.title = 'Додати тікет у будильники на +1 год (власний)';
-        btn.title = btn.dataset.title;
-        btn.innerHTML = ADD_REM_ICON;
-        btn.addEventListener('click', () => {
-            const tid = readTicketId();
-            if (!tid) { flashBtn(btn, 'hr-err', 'Не знайдено ID тікета'); return; }
-            const time = plusOneHourHHMM();
-            btn.disabled = true;
-            try {
-                chrome.runtime.sendMessage({ sb: 'add', ticketId: tid, time }, (resp) => {
-                    btn.disabled = false;
-                    if (chrome.runtime.lastError) { flashBtn(btn, 'hr-err', 'Помилка'); return; }
-                    if (resp && resp.duplicate) flashBtn(btn, 'hr-dup', 'Вже додано');
-                    else if (resp && resp.ok) flashBtn(btn, 'hr-ok', 'Додано на ' + time);
-                    else flashBtn(btn, 'hr-err', 'Помилка');
-                });
-            } catch (e) { btn.disabled = false; flashBtn(btn, 'hr-err', 'Помилка'); }
-        });
-
-        wrap.appendChild(btn);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = ADD_REM_BTN_CLASS;
+    btn.dataset.title = 'Додати тікет у будильники на +1 год (власний)';
+    btn.title = btn.dataset.title;
+    btn.innerHTML = ADD_REM_ICON;
+    btn.addEventListener('click', (e) => {
+        // не згортати блок при кліку по кнопці
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+        const tid = readTicketId();
+        if (!tid) { flashBtn(btn, 'hr-err', 'Не знайдено ID тікета'); return; }
+        const time = plusOneHourHHMM();
+        btn.disabled = true;
+        try {
+            chrome.runtime.sendMessage({ sb: 'add', ticketId: tid, time }, (resp) => {
+                btn.disabled = false;
+                if (chrome.runtime.lastError) { flashBtn(btn, 'hr-err', 'Помилка'); return; }
+                if (resp && resp.duplicate) flashBtn(btn, 'hr-dup', 'Вже додано');
+                else if (resp && resp.ok) flashBtn(btn, 'hr-ok', 'Додано на ' + time);
+                else flashBtn(btn, 'hr-err', 'Помилка');
+            });
+        } catch (e2) { btn.disabled = false; flashBtn(btn, 'hr-err', 'Помилка'); }
     });
+
+    anchor.appendChild(btn);
 }
 
 function refresh() {
