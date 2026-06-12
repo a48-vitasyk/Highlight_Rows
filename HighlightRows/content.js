@@ -69,6 +69,10 @@ const DEFAULT_SETTINGS = {
     // показувати дані послуги в тікеті (майстер-тогл) + які саме поля
     trafficEnabled: false,
     serviceShow: { status: true, os: true, cost: true, expiredate: true, traffic: true },
+    // косметика панелі (api.zomro.com): дзеркалення чату + висота поля відповіді
+    reverseEnabled: false,
+    resizeEnabled: false,
+    resizePx: 300,
 };
 
 // Кеш у пам'яті, щоб refresh() був синхронним і без гонок.
@@ -145,6 +149,11 @@ function normalizeSettings(raw) {
     s.staleHours = Number(s.staleHours);
     if (!(s.staleHours > 0)) s.staleHours = DEFAULT_SETTINGS.staleHours;
     s.trafficEnabled = !!s.trafficEnabled;
+    s.reverseEnabled = !!s.reverseEnabled;
+    s.resizeEnabled = !!s.resizeEnabled;
+    s.resizePx = Number(s.resizePx);
+    if (!(s.resizePx > 0)) s.resizePx = DEFAULT_SETTINGS.resizePx;
+    if (s.resizePx > 2000) s.resizePx = 2000;
     {
         const raw = (s.serviceShow && typeof s.serviceShow === 'object') ? s.serviceShow : {};
         s.serviceShow = {};
@@ -574,10 +583,57 @@ function injectAddReminderButton() {
     anchor.appendChild(btn);
 }
 
+// --- Косметика панелі: «Реверс» (дзеркалення чату) і «Ресайз» (висота поля) ---
+// Уся поведінка двох вихідних розширень зводиться до CSS, тож тримаємо її в двох
+// керованих <style> — додаємо/прибираємо за станом тоглів (прибирання повертає
+// вихідний вигляд).
+function setStyleEl(id, css) {
+    let el = document.getElementById(id);
+    if (!css) { if (el) el.remove(); return; }
+    if (!el) {
+        el = document.createElement('style');
+        el.id = id;
+        (document.head || document.documentElement).appendChild(el);
+    }
+    if (el.textContent !== css) el.textContent = css;
+}
+
+function applyPanelTweaks() {
+    setStyleEl('hr-reverse-style', settings.reverseEnabled ? (
+        '.isp-chat-bubble{max-width:none!important}' +
+        '.form__content.ng-star-inserted{padding-right:60px!important}' +
+        '.isp-inline-group{--isp-layout-header-height:1px}' +
+        '.isp-chat-bubble.isp-chat-bubble_type-outcoming,' +
+        '.isp-chat-bubble.isp-chat-bubble_type-ticketnote,' +
+        '.isp-chat-bubble.isp-chat-bubble_type-system,' +
+        '.isp-chat-bubble.isp-chat-bubble_type-inner{display:flex;flex-direction:row-reverse}' +
+        '.scroll-buttons{transform:matrix(1,0,0,1,45,-80)!important}'
+    ) : '');
+
+    setStyleEl('hr-resize-style', settings.resizeEnabled ? (
+        '.form.isp-dynamic-form-scrollable-container{scroll-margin-top:initial!important}' +
+        'textarea.ispui-input__textarea{height:' + settings.resizePx + 'px!important;scroll-margin-top:initial!important}'
+    ) : '');
+}
+
 function refresh() {
     if (!alive) return;
     if (!extensionAlive()) { teardown(); return; }
     injectAddReminderButton();
+
+    // Підстраховка висоти поля відповіді (стильову таблицю міг перебити inline).
+    const ta = document.querySelector('textarea.ispui-input__textarea');
+    if (ta) {
+        if (settings.resizeEnabled) {
+            ta.style.setProperty('height', settings.resizePx + 'px', 'important');
+            ta.style.scrollMarginTop = 'initial';
+            ta.dataset.hrResized = '1';
+        } else if (ta.dataset.hrResized) {
+            ta.style.removeProperty('height');
+            ta.style.removeProperty('scroll-margin-top');
+            delete ta.dataset.hrResized;
+        }
+    }
 
     const now = Date.now();
     const applied = new Set();
@@ -1293,6 +1349,7 @@ function init() {
         reminderState = loadedReminderState && typeof loadedReminderState === 'object' ? loadedReminderState : {};
         if (loadedLabels && typeof loadedLabels === 'object') panelLabels = { ...DEFAULT_LABELS, ...loadedLabels };
         matchAlertState = loadedMatchState && typeof loadedMatchState === 'object' ? loadedMatchState : {};
+        applyPanelTweaks();
         refresh();
 
         try {
@@ -1302,6 +1359,7 @@ function init() {
                     const wasStale = settings.staleEnabled;
                     const oldHours = settings.staleHours;
                     settings = normalizeSettings(changes.settings.newValue);
+                    applyPanelTweaks();
                     if (!settings.staleEnabled) {
                         // Вимкнули монітор — прибираємо застарілий список і статус.
                         try { chrome.storage.local.set({ staleTickets: [], staleScanStatus: null }); } catch (e) {}
