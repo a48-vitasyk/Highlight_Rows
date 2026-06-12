@@ -779,10 +779,12 @@ async function fetchBillmgr(params) {
     // sfrom=ajax — як рідні запити панелі: без нього billmgr віддає 301 на
     // ticket.edit і це ламає сесійну куку (панель кидає на логін). out=xjson — JSON.
     const url = location.origin + '/billmgr?' + params + '&sfrom=ajax&out=xjson';
-    // Йдемо за редіректом: 301 на billmgr — зазвичай канонічний (не логін), за ним
-    // повертається JSON. «Сесія злетіла» = лише HTML-сторінка логіну або помилка
-    // (крос-доменний логін-редірект сам впаде на CORS → catch у викликах).
-    const resp = await fetch(url, { credentials: 'include' });
+    // Заголовки як у рідних запитів панелі — без isp-client billmgr 301-ить
+    // на cp.zomro.com (крос-домен → CORS). same-origin, тож preflight не потрібен.
+    const resp = await fetch(url, {
+        credentials: 'include',
+        headers: { 'isp-client': 'Web-interface', accept: 'application/json, text/plain, */*' },
+    });
     const ct = resp.headers ? (resp.headers.get('content-type') || '') : '';
     if (!resp.ok || (ct && ct.indexOf('html') !== -1)) {
         noteSessionLost();
