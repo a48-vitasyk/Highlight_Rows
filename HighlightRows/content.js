@@ -1329,6 +1329,7 @@ async function loadTraffic(force) {
     }
 }
 
+let trafficAttempts = {};
 function maybeTraffic() {
     if (!settings.trafficEnabled) {
         if (trafficData) { trafficData = null; removeTrafficDom(); }
@@ -1337,10 +1338,17 @@ function maybeTraffic() {
     if (!onTicketView()) return; // не сторінка тікета
     const key = currentTicketKey();
     if (!key) return;
-    if (trafficData && trafficData.key === key) { injectInfo(); return; }
-    // Новий тікет — «Информация об услуге» підтягується автоматично (один раз),
-    // лише з активної вкладки і якщо сесія білінга жива.
-    if (tabVisible() && !sessionInCooldown()) loadTraffic(false);
+    // Дані вже є (успіх або «немає послуги») — лише перемалювати: Angular міг
+    // стерти наш DOM при ре-рендері блоку.
+    const resolved = trafficData && trafficData.key === key && (trafficData.none || trafficData.service != null);
+    if (resolved) { injectInfo(); return; }
+    // Ще не вийшло (блок ще не відрендерився / тимчасовий збій) — повторюємо до
+    // кількох спроб, поки не підтягнеться. Без хибного 15-хв блокування.
+    if (!tabVisible() || trafficLoading) return;
+    const n = trafficAttempts[key] || 0;
+    if (n >= 4) return; // здаємось — лишається ручний ↻
+    trafficAttempts[key] = n + 1;
+    loadTraffic(false);
 }
 
 // --- Тригери refresh -----------------------------------------------------
