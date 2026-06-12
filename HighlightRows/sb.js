@@ -124,6 +124,21 @@ const SB = {
             method: 'PATCH', body: JSON.stringify({ snooze_until: untilMs ? new Date(untilMs).toISOString() : null }),
         });
     },
+    async claimReminder(id) {
+        const sess = await SB.getSession();
+        const email = (sess && sess.user && sess.user.email) || null;
+        const uid = (sess && sess.user && sess.user.id) || null;
+        return SB.rest('reminders?id=eq.' + encodeURIComponent(id), {
+            method: 'PATCH', body: JSON.stringify({ owner_email: email, owner_uid: uid, taken_at: new Date().toISOString() }),
+        });
+    },
+    async doneReminder(id) {
+        const sess = await SB.getSession();
+        const email = (sess && sess.user && sess.user.email) || null;
+        return SB.rest('reminders?id=eq.' + encodeURIComponent(id), {
+            method: 'PATCH', body: JSON.stringify({ done_at: new Date().toISOString(), done_by_email: email }),
+        });
+    },
 
     // --- Дзеркало у storage (щоб content.js працював без змін) ---
     async mirror(rows) {
@@ -131,6 +146,10 @@ const SB = {
         const reminders = rows.map((x) => ({
             id: x.id, ticketId: x.ticket_id, time: x.time, note: x.note || '',
             scope: x.scope || 'personal', creatorEmail: x.created_by_email || '',
+            ownerEmail: x.owner_email || '',
+            takenAt: x.taken_at ? Date.parse(x.taken_at) : 0,
+            doneAt: x.done_at ? Date.parse(x.done_at) : 0,
+            doneByEmail: x.done_by_email || '',
         }));
         const reminderState = {};
         for (const x of rows) {
