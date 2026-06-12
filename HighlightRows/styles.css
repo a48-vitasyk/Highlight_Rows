@@ -58,3 +58,21 @@
     cursor: pointer;
     white-space: nowrap;
 }
+
+/* Кнопка «У будильник» у блоці «Информация о запросе». */
+.hr-add-reminder {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin: 8px 0;
+    padding: 6px 12px;
+    border: none;
+    background: #2a3f5f;
+    color: #fff;
+    border-radius: 8px;
+    cursor: pointer;
+    font: 600 12px/1.2 system-ui, sans-serif;
+    white-space: nowrap;
+}
+.hr-add-reminder:hover { filter: brightness(1.12); }
+.hr-add-reminder:disabled { opacity: .6; cursor: default; }
