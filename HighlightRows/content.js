@@ -537,6 +537,8 @@ function setSvg(el, svg) {
     if (!el) return;
     el.textContent = '';
     if (!svg) return;
+    // Без xmlns DOMParser кладе <svg> у нульовий неймспейс і він не рендериться.
+    if (svg.indexOf('xmlns') === -1) svg = svg.replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" ');
     const node = new DOMParser().parseFromString(svg, 'image/svg+xml').documentElement;
     if (node && node.nodeName.toLowerCase() === 'svg') el.appendChild(document.importNode(node, true));
 }
