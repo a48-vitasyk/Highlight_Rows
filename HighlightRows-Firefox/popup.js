@@ -663,26 +663,20 @@ function renderUpdate(info) {
     const dot = $('updateDot');
     const txt = $('updateInfo');
     if (!txt) return;
-    const apply = $('reloadExtBtn');
     const cur = (chrome.runtime.getManifest && chrome.runtime.getManifest().version) || '';
     if (info && info.checking) { txt.textContent = 'Перевіряю…'; return; }
     if (info && info.hasUpdate) {
-        txt.textContent = 'Є нова: ' + (info.latest || '') + ' — перезавантажте, щоб застосувати';
+        txt.textContent = 'Є нова: ' + (info.latest || '') + ' — оновіть архів';
         if (dot) dot.hidden = false;
-        if (apply) apply.hidden = false;
         return;
     }
     if (dot) dot.hidden = true;
-    if (apply) apply.hidden = true;
     if (info && info.error) txt.textContent = 'Не вдалось перевірити · v' + cur;
     else txt.textContent = 'Оновлень немає · v' + cur;
 }
 if ($('updateBtn')) $('updateBtn').addEventListener('click', () => {
     renderUpdate({ checking: true });
     try { chrome.runtime.sendMessage({ action: 'checkUpdate' }, () => { void chrome.runtime.lastError; }); } catch (e) { /* ignore */ }
-});
-if ($('reloadExtBtn')) $('reloadExtBtn').addEventListener('click', () => {
-    try { chrome.runtime.reload(); } catch (e) { /* ignore */ }
 });
 
 // Лічильник біля «Оновити» в «Особисті тікети»: скільки тікетів зараз у списку.
@@ -773,6 +767,11 @@ $('save').addEventListener('click', async () => {
     savingNow = true;
     chrome.storage.sync.set({ settings }, async () => {
         chrome.storage.sync.remove('nameToHighlight');
+        // Монітор «Без відповіді» вимкнено → прибрати список і статус одразу,
+        // не чекаючи на вкладку Zomro з контент-скриптом.
+        if (!settings.staleEnabled) {
+            try { chrome.storage.local.set({ staleTickets: [], staleScanStatus: null }); } catch (e) { /* ignore */ }
+        }
         const status = $('status');
         if (loggedIn) {
             status.textContent = 'Збереження…';
