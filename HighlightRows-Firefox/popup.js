@@ -17,6 +17,9 @@ const DEFAULT_SETTINGS = {
     staleHours: 4,
     trafficEnabled: false,
     serviceShow: { status: true, os: true, cost: true, expiredate: true, traffic: true },
+    reverseEnabled: false,
+    resizeEnabled: false,
+    resizePx: 300,
 };
 
 const SERVICE_KEYS = ['status', 'os', 'cost', 'expiredate', 'traffic'];
@@ -296,6 +299,9 @@ function fillForm(s, reminderState) {
     $('staleEnabled').checked = s.staleEnabled;
     $('staleHours').value = s.staleHours || DEFAULT_SETTINGS.staleHours;
     $('trafficEnabled').checked = s.trafficEnabled;
+    $('reverseEnabled').checked = s.reverseEnabled;
+    $('resizeEnabled').checked = s.resizeEnabled;
+    $('resizePx').value = s.resizePx || DEFAULT_SETTINGS.resizePx;
     const sv = s.serviceShow || {};
     SERVICE_KEYS.forEach((k) => { const el = $('show_' + k); if (el) el.checked = sv[k] !== false; });
     $('reminderColor').value = s.reminderColor || DEFAULT_SETTINGS.reminderColor;
@@ -338,6 +344,9 @@ function readForm() {
         staleEnabled: $('staleEnabled').checked,
         staleHours: Number($('staleHours').value) > 0 ? Number($('staleHours').value) : DEFAULT_SETTINGS.staleHours,
         trafficEnabled: $('trafficEnabled').checked,
+        reverseEnabled: $('reverseEnabled').checked,
+        resizeEnabled: $('resizeEnabled').checked,
+        resizePx: Number($('resizePx').value) > 0 ? Number($('resizePx').value) : DEFAULT_SETTINGS.resizePx,
         serviceShow: {
             status: $('show_status').checked,
             os: $('show_os').checked,
