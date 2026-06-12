@@ -92,6 +92,7 @@ const SB = {
 
     // --- CRUD будильників ---
     listReminders() { return SB.rest('reminders?select=*&order=updated_at.desc'); },
+    listLogs(limit) { return SB.rest('reminder_logs?select=*&order=at.desc&limit=' + (Number(limit) > 0 ? Number(limit) : 100)); },
     async insertReminder(r) {
         const sess = await SB.getSession();
         const email = (sess && sess.user && sess.user.email) || null;
