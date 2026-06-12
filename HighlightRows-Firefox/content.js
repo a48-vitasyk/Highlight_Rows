@@ -1128,14 +1128,15 @@ function injectServiceDom() {
     const box = findServiceInfoItems();
     if (!box) return;
     for (const f of SERVICE_FIELDS) {
-        const val = trafficData.service[f.key];
+        const raw = trafficData.service[f.key];
         let item = box.querySelector('.' + SERVICE_ITEM_CLASS + '[data-hr-field="' + f.key + '"]');
-        // Поле вимкнене в налаштуваннях або порожнє — прибрати й пропустити.
+        // Вимкнене в налаштуваннях — прибрати. Порожнє/«-» — показуємо «-» (а не ховаємо).
         const hidden = settings.serviceShow && settings.serviceShow[f.key] === false;
-        if (hidden || val == null || val === '' || val === '-') {
+        if (hidden) {
             if (item) item.remove();
             continue;
         }
+        const val = (raw == null || raw === '' || raw === '-') ? '-' : raw;
         if (!item) {
             item = document.createElement('div');
             item.className = SERVICE_ITEM_CLASS;
@@ -1165,8 +1166,9 @@ function injectInfo() {
 function trafficValueText() {
     if (!trafficData) return '';
     if (trafficData.none) return 'немає прив\'язаної послуги';
-    if (trafficData.notFound) return '—';
-    return `${formatTB(trafficData.used)} / ${formatTB(trafficData.paid)} TB`;
+    if (trafficData.notFound) return '-';
+    const fmt = (v) => (v == null || v === '' || v === '-') ? '-' : formatTB(v);
+    return `${fmt(trafficData.used)} / ${fmt(trafficData.paid)} TB`;
 }
 
 function injectTrafficDom() {
@@ -1305,13 +1307,13 @@ async function loadTraffic(force) {
 
             const inst = await fetchBillmgr('func=instances' + (item ? '&id=' + encodeURIComponent(item) : ''));
             const elems = asArray(inst.elem);
-            // Збіг за будь-яким ідентифікатором тікета (item може бути id / uuid /
-            // intname / itemtype); якщо у клієнта лише один сервер — беремо його.
-            let match = item ? elems.find((e) =>
-                fieldVal(e.id) === item ||
-                fieldVal(e.instances_uuid) === item ||
-                fieldVal(e.intname) === item ||
-                fieldVal(e.itemtype) === item) : null;
+            // Збіг: інстанс, у якому БУДЬ-ЯКЕ поле дорівнює item (id / uuid /
+            // intname / itemtype / subaccount / pricelist_id тощо — не вгадуємо
+            // конкретне). Якщо у клієнта лише один сервер — беремо його.
+            let match = item ? elems.find((e) => Object.keys(e).some((k) => {
+                const v = e[k];
+                return v && typeof v === 'object' && fieldVal(v) === item;
+            })) : null;
             if (!match && elems.length === 1) match = elems[0];
             trafficData = match
                 ? {
