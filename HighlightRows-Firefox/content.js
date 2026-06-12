@@ -628,6 +628,9 @@ let staleScanRunning = false;
 // підтримки (повідомлення $type="outcoming") і відбирає ті, де від неї минуло
 // понад settings.staleHours. Якщо підтримка ще не відповідала — рахує від
 // дати створення. Результат пише в storage.local.staleTickets (читає popup).
+// Прогрес скану для popup (скільки тікетів просканували / пройшли поріг).
+function setStaleStatus(o) { try { chrome.storage.local.set({ staleScanStatus: o }); } catch (e) { /* ignore */ } }
+
 async function scanStaleTickets(force) {
     if (!alive || !extensionAlive() || !onBillmgr() || staleScanRunning) return;
     // Вимкнено — не скануємо: інакше відкриття тікетів через ticket.edit гасить
@@ -643,20 +646,24 @@ async function scanStaleTickets(force) {
     try { chrome.storage.local.set({ stalePollAt: Date.now() }); } catch (e) { return; }
 
     staleScanRunning = true;
+    let total = 0, scanned = 0;
+    const result = [];
     try {
         // Скануємо всю чергу (всі сторінки), а не лише поточну — інакше тікети
         // з інших сторінок не потраплять у монітор. fetchAllTickets() сам
         // оновлює локалізовані підписи й повертає користувача на його сторінку.
         const elems = await fetchAllTickets();
+        total = elems.length;
+        setStaleStatus({ scanning: true, total, scanned: 0, passed: 0, at: Date.now() });
         const thresholdMs = settings.staleHours * 60 * 60 * 1000;
         const now = Date.now();
-        const result = [];
 
         for (const el of elems) {
             if (!alive || !extensionAlive()) break;
             const elid = fieldVal(el.id);
             const ticketNo = fieldVal(el.ticket);
             if (!elid) continue;
+            scanned++;
 
             let lastSupport = null;
             try {
@@ -671,18 +678,17 @@ async function scanStaleTickets(force) {
             } catch (e) { /* пропускаємо цей тікет */ }
 
             const ref = lastSupport !== null ? lastSupport : parseServerDate(fieldVal(el.date_start));
-            if (ref === null) continue;
-            const ageMs = now - ref;
-            if (ageMs > thresholdMs) {
+            if (ref !== null && (now - ref) > thresholdMs) {
                 result.push({
                     ticketId: ticketNo,
                     subject: fieldVal(el.name),
                     client: fieldVal(el.client),
-                    hours: ageMs / 3600000,
+                    hours: (now - ref) / 3600000,
                     noReply: lastSupport === null,
                     url: elid ? location.origin + '/billmgr?startform=ticket.edit&elid=' + encodeURIComponent(elid) : '',
                 });
             }
+            setStaleStatus({ scanning: true, total, scanned, passed: result.length, at: Date.now() });
             await sleep(STALE_FETCH_GAP_MS);
         }
 
@@ -692,6 +698,7 @@ async function scanStaleTickets(force) {
         // мережа/парсинг — спробуємо наступного разу
     } finally {
         staleScanRunning = false;
+        setStaleStatus({ scanning: false, total, scanned, passed: result.length, at: Date.now() });
     }
 }
 
