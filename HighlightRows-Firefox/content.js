@@ -10,8 +10,7 @@ const TICKET_SELECTOR = 'td[data-table-column-name="ticket"] .isp-cell-content__
 // «Заблокований запит» — за атрибутом (незалежно від мови інтерфейсу).
 const BLOCKED_PROP_SELECTOR = 'div.isp-prop[data-table-prop-name="blocked_by"]';
 
-// «Без відповіді понад N год» — через API billmgr (same-origin).
-const STALE_POLL_INTERVAL_MS = 30 * 60 * 1000; // як часто пересканувати чергу
+// «Без відповіді понад N год» — через API billmgr (same-origin). Скан лише вручну.
 const STALE_POLL_DEDUP_MS = 28 * 60 * 1000;    // не сканувати, якщо інша вкладка щойно сканувала
 const STALE_FETCH_GAP_MS = 650;                // пауза між запитами деталей (м'якше до білінгу — ~1.5 зап/с, щоб не ловити бан WAF)
 
@@ -95,7 +94,6 @@ let matchIntervalRef = null;
 let alive = true;
 let observerRef = null;
 let intervalRef = null;
-let staleIntervalRef = null;
 let sbPullIntervalRef = null;
 let debounceTimer = null;
 let reminderAudio = null;
@@ -111,7 +109,6 @@ function extensionAlive() {
 function teardown() {
     alive = false;
     if (intervalRef) { clearInterval(intervalRef); intervalRef = null; }
-    if (staleIntervalRef) { clearInterval(staleIntervalRef); staleIntervalRef = null; }
     if (sbPullIntervalRef) { clearInterval(sbPullIntervalRef); sbPullIntervalRef = null; }
     if (matchIntervalRef) { clearInterval(matchIntervalRef); matchIntervalRef = null; }
     if (observerRef) { observerRef.disconnect(); observerRef = null; }
@@ -1406,14 +1403,8 @@ function init() {
 
             intervalRef = setInterval(refresh, REFRESH_INTERVAL_MS);
 
-            // «Без відповіді»: початкове сканування + періодичне (кожні 30 хв).
-            // Старт із затримкою + джитер — щоб reload усіх вкладок не давав
-            // синхронного обходу черги (м'якше до WAF білінгу).
-            setTimeout(scanStaleTickets, 30000 + Math.floor(Math.random() * 30000));
-            staleIntervalRef = setInterval(scanStaleTickets, STALE_POLL_INTERVAL_MS);
-
-            // Збіги по всій черзі (теги/блокування/«Особисті тікети») —
-            // лише вручну, за кнопкою «Оновити» (без авто-обходу всіх сторінок).
+            // «Без відповіді» та збіги по всій черзі («Особисті тікети») —
+            // лише вручну, за кнопкою «Оновити» (без авто/періодичного обходу черги).
 
             // Спільні будильники: періодично підтягувати зі спільної бази
             // (фактичний fetch робить background; тут лише тригеримо з активної вкладки).
@@ -1424,7 +1415,6 @@ function init() {
             // поважає власний дедуп/кеш, тож без сплеску).
             document.addEventListener('visibilitychange', () => {
                 if (!alive || !tabVisible()) return;
-                scanStaleTickets(false);
                 maybeTraffic();
                 sbSend({ sb: 'pull' });
             });
