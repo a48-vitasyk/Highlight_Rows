@@ -1173,9 +1173,12 @@ function init() {
             chrome.storage.onChanged.addListener((changes, area) => {
                 if (!alive) return;
                 if (area === 'sync' && changes.settings) {
+                    const wasStale = settings.staleEnabled;
                     settings = normalizeSettings(changes.settings.newValue);
                     // Вимкнули монітор — прибираємо застарілий список у popup.
                     if (!settings.staleEnabled) { try { chrome.storage.local.set({ staleTickets: [] }); } catch (e) {} }
+                    // Щойно увімкнули — сканувати одразу, не чекаючи 15-хв циклу.
+                    else if (!wasStale) scanStaleTickets(true);
                     refresh();
                 } else if (area === 'local' && changes.reminderState) {
                     reminderState = changes.reminderState.newValue || {};
