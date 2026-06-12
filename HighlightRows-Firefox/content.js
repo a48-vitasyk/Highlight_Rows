@@ -779,13 +779,14 @@ async function fetchBillmgr(params) {
     // sfrom=ajax — як рідні запити панелі: без нього billmgr віддає 301 на
     // ticket.edit і це ламає сесійну куку (панель кидає на логін). out=xjson — JSON.
     const url = location.origin + '/billmgr?' + params + '&sfrom=ajax&out=xjson';
-    // redirect:'manual' — НЕ йдемо за 301 на cp.zomro.com (інакше браузер шле
-    // зайвий крос-доменний OPTIONS-preflight). Будь-який редірект = «не дотягли».
-    const resp = await fetch(url, { credentials: 'include', redirect: 'manual' });
+    // Заголовки як у рідних запитів панелі — без isp-client billmgr 301-ить
+    // на cp.zomro.com (крос-домен → CORS). same-origin, тож preflight не потрібен.
+    const resp = await fetch(url, {
+        credentials: 'include',
+        headers: { 'isp-client': 'Web-interface', accept: 'application/json, text/plain, */*' },
+    });
     const ct = resp.headers ? (resp.headers.get('content-type') || '') : '';
-    if (resp.type === 'opaqueredirect' || resp.redirected ||
-        (resp.status >= 300 && resp.status < 400) ||
-        (ct && ct.indexOf('html') !== -1)) {
+    if (!resp.ok || (ct && ct.indexOf('html') !== -1)) {
         noteSessionLost();
         throw new Error('session-redirect');
     }
@@ -1342,11 +1343,11 @@ function maybeTraffic() {
     // стерти наш DOM при ре-рендері блоку.
     const resolved = trafficData && trafficData.key === key && (trafficData.none || trafficData.service != null);
     if (resolved) { injectInfo(); return; }
-    // Ще не вийшло — кілька спроб. Якщо сесія/ендпоінт віддає редірект
-    // (cooldown) — не довбаємо, лишається ручний ↻.
-    if (!tabVisible() || trafficLoading || sessionInCooldown()) return;
+    // Ще не вийшло (блок ще не відрендерився / тимчасовий збій) — повторюємо до
+    // кількох спроб, поки не підтягнеться. Без хибного 15-хв блокування.
+    if (!tabVisible() || trafficLoading) return;
     const n = trafficAttempts[key] || 0;
-    if (n >= 2) return; // здаємось — лишається ручний ↻
+    if (n >= 4) return; // здаємось — лишається ручний ↻
     trafficAttempts[key] = n + 1;
     loadTraffic(false);
 }
