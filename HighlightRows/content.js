@@ -699,10 +699,28 @@ function sleep(ms) {
     return new Promise((r) => setTimeout(r, ms));
 }
 
+// Коли сесія злетіла, billmgr редіректить на логін (інший домен). Розпізнаємо
+// це, щоб не йти за редіректом (зайва CORS-помилка) і не довбати білінг, поки
+// користувач розлогінений.
+const SESSION_LOST_COOLDOWN_MS = 15 * 60 * 1000;
+let sessionLostAt = 0;
+function noteSessionLost() { sessionLostAt = Date.now(); }
+function sessionInCooldown() { return Date.now() - sessionLostAt < SESSION_LOST_COOLDOWN_MS; }
+
 async function fetchBillmgr(params) {
     const url = location.origin + '/billmgr?' + params + '&out=xjson';
-    const resp = await fetch(url, { credentials: 'include' });
+    const resp = await fetch(url, { credentials: 'include', redirect: 'manual' });
+    // redirect:'manual' → крос-доменний редірект на логін приходить як
+    // opaqueredirect (status 0); також ловимо 3xx і не-JSON (HTML логіну).
+    const ct = resp.headers ? (resp.headers.get('content-type') || '') : '';
+    if (resp.type === 'opaqueredirect' || resp.redirected ||
+        (resp.status >= 300 && resp.status < 400) ||
+        (resp.status && ct && ct.indexOf('json') === -1)) {
+        noteSessionLost();
+        throw new Error('session-redirect');
+    }
     const json = await resp.json();
+    sessionLostAt = 0; // успішна відповідь — сесія жива
     return json.doc || json;
 }
 
@@ -721,6 +739,8 @@ async function scanStaleTickets(force) {
     if (!settings.staleEnabled) { if (force) setStaleStatus({ scanning: false, note: 'монітор вимкнено' }); return; }
     // Скан ходить у billmgr same-origin — лише на сторінці панелі.
     if (!onBillmgr()) { if (force) setStaleStatus({ scanning: false, note: 'відкрийте сторінку панелі (billmgr)' }); return; }
+    // Сесія нещодавно злетіла — не довбати білінг (ручний force усе ж пробує).
+    if (!force && sessionInCooldown()) return;
 
     // Дедуплікація між вкладками: не сканувати, якщо нещодавно вже сканували.
     // Ручне оновлення (force) ігнорує цей таймер.
@@ -732,6 +752,7 @@ async function scanStaleTickets(force) {
 
     staleScanRunning = true;
     let total = 0, scanned = 0;
+    let sessionLost = false;
     const result = [];
     try {
         // Скануємо всю чергу (всі сторінки), а не лише поточну — інакше тікети
@@ -780,10 +801,12 @@ async function scanStaleTickets(force) {
         result.sort((a, b) => b.hours - a.hours);
         try { chrome.storage.local.set({ staleTickets: result }); } catch (e) {}
     } catch (e) {
-        // мережа/парсинг — спробуємо наступного разу
+        if (e && e.message === 'session-redirect') sessionLost = true;
+        // інакше мережа/парсинг — спробуємо наступного разу
     } finally {
         staleScanRunning = false;
-        setStaleStatus({ scanning: false, total, scanned, passed: result.length, at: Date.now() });
+        if (sessionLost) setStaleStatus({ scanning: false, note: 'панель розлогінено — оновіть сторінку' });
+        else setStaleStatus({ scanning: false, total, scanned, passed: result.length, at: Date.now() });
     }
 }
 
@@ -842,6 +865,7 @@ function setMatchStatus(o) { try { chrome.storage.local.set({ matchScanStatus: o
 async function scanMatches(force) {
     if (!alive || !extensionAlive() || matchScanRunning) return;
     if (!onBillmgr()) { if (force) setMatchStatus({ scanning: false, note: 'відкрийте сторінку панелі (billmgr)' }); return; }
+    if (!force && sessionInCooldown()) return;
     if (!force) {
         const last = await loadFromStorage('local', 'matchPollAt', 0);
         if (Date.now() - (last || 0) < MATCH_POLL_DEDUP_MS) return;
@@ -850,6 +874,7 @@ async function scanMatches(force) {
 
     matchScanRunning = true;
     let matchCount = 0;
+    let sessionLost = false;
     try {
         setMatchStatus({ scanning: true, count: 0 });
         const tickets = await fetchAllTickets();
@@ -946,10 +971,12 @@ async function scanMatches(force) {
         }
         try { chrome.runtime.sendMessage({ action: 'setBadge', count: list.length }); } catch (e) {}
     } catch (e) {
-        // мережа/парсинг — наступного разу
+        if (e && e.message === 'session-redirect') sessionLost = true;
+        // інакше мережа/парсинг — наступного разу
     } finally {
         matchScanRunning = false;
-        setMatchStatus({ scanning: false, count: matchCount });
+        if (sessionLost) setMatchStatus({ scanning: false, note: 'панель розлогінено — оновіть сторінку' });
+        else setMatchStatus({ scanning: false, count: matchCount });
     }
 }
 
