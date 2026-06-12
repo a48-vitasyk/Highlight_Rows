@@ -49,6 +49,33 @@ chrome.runtime.onMessage.addListener((req, sender, sendResponse) => {
         try {
             if (req.sb === 'pull') {
                 await SB.pull();
+            } else if (req.sb === 'add') {
+                // Додати тікет у будильники (кнопка з панелі). Завжди власний.
+                const ticketId = String(req.ticketId || '').trim();
+                const time = String(req.time || '').trim();
+                if (!ticketId || !time) { sendResponse({ ok: false, error: 'no ticket/time' }); return; }
+                const existing = await new Promise((res) => {
+                    try { chrome.storage.sync.get('settings', (d) => res(((d && d.settings && d.settings.reminders) || []))); }
+                    catch (e) { res([]); }
+                });
+                if (existing.some((r) => r && String(r.ticketId) === ticketId)) {
+                    sendResponse({ ok: true, duplicate: true }); return;
+                }
+                if (await SB.loggedIn()) {
+                    await SB.insertReminder({ ticketId, time, scope: 'personal', note: '' });
+                    await SB.pull();
+                } else {
+                    const settings = await new Promise((res) => {
+                        try { chrome.storage.sync.get('settings', (d) => res((d && d.settings) || {})); }
+                        catch (e) { res({}); }
+                    });
+                    settings.reminders = Array.isArray(settings.reminders) ? settings.reminders : [];
+                    const id = (self.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now());
+                    settings.reminders.push({ id, ticketId, time, note: '', scope: 'personal' });
+                    await new Promise((res) => { try { chrome.storage.sync.set({ settings }, res); } catch (e) { res(); } });
+                }
+                sendResponse({ ok: true });
+                return;
             } else if (req.sb === 'snooze') {
                 for (const id of (req.ids || [])) await SB.setSnooze(id, req.until);
                 await SB.pull();

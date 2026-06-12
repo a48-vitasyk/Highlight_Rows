@@ -491,9 +491,72 @@ function computeActiveReminders(now) {
 
 // --- Основний прохід -----------------------------------------------------
 
+// --- Кнопка «У будильник» у блоці «Информация о запросе» ------------------
+// Додає поточний тікет у будильники: time = зараз + 1 год, scope = власний.
+const ADD_REM_BTN_CLASS = 'hr-add-reminder';
+
+function ticketIdFromGroup(group) {
+    const wanted = (panelLabels.ticketIdLabel || DEFAULT_LABELS.ticketIdLabel);
+    const labels = group.querySelectorAll('.isp-item-label');
+    for (const lbl of labels) {
+        if ((lbl.textContent || '').trim() === wanted) {
+            const row = lbl.parentElement;
+            const val = row && row.querySelector('.isp-item-value');
+            if (val) return (val.textContent || '').trim();
+        }
+    }
+    return '';
+}
+
+function plusOneHourHHMM() {
+    const d = new Date(Date.now() + 60 * 60 * 1000);
+    return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+
+function flashBtn(btn, text) {
+    btn.textContent = text;
+    clearTimeout(btn._flashT);
+    btn._flashT = setTimeout(() => { btn.textContent = btn.dataset.label; }, 2000);
+}
+
+function injectAddReminderButton() {
+    document.querySelectorAll('isp-chat-summary-group, .isp-summary-group').forEach((group) => {
+        if (group.querySelector('.' + ADD_REM_BTN_CLASS)) return; // вже вставлено
+        const ticketId = ticketIdFromGroup(group);
+        if (!ticketId) return; // не той блок (немає «Код запроса»)
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = ADD_REM_BTN_CLASS;
+        btn.dataset.label = '🔔 У будильник (+1 год)';
+        btn.textContent = btn.dataset.label;
+        btn.title = 'Додати цей тікет у будильники на +1 годину (власний)';
+        btn.addEventListener('click', () => {
+            const tid = ticketIdFromGroup(group) || ticketId;
+            if (!tid) { flashBtn(btn, 'Не знайдено ID'); return; }
+            const time = plusOneHourHHMM();
+            btn.disabled = true;
+            try {
+                chrome.runtime.sendMessage({ sb: 'add', ticketId: tid, time }, (resp) => {
+                    btn.disabled = false;
+                    if (chrome.runtime.lastError) { flashBtn(btn, 'Помилка'); return; }
+                    if (resp && resp.duplicate) flashBtn(btn, 'Вже додано');
+                    else if (resp && resp.ok) flashBtn(btn, '✓ Додано ' + time);
+                    else flashBtn(btn, 'Помилка');
+                });
+            } catch (e) { btn.disabled = false; flashBtn(btn, 'Помилка'); }
+        });
+
+        const items = group.querySelector('.isp-summary-items');
+        if (items && items.parentNode) items.parentNode.insertBefore(btn, items);
+        else group.appendChild(btn);
+    });
+}
+
 function refresh() {
     if (!alive) return;
     if (!extensionAlive()) { teardown(); return; }
+    injectAddReminderButton();
 
     const now = Date.now();
     const applied = new Set();
