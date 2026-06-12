@@ -58,6 +58,9 @@
     cursor: pointer;
     white-space: nowrap;
 }
+#hr-reminder-banner .hr-rb-take { color: #1a5fb4; }
+#hr-reminder-banner .hr-rb-done { color: #1e7e34; }
+#hr-reminder-banner .hr-reminder-banner-btn[hidden] { display: none; }
 
 /* Кнопка «У будильник» — нативна кнопка з іконкою в заголовку «Информация о запросе». */
 .hr-add-reminder {

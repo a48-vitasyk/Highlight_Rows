@@ -62,6 +62,7 @@ const DEFAULT_SETTINGS = {
     reminderColor: '#ff5a5a',
     reminders: [], // { id, ticketId, time: "HH:MM", note }
     snoozeMinutes: 10, // тривалість снузу кнопки «Заглушити»
+    escalateMinutes: 10, // спільний HeartBeat: взяв і не закрив → через N хв дзвонить усім
     // «без відповіді понад N год» — список у popup
     staleEnabled: false, // вимкнено за замовч.: скан відкриває тікети й гасить позначку нового повідомлення
     staleHours: 4,
@@ -78,6 +79,14 @@ const DEFAULT_SETTINGS = {
 let settings = { ...DEFAULT_SETTINGS };
 let rowTimers = {};       // { [key]: { firstSeen, lastAlert } } — для blocked та tag-алертів
 let reminderState = {};   // { [reminderId]: { mutedDate: 'Y-M-D' } } — пише popup
+let myEmail = '';         // email поточної сесії (для маршрутизації дзвінка shared HeartBeat)
+function loadMyEmail() {
+    try {
+        chrome.storage.local.get('sbSession', (d) => {
+            myEmail = (d && d.sbSession && d.sbSession.user && d.sbSession.user.email) || '';
+        });
+    } catch (e) { /* ignore */ }
+}
 let reminderNotifiedAt = {}; // { [reminderId]: ts } — троттлінг сповіщень (у пам'яті)
 let trafficData = null;   // { key, used, paid, none?, notFound? } — кеш трафіку поточного тікета
 let trafficLoading = false;
@@ -160,12 +169,20 @@ function normalizeSettings(raw) {
     s.reminderColor = String(s.reminderColor || DEFAULT_SETTINGS.reminderColor);
     s.snoozeMinutes = Number(s.snoozeMinutes);
     if (!(s.snoozeMinutes > 0)) s.snoozeMinutes = DEFAULT_SETTINGS.snoozeMinutes;
+    s.escalateMinutes = Number(s.escalateMinutes);
+    if (!(s.escalateMinutes > 0)) s.escalateMinutes = DEFAULT_SETTINGS.escalateMinutes;
     s.reminders = (Array.isArray(s.reminders) ? s.reminders : [])
         .map((r) => ({
             id: r.id || genId(),
             ticketId: String(r.ticketId || '').trim(),
             time: String(r.time || '').trim(),
             note: String(r.note || ''),
+            scope: r.scope === 'shared' ? 'shared' : 'personal',
+            creatorEmail: String(r.creatorEmail || ''),
+            ownerEmail: String(r.ownerEmail || ''),
+            takenAt: Number(r.takenAt) || 0,
+            doneAt: Number(r.doneAt) || 0,
+            doneByEmail: String(r.doneByEmail || ''),
         }))
         .filter((r) => r.ticketId && r.time);
 
@@ -369,24 +386,41 @@ function ensureReminderBanner(active) {
         banner.id = 'hr-reminder-banner';
         const text = document.createElement('span');
         text.className = 'hr-reminder-banner-text';
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'hr-reminder-banner-btn';
-        btn.textContent = 'Заглушити';
-        btn.addEventListener('click', (e) => { e.preventDefault(); snoozeActiveReminders(); });
         banner.appendChild(text);
-        banner.appendChild(btn);
+        const mkBtn = (cls, onClick) => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'hr-reminder-banner-btn ' + cls;
+            b.addEventListener('click', (e) => { e.preventDefault(); onClick(); });
+            banner.appendChild(b);
+            return b;
+        };
+        mkBtn('hr-rb-take', claimActiveShared);
+        mkBtn('hr-rb-done', doneActiveShared);
+        mkBtn('hr-rb-snooze', snoozeActiveReminders);
         document.body.appendChild(banner);
     }
     const label = active
-        .map((r) => '#' + r.ticketId + (r.note ? ' — ' + r.note : ''))
+        .map((r) => {
+            let s = '#' + r.ticketId + (r.note ? ' — ' + r.note : '');
+            if (r.scope === 'shared' && r.ownerEmail) s += ' (взяв ' + r.ownerEmail.split('@')[0] + ')';
+            return s;
+        })
         .join(' · ');
     const full = '⏰ ' + label;
     const textEl = banner.querySelector('.hr-reminder-banner-text');
     if (textEl.textContent !== full) textEl.textContent = full;
-    const btnEl = banner.querySelector('.hr-reminder-banner-btn');
-    const btnLabel = 'Відкласти на ' + settings.snoozeMinutes + ' хв';
-    if (btnEl.textContent !== btnLabel) btnEl.textContent = btnLabel;
+    // «Взяти»/«Відписав» — лише коли серед активних є спільні й ми залогінені.
+    const hasShared = !!myEmail && active.some((r) => r.scope === 'shared');
+    const takeBtn = banner.querySelector('.hr-rb-take');
+    const doneBtn = banner.querySelector('.hr-rb-done');
+    const snoozeBtn = banner.querySelector('.hr-rb-snooze');
+    if (takeBtn) { takeBtn.hidden = !hasShared; if (takeBtn.textContent !== 'Взяти') takeBtn.textContent = 'Взяти'; }
+    if (doneBtn) { doneBtn.hidden = !hasShared; if (doneBtn.textContent !== 'Відписав') doneBtn.textContent = 'Відписав'; }
+    if (snoozeBtn) {
+        const sl = 'Відкласти на ' + settings.snoozeMinutes + ' хв';
+        if (snoozeBtn.textContent !== sl) snoozeBtn.textContent = sl;
+    }
 }
 
 function removeReminderBanner() {
@@ -424,6 +458,29 @@ function snoozeActiveReminders() {
         return;
     }
     sbSend({ sb: 'snooze', ids: active.map((r) => r.id), until });
+    stopReminderAudio();
+    removeReminderBanner();
+    refresh();
+}
+
+// «Взяти»: спільні активні HeartBeat стають моїми → дзвонять лише мені (іншим
+// тихо). Локально оновлюємо одразу, у базу — через background (потім pull).
+function claimActiveShared() {
+    if (!myEmail) return;
+    const active = computeActiveReminders(Date.now()).filter((r) => r.scope === 'shared' && r.ownerEmail !== myEmail);
+    if (!active.length) return;
+    active.forEach((r) => { r.ownerEmail = myEmail; r.takenAt = Date.now(); });
+    sbSend({ sb: 'claim', ids: active.map((r) => r.id) });
+    refresh();
+}
+
+// «Відписав»: спільні активні HeartBeat закриваються для всіх (запис у лог).
+function doneActiveShared() {
+    if (!myEmail) return;
+    const active = computeActiveReminders(Date.now()).filter((r) => r.scope === 'shared');
+    if (!active.length) return;
+    active.forEach((r) => { r.doneAt = Date.now(); r.doneByEmail = myEmail; });
+    sbSend({ sb: 'done', ids: active.map((r) => r.id) });
     stopReminderAudio();
     removeReminderBanner();
     refresh();
@@ -490,9 +547,41 @@ function computeActiveReminders(now) {
         if (st && st.snoozeUntil && now < st.snoozeUntil) continue; // відкладено (снуз)
         const target = targetTimeToday(r.time);
         if (target === null) continue;
-        if (now >= target - REMINDER_LEAD_MS) active.push(r);
+        if (now < target - REMINDER_LEAD_MS) continue;
+        // Передача зміни (лише shared): закрито → не дзвонить; взято кимось →
+        // дзвонить лише власнику, доки не мине ескалація (тоді знову всім).
+        if (r.doneAt) continue;
+        if (r.scope === 'shared' && r.ownerEmail) {
+            const escalated = now >= target + (settings.escalateMinutes || 10) * 60000;
+            if (r.ownerEmail !== myEmail && !escalated) continue;
+        }
+        active.push(r);
     }
     return active;
+}
+
+// B — пінг при передачі: щойно зʼявляється новий спільний HeartBeat (не мій і не
+// закритий) — один раз сповіщаємо зміну (не чекаючи його часу). Перший запуск
+// лише засіває множину без дзвінка (щоб не задзвеніли всі наявні одразу).
+function pingNewShared() {
+    if (!alive) return;
+    try {
+        chrome.storage.local.get('pingedShared', (d) => {
+            const hadList = !!(d && Array.isArray(d.pingedShared));
+            const seen = new Set(hadList ? d.pingedShared : []);
+            let changed = false;
+            for (const r of settings.reminders) {
+                if (r.scope !== 'shared' || r.doneAt) continue;
+                if (seen.has(r.id)) continue;
+                if (hadList && r.ownerEmail !== myEmail && r.creatorEmail !== myEmail) {
+                    notifyReminder(r, Date.now()); // разовий пінг зміні
+                }
+                seen.add(r.id);
+                changed = true;
+            }
+            if (changed || !hadList) { try { chrome.storage.local.set({ pingedShared: [...seen] }); } catch (e) { /* ignore */ } }
+        });
+    } catch (e) { /* ignore */ }
 }
 
 // --- Основний прохід -----------------------------------------------------
@@ -1377,7 +1466,9 @@ function init() {
         if (loadedLabels && typeof loadedLabels === 'object') panelLabels = { ...DEFAULT_LABELS, ...loadedLabels };
         matchAlertState = loadedMatchState && typeof loadedMatchState === 'object' ? loadedMatchState : {};
         applyPanelTweaks();
+        loadMyEmail();
         refresh();
+        pingNewShared();
 
         try {
             chrome.storage.onChanged.addListener((changes, area) => {
@@ -1386,6 +1477,7 @@ function init() {
                     const oldHours = settings.staleHours;
                     settings = normalizeSettings(changes.settings.newValue);
                     applyPanelTweaks();
+                    pingNewShared();
                     if (!settings.staleEnabled) {
                         // Вимкнули монітор — прибираємо застарілий список і статус.
                         try { chrome.storage.local.set({ staleTickets: [], staleScanStatus: null }); } catch (e) {}
@@ -1404,6 +1496,8 @@ function init() {
                 } else if (area === 'local' && changes.reminderState) {
                     reminderState = changes.reminderState.newValue || {};
                     refresh();
+                } else if (area === 'local' && changes.sbSession) {
+                    loadMyEmail();
                 }
             });
 

@@ -13,6 +13,7 @@ const DEFAULT_SETTINGS = {
     reminderColor: '#ff5a5a',
     reminders: [],
     snoozeMinutes: 10,
+    escalateMinutes: 10,
     staleEnabled: false,
     staleHours: 4,
     trafficEnabled: false,
@@ -261,9 +262,12 @@ function addReminderRow(reminder, muted) {
     row.appendChild(time);
     row.appendChild(actions);
     row.appendChild(note);
-    if (r.creatorEmail && scope === 'shared') {
+    if (scope === 'shared' && (r.creatorEmail || r.ownerEmail || r.doneAt)) {
         const auth = makeEl('div', { className: 'rem-author', innerHTML: IC.user12 });
-        auth.appendChild(document.createTextNode(' ' + r.creatorEmail));
+        let txt = ' ' + (r.creatorEmail || '');
+        if (r.doneAt) txt += ' · ✓ ' + (r.doneByEmail || '').split('@')[0];
+        else if (r.ownerEmail) txt += ' · взяв ' + (r.ownerEmail || '').split('@')[0];
+        auth.appendChild(document.createTextNode(txt));
         row.appendChild(auth);
     }
 
@@ -326,6 +330,7 @@ function fillForm(s, reminderState) {
     SERVICE_KEYS.forEach((k) => { const el = $('show_' + k); if (el) el.checked = sv[k] !== false; });
     $('reminderColor').value = s.reminderColor || DEFAULT_SETTINGS.reminderColor;
     $('snoozeMinutes').value = s.snoozeMinutes || DEFAULT_SETTINGS.snoozeMinutes;
+    $('escalateMinutes').value = s.escalateMinutes || DEFAULT_SETTINGS.escalateMinutes;
 
     $('tagRules').innerHTML = '';
     (s.tagRules || []).forEach(addTagRuleRow);
@@ -377,6 +382,7 @@ function readForm() {
         tagRules,
         reminderColor: $('reminderColor').value,
         snoozeMinutes: Number($('snoozeMinutes').value) > 0 ? Number($('snoozeMinutes').value) : DEFAULT_SETTINGS.snoozeMinutes,
+        escalateMinutes: Number($('escalateMinutes').value) > 0 ? Number($('escalateMinutes').value) : DEFAULT_SETTINGS.escalateMinutes,
         reminders,
     };
 }
@@ -535,6 +541,7 @@ const LOG_ACTIONS = {
     scope_shared: 'зробив загальним', scope_personal: 'зробив особистим',
     mute: 'заглушив', unmute: 'увімкнув звук',
     snooze: 'відклав', snooze_clear: 'скасував відкладення',
+    claim: 'взяв', release: 'віддав', done: 'відписав', reopen: 'знову відкрив',
     delete: 'видалив',
 };
 function logActionLabel(a) { return LOG_ACTIONS[a] || a || ''; }

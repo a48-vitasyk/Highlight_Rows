@@ -87,6 +87,12 @@ chrome.runtime.onMessage.addListener((req, sender, sendResponse) => {
             } else if (req.sb === 'mute') {
                 await SB.setMute(req.id, req.mutedDate);
                 await SB.pull();
+            } else if (req.sb === 'claim') {
+                for (const id of (req.ids || [])) await SB.claimReminder(id);
+                await SB.pull();
+            } else if (req.sb === 'done') {
+                for (const id of (req.ids || [])) await SB.doneReminder(id);
+                await SB.pull();
             }
             sendResponse({ ok: true });
         } catch (e) {
