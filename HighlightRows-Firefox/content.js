@@ -1295,31 +1295,32 @@ async function loadTraffic(force) {
             const ticket = await fetchBillmgr('func=ticket.edit&elid=' + encodeURIComponent(elid));
             updatePanelLabelsFrom(ticket); // локалізовані підписи поточною мовою
             const item = fieldVal(ticket.item);
-            if (!item) {
-                trafficData = { key, none: true };
-            } else {
-                // Виставляємо контекст клієнта (як кнопка «По клиенту») — інакше
-                // func=instances не поверне його сервер. Фільтр не знімаємо (за
-                // рішенням користувача).
-                const plid = fieldVal(ticket.plid) || fieldVal(ticket.id);
-                try {
-                    await fetchBillmgr('func=ticket.setfilter&elid=' + encodeURIComponent(elid) +
-                        '&plid=' + encodeURIComponent(plid));
-                } catch (e) { /* контекст міг бути вже виставлений */ }
+            // Контекст клієнта (як кнопка «По клиенту») — інакше func=instances
+            // не поверне його сервер.
+            const plid = fieldVal(ticket.plid) || fieldVal(ticket.id);
+            try {
+                await fetchBillmgr('func=ticket.setfilter&elid=' + encodeURIComponent(elid) +
+                    '&plid=' + encodeURIComponent(plid));
+            } catch (e) { /* контекст міг бути вже виставлений */ }
 
-                // Без p_cnt (щоб не скидати «рядків на сторінці» у списку серверів);
-                // контекст клієнта вже звужує список до його інстансів.
-                const inst = await fetchBillmgr('func=instances&id=' + encodeURIComponent(item));
-                const match = asArray(inst.elem).find((e) => fieldVal(e.id) === item);
-                trafficData = match
-                    ? {
-                        key,
-                        used: fieldVal(match.used_traffic),
-                        paid: fieldVal(match.paid_traffic),
-                        service: buildService(match),
-                    }
-                    : { key, notFound: true };
-            }
+            const inst = await fetchBillmgr('func=instances' + (item ? '&id=' + encodeURIComponent(item) : ''));
+            const elems = asArray(inst.elem);
+            // Збіг за будь-яким ідентифікатором тікета (item може бути id / uuid /
+            // intname / itemtype); якщо у клієнта лише один сервер — беремо його.
+            let match = item ? elems.find((e) =>
+                fieldVal(e.id) === item ||
+                fieldVal(e.instances_uuid) === item ||
+                fieldVal(e.intname) === item ||
+                fieldVal(e.itemtype) === item) : null;
+            if (!match && elems.length === 1) match = elems[0];
+            trafficData = match
+                ? {
+                    key,
+                    used: fieldVal(match.used_traffic),
+                    paid: fieldVal(match.paid_traffic),
+                    service: buildService(match),
+                }
+                : { key, notFound: true };
         }
         injectInfo();
     } catch (e) {
