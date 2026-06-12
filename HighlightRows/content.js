@@ -514,43 +514,48 @@ function plusOneHourHHMM() {
     return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
 }
 
-function flashBtn(btn, text) {
-    btn.textContent = text;
+// Коротка візуальна реакція кольором іконки (без зміни вмісту — лишаємо SVG).
+function flashBtn(btn, state, title) {
+    if (title) btn.title = title;
+    btn.classList.remove('hr-ok', 'hr-dup', 'hr-err');
+    if (state) btn.classList.add(state);
     clearTimeout(btn._flashT);
-    btn._flashT = setTimeout(() => { btn.textContent = btn.dataset.label; }, 2000);
+    btn._flashT = setTimeout(() => { btn.classList.remove('hr-ok', 'hr-dup', 'hr-err'); btn.title = btn.dataset.title; }, 1800);
 }
 
-// Кнопку ставимо під стрілкою згортання (.toggle-wrapper з іконкою arrow_curve).
+// Іконка-дзвіночок (нативний вигляд: тонкі лінії, currentColor — як стрілки панелі).
+const ADD_REM_ICON = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>';
+
+// Кнопку ставимо під стрілкою згортання (.toggle-wrapper з іконкою arrow_curve),
+// усередині самого wrapper — щоб трималась стрілки, а не відлітала в кінець сторінки.
 function injectAddReminderButton() {
     document.querySelectorAll('.toggle-wrapper').forEach((wrap) => {
         if (!wrap.querySelector('.arrow_curve')) return; // не та стрілка
-        const next = wrap.nextElementSibling;
-        if (next && next.classList && next.classList.contains(ADD_REM_BTN_CLASS)) return; // вже додано
+        if (wrap.querySelector('.' + ADD_REM_BTN_CLASS)) return; // вже додано
 
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = ADD_REM_BTN_CLASS;
-        btn.dataset.label = '🔔 У будильник (+1 год)';
-        btn.textContent = btn.dataset.label;
-        btn.title = 'Додати цей тікет у будильники на +1 годину (власний)';
+        btn.dataset.title = 'Додати тікет у будильники на +1 год (власний)';
+        btn.title = btn.dataset.title;
+        btn.innerHTML = ADD_REM_ICON;
         btn.addEventListener('click', () => {
             const tid = readTicketId();
-            if (!tid) { flashBtn(btn, 'Не знайдено ID'); return; }
+            if (!tid) { flashBtn(btn, 'hr-err', 'Не знайдено ID тікета'); return; }
             const time = plusOneHourHHMM();
             btn.disabled = true;
             try {
                 chrome.runtime.sendMessage({ sb: 'add', ticketId: tid, time }, (resp) => {
                     btn.disabled = false;
-                    if (chrome.runtime.lastError) { flashBtn(btn, 'Помилка'); return; }
-                    if (resp && resp.duplicate) flashBtn(btn, 'Вже додано');
-                    else if (resp && resp.ok) flashBtn(btn, '✓ Додано ' + time);
-                    else flashBtn(btn, 'Помилка');
+                    if (chrome.runtime.lastError) { flashBtn(btn, 'hr-err', 'Помилка'); return; }
+                    if (resp && resp.duplicate) flashBtn(btn, 'hr-dup', 'Вже додано');
+                    else if (resp && resp.ok) flashBtn(btn, 'hr-ok', 'Додано на ' + time);
+                    else flashBtn(btn, 'hr-err', 'Помилка');
                 });
-            } catch (e) { btn.disabled = false; flashBtn(btn, 'Помилка'); }
+            } catch (e) { btn.disabled = false; flashBtn(btn, 'hr-err', 'Помилка'); }
         });
 
-        if (wrap.parentNode) wrap.parentNode.insertBefore(btn, wrap.nextSibling);
-        else wrap.appendChild(btn);
+        wrap.appendChild(btn);
     });
 }
 
