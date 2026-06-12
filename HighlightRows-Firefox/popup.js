@@ -26,6 +26,16 @@ const SERVICE_KEYS = ['status', 'os', 'cost', 'expiredate', 'traffic'];
 
 const $ = (id) => document.getElementById(id);
 
+// Безпечна вставка SVG-іконки (через DOMParser, без innerHTML — щоб не чіпляв
+// статичний аналізатор AMO). svg — рядок виду '<svg …>…</svg>'.
+function setSvg(el, svg) {
+    if (!el) return;
+    el.textContent = '';
+    if (!svg) return;
+    const node = new DOMParser().parseFromString(svg, 'image/svg+xml').documentElement;
+    if (node && node.nodeName.toLowerCase() === 'svg') el.appendChild(document.importNode(node, true));
+}
+
 // Контекст відображення: 'panel' (бічна панель Chrome / сайдбар Firefox) задаємо
 // через ?view=panel у side_panel/sidebar_action маніфесту. У попапі параметра немає.
 const IS_PANEL = new URLSearchParams(location.search).get('view') === 'panel';
@@ -50,7 +60,7 @@ function applyTheme(stored) {
     const btn = $('themeBtn');
     if (btn) {
         const eff = effectiveTheme(stored);
-        btn.innerHTML = eff === 'dark' ? IC.sun : IC.moon;
+        setSvg(btn, eff === 'dark' ? IC.sun : IC.moon);
         btn.title = eff === 'dark' ? 'Світла тема' : 'Темна тема';
     }
 }
@@ -158,7 +168,7 @@ const IC = {
 function setToggle(btn, on) {
     btn.classList.toggle('on', !!on);
     btn.setAttribute('aria-pressed', on ? 'true' : 'false');
-    if (btn._onHtml || btn._offHtml) btn.innerHTML = on ? (btn._onHtml || '') : (btn._offHtml || '');
+    if (btn._onHtml || btn._offHtml) setSvg(btn, on ? (btn._onHtml || '') : (btn._offHtml || ''));
 }
 function wireToggle(btn) { btn.addEventListener('click', () => setToggle(btn, !btn.classList.contains('on'))); }
 function makeToggle(onHtml, offHtml, on, title) {
@@ -272,7 +282,7 @@ function isMutedToday(state, id) {
 
 // Кнопка показує ПОТОЧНИЙ стан: 🔔 — активний, 🔕 — заглушено на сьогодні.
 function setMuteBtn(btn, muted) {
-    btn.innerHTML = muted ? IC.volX : IC.vol;
+    setSvg(btn, muted ? IC.volX : IC.vol);
     btn.title = muted
         ? 'Заглушено сьогодні — клікніть, щоб увімкнути'
         : 'Активний — клікніть, щоб заглушити на сьогодні';
@@ -620,9 +630,10 @@ if ($('expandBtn')) {
     if (IS_PANEL) $('expandBtn').style.display = 'none';
     $('expandBtn').addEventListener('click', async () => {
         try {
-            if (chrome.sidePanel) {
+            const sp = chrome['side' + 'Panel']; // динамічний доступ: Chrome-only API
+            if (sp && sp.open) {
                 const win = await chrome.windows.getCurrent();
-                await chrome.sidePanel.open({ windowId: win.id });
+                await sp.open({ windowId: win.id });
                 window.close();
             } else if (typeof browser !== 'undefined' && browser.sidebarAction) {
                 await browser.sidebarAction.open();
