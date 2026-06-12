@@ -28,12 +28,31 @@ const SB = {
         return new Promise((res) => { try { chrome.storage.local.remove('sbSession', res); } catch (e) { res(); } });
     },
 
+    // Розкодувати payload JWT (email/sub завжди є в access_token) — щоб ім'я
+    // не залежало від окремого запиту /auth/v1/user, який може не вдатися.
+    _decodeJwt(token) {
+        try {
+            const seg = String(token || '').split('.')[1];
+            if (!seg) return null;
+            const bin = atob(seg.replace(/-/g, '+').replace(/_/g, '/'));
+            const json = decodeURIComponent(bin.split('').map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join(''));
+            return JSON.parse(json);
+        } catch (e) { return null; }
+    },
     _sessFromToken(j) {
+        let user = j.user ? { id: j.user.id, email: j.user.email } : null;
+        if ((!user || !user.email) && j.access_token) {
+            const c = SB._decodeJwt(j.access_token);
+            if (c) {
+                const email = c.email || (c.user_metadata && c.user_metadata.email) || (user && user.email) || null;
+                user = { id: c.sub || (user && user.id) || null, email };
+            }
+        }
         return {
             access_token: j.access_token,
             refresh_token: j.refresh_token,
             expires_at: j.expires_at || (Math.floor(Date.now() / 1000) + (Number(j.expires_in) || 3600)),
-            user: j.user ? { id: j.user.id, email: j.user.email } : null,
+            user,
         };
     },
 
