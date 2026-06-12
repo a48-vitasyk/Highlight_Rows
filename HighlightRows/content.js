@@ -1161,6 +1161,7 @@ function injectInfo() {
 
 function trafficValueText() {
     if (!trafficData) return '';
+    if (trafficData.idle) return 'натисніть ↻';
     if (trafficData.none) return 'немає прив\'язаної послуги';
     if (trafficData.notFound) return '—';
     return `${formatTB(trafficData.used)} / ${formatTB(trafficData.paid)} TB`;
@@ -1332,12 +1333,13 @@ function maybeTraffic() {
         return;
     }
     if (!onTicketView()) return; // не сторінка тікета
-    if (!tabVisible()) return; // авто-довантаження — лише з активної вкладки
-    if (!trafficData || trafficData.key !== currentTicketKey()) {
-        loadTraffic(false);
-    } else {
-        injectInfo();
-    }
+    const key = currentTicketKey();
+    if (!key) return;
+    // Плагін НЕ тягне трафік сам — щоб не робити фонових запитів до білінгу й не
+    // міняти його фільтр (func=ticket.setfilter). Показуємо блок із кнопкою ↻;
+    // завантаження — лише за кліком користувача.
+    if (!trafficData || trafficData.key !== key) trafficData = { key, idle: true };
+    injectInfo();
 }
 
 // --- Тригери refresh -----------------------------------------------------
