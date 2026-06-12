@@ -658,34 +658,12 @@ function renderMatchTickets(arr) {
     });
 }
 
-chrome.storage.local.get(['staleTickets', 'matchTickets', 'staleScanStatus', 'matchScanStatus', 'myTickets', 'updateInfo'], (d) => {
+chrome.storage.local.get(['staleTickets', 'matchTickets', 'staleScanStatus', 'matchScanStatus', 'myTickets'], (d) => {
     renderStaleTickets((d && d.staleTickets) || []);
     renderMatchTickets((d && d.matchTickets) || []);
     renderStaleStatus(d && d.staleScanStatus);
     renderMatchStatus(d && d.matchScanStatus);
     renderMyTickets((d && d.myTickets) || []);
-    renderUpdate(d && d.updateInfo);
-});
-
-// Кнопка «Оновити версію»: червона крапка, коли на GitHub новіша версія.
-function renderUpdate(info) {
-    const dot = $('updateDot');
-    const txt = $('updateInfo');
-    if (!txt) return;
-    const cur = (chrome.runtime.getManifest && chrome.runtime.getManifest().version) || '';
-    if (info && info.checking) { txt.textContent = 'Перевіряю…'; return; }
-    if (info && info.hasUpdate) {
-        txt.textContent = 'Є нова: ' + (info.latest || '');
-        if (dot) dot.hidden = false;
-        return;
-    }
-    if (dot) dot.hidden = true;
-    if (info && info.error) txt.textContent = 'Не вдалось перевірити · v' + cur;
-    else txt.textContent = 'Оновлень немає · v' + cur;
-}
-if ($('updateBtn')) $('updateBtn').addEventListener('click', () => {
-    renderUpdate({ checking: true });
-    try { chrome.runtime.sendMessage({ action: 'checkUpdate' }, () => { void chrome.runtime.lastError; }); } catch (e) { /* ignore */ }
 });
 
 // Лічильник біля «Оновити» в «Особисті тікети»: скільки тікетів зараз у списку.
@@ -719,7 +697,6 @@ chrome.storage.onChanged.addListener((changes, area) => {
     if (changes.staleScanStatus) renderStaleStatus(changes.staleScanStatus.newValue);
     if (changes.matchScanStatus) renderMatchStatus(changes.matchScanStatus.newValue);
     if (changes.myTickets) renderMyTickets(changes.myTickets.newValue || []);
-    if (changes.updateInfo) renderUpdate(changes.updateInfo.newValue);
 });
 
 $('refreshMatches').addEventListener('click', () => {

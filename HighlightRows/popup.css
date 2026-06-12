@@ -303,20 +303,4 @@ button#save {
 button#save:hover { filter: brightness(1.08); }
 #status { min-height: 14px; color: var(--ok); font-size: 10.5px; margin-top: 6px; text-align: center; }
 
-/* Кнопка оновлення версії + червона крапка «доступне оновлення». */
-.upd-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-.upd-btn {
-    position: relative; flex: none; width: 28px; height: 28px; padding: 0;
-    display: inline-flex; align-items: center; justify-content: center;
-    border: 1px solid var(--border); background: var(--surface);
-    border-radius: var(--pill); cursor: pointer; color: var(--text);
-}
-.upd-btn:hover { border-color: var(--accent); }
-.upd-btn svg { display: block; }
-.upd-dot {
-    position: absolute; top: -2px; right: -2px; width: 9px; height: 9px;
-    border-radius: 50%; background: #e23b2f; border: 2px solid var(--surface);
-}
-#updateInfo { color: var(--muted); }
-
 #reloadHint { cursor: pointer; color: var(--accent); font-weight: 700; padding: 4px 0; margin-bottom: 6px; }

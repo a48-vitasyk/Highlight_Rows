@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Highlight Rows",
-  "version": "3.38.0",
+  "version": "3.39.0",
   "description": "Ticket helper for the Zomro panel: highlight by blocked request and subject tags, manual time reminders, a 'no support reply > N h' monitor, and client traffic/service info in the ticket. (Firefox build)",
   "browser_specific_settings": {
     "gecko": {
@@ -20,8 +20,7 @@
   ],
   "host_permissions": [
     "https://*.supabase.co/*",
-    "wss://*.supabase.co/*",
-    "https://raw.githubusercontent.com/*"
+    "wss://*.supabase.co/*"
   ],
   "sidebar_action": {
     "default_panel": "popup.html?view=panel",
