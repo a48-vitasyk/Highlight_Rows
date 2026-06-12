@@ -776,7 +776,9 @@ function sessionInCooldown() { return Date.now() - sessionLostAt < SESSION_LOST_
 function tabVisible() { return document.visibilityState === 'visible'; }
 
 async function fetchBillmgr(params) {
-    const url = location.origin + '/billmgr?' + params + '&out=xjson';
+    // sfrom=ajax — як рідні запити панелі: без нього billmgr віддає 301 на
+    // ticket.edit і це ламає сесійну куку (панель кидає на логін). out=xjson — JSON.
+    const url = location.origin + '/billmgr?' + params + '&sfrom=ajax&out=xjson';
     const resp = await fetch(url, { credentials: 'include', redirect: 'manual' });
     // redirect:'manual' → крос-доменний редірект на логін приходить як
     // opaqueredirect (status 0); також ловимо 3xx і не-JSON (HTML логіну).
