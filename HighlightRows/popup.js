@@ -32,6 +32,9 @@ function setSvg(el, svg) {
     if (!el) return;
     el.textContent = '';
     if (!svg) return;
+    // Без xmlns DOMParser(image/svg+xml) кладе <svg> у нульовий неймспейс і він
+    // не рендериться — додаємо неймспейс SVG, якщо його немає.
+    if (svg.indexOf('xmlns') === -1) svg = svg.replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" ');
     const node = new DOMParser().parseFromString(svg, 'image/svg+xml').documentElement;
     if (node && node.nodeName.toLowerCase() === 'svg') el.appendChild(document.importNode(node, true));
 }
@@ -558,6 +561,12 @@ function renderLogs(rows) {
         box.appendChild(item);
     });
 }
+let logsCache = [];
+function applyLogFilter() {
+    const q = ($('logsFilter') && $('logsFilter').value.trim()) || '';
+    const rows = q ? logsCache.filter((r) => String(r.ticket_id || '').includes(q)) : logsCache;
+    renderLogs(rows);
+}
 function loadLogs() {
     const box = $('logsList');
     const st = $('logsStatus');
@@ -568,17 +577,20 @@ function loadLogs() {
             if (chrome.runtime.lastError) { if (st) st.textContent = 'помилка'; return; }
             if (!resp || !resp.ok) {
                 if (st) st.textContent = '';
+                logsCache = [];
                 box.innerHTML = '';
                 const msg = (resp && resp.error === 'not-logged-in') ? 'Увійдіть через Google, щоб бачити логи' : 'Не вдалось завантажити';
                 box.appendChild(makeEl('div', { className: 'list-empty', textContent: msg }));
                 return;
             }
             if (st) st.textContent = '';
-            renderLogs(resp.rows || []);
+            logsCache = resp.rows || [];
+            applyLogFilter();
         });
     } catch (e) { if (st) st.textContent = 'помилка'; }
 }
 if ($('refreshLogs')) $('refreshLogs').addEventListener('click', loadLogs);
+if ($('logsFilter')) $('logsFilter').addEventListener('input', applyLogFilter);
 
 function initTabs() {
     const tabs = [...document.querySelectorAll('.tab')];
