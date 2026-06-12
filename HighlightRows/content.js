@@ -779,14 +779,12 @@ async function fetchBillmgr(params) {
     // sfrom=ajax — як рідні запити панелі: без нього billmgr віддає 301 на
     // ticket.edit і це ламає сесійну куку (панель кидає на логін). out=xjson — JSON.
     const url = location.origin + '/billmgr?' + params + '&sfrom=ajax&out=xjson';
-    const resp = await fetch(url, { credentials: 'include', redirect: 'manual' });
-    // Сесія злетіла = редірект на логін: opaqueredirect (status 0), 3xx або
-    // HTML-сторінка логіну. НЕ чіпаємо «не-json» content-type — billmgr для ajax
-    // інколи віддає text/plain з валідним JSON (інакше хибно гасили б трафік).
+    // Йдемо за редіректом: 301 на billmgr — зазвичай канонічний (не логін), за ним
+    // повертається JSON. «Сесія злетіла» = лише HTML-сторінка логіну або помилка
+    // (крос-доменний логін-редірект сам впаде на CORS → catch у викликах).
+    const resp = await fetch(url, { credentials: 'include' });
     const ct = resp.headers ? (resp.headers.get('content-type') || '') : '';
-    if (resp.type === 'opaqueredirect' || resp.redirected ||
-        (resp.status >= 300 && resp.status < 400) ||
-        (ct && ct.indexOf('html') !== -1)) {
+    if (!resp.ok || (ct && ct.indexOf('html') !== -1)) {
         noteSessionLost();
         throw new Error('session-redirect');
     }
