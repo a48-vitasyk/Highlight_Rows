@@ -614,6 +614,7 @@ function renderStaleStatus(s) {
     const el = $('staleStatus');
     if (!el) return;
     if (!s) { el.textContent = ''; return; }
+    if (s.note) { el.textContent = s.note; return; }
     el.textContent = s.scanning
         ? ('Сканую ' + (s.scanned || 0) + '/' + (s.total || 0) + ' · пройшло ' + (s.passed || 0))
         : ('Скановано ' + (s.scanned || 0) + ' · без відп. ' + (s.passed || 0));
@@ -648,7 +649,10 @@ $('refreshStale').addEventListener('click', () => {
         const tab = tabs && tabs[0];
         if (!tab) { setRefreshing(false); return; }
         chrome.tabs.sendMessage(tab.id, { action: 'scanStaleTickets' }, () => {
-            if (chrome.runtime.lastError) setRefreshing(false); // вкладка не панель
+            if (chrome.runtime.lastError) { // вкладка не панель / content.js не запущено
+                setRefreshing(false);
+                renderStaleStatus({ note: 'відкрийте вкладку панелі Zomro' });
+            }
         });
     });
 });

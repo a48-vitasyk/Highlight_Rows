@@ -632,10 +632,11 @@ let staleScanRunning = false;
 function setStaleStatus(o) { try { chrome.storage.local.set({ staleScanStatus: o }); } catch (e) { /* ignore */ } }
 
 async function scanStaleTickets(force) {
-    if (!alive || !extensionAlive() || !onBillmgr() || staleScanRunning) return;
-    // Вимкнено — не скануємо: інакше відкриття тікетів через ticket.edit гасить
-    // позначку нового повідомлення (p-newmsg). Стосується й ручного оновлення.
-    if (!settings.staleEnabled) return;
+    if (!alive || !extensionAlive() || staleScanRunning) return;
+    // Вимкнено — не скануємо (інакше ticket.edit гасить позначку нового повідомлення).
+    if (!settings.staleEnabled) { if (force) setStaleStatus({ scanning: false, note: 'монітор вимкнено' }); return; }
+    // Скан ходить у billmgr same-origin — лише на сторінці панелі.
+    if (!onBillmgr()) { if (force) setStaleStatus({ scanning: false, note: 'відкрийте сторінку панелі (billmgr)' }); return; }
 
     // Дедуплікація між вкладками: не сканувати, якщо нещодавно вже сканували.
     // Ручне оновлення (force) ігнорує цей таймер.
@@ -1181,11 +1182,23 @@ function init() {
                 if (!alive) return;
                 if (area === 'sync' && changes.settings) {
                     const wasStale = settings.staleEnabled;
+                    const oldHours = settings.staleHours;
                     settings = normalizeSettings(changes.settings.newValue);
-                    // Вимкнули монітор — прибираємо застарілий список у popup.
-                    if (!settings.staleEnabled) { try { chrome.storage.local.set({ staleTickets: [] }); } catch (e) {} }
-                    // Щойно увімкнули — сканувати одразу, не чекаючи 15-хв циклу.
-                    else if (!wasStale) scanStaleTickets(true);
+                    if (!settings.staleEnabled) {
+                        // Вимкнули монітор — прибираємо застарілий список і статус.
+                        try { chrome.storage.local.set({ staleTickets: [], staleScanStatus: null }); } catch (e) {}
+                    } else if (!wasStale || settings.staleHours !== oldHours) {
+                        // Увімкнули або змінили поріг: миттєво прибрати ті, що вже не
+                        // підпадають (за збереженим віком), і запустити повний скан.
+                        try {
+                            chrome.storage.local.get('staleTickets', (d) => {
+                                const arr = (d && d.staleTickets) || [];
+                                const filtered = arr.filter((t) => t && t.hours > settings.staleHours);
+                                if (filtered.length !== arr.length) chrome.storage.local.set({ staleTickets: filtered });
+                            });
+                        } catch (e) { /* ignore */ }
+                        scanStaleTickets(true);
+                    }
                     refresh();
                 } else if (area === 'local' && changes.reminderState) {
                     reminderState = changes.reminderState.newValue || {};
