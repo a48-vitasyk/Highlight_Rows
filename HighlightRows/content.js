@@ -1320,9 +1320,8 @@ function init() {
             setTimeout(scanStaleTickets, 30000);
             staleIntervalRef = setInterval(scanStaleTickets, STALE_POLL_INTERVAL_MS);
 
-            // Збіги по всій черзі (теги/блокування/будильники).
-            setTimeout(scanMatches, 35000);
-            matchIntervalRef = setInterval(scanMatches, MATCH_POLL_INTERVAL_MS);
+            // Збіги по всій черзі (теги/блокування/«Особисті тікети») —
+            // лише вручну, за кнопкою «Оновити» (без авто-обходу всіх сторінок).
 
             // Спільні будильники: періодично підтягувати зі спільної бази
             // (фактичний fetch робить background; тут лише тригеримо).
