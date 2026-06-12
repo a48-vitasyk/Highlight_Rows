@@ -1163,7 +1163,6 @@ function injectInfo() {
 
 function trafficValueText() {
     if (!trafficData) return '';
-    if (trafficData.idle) return 'натисніть ↻';
     if (trafficData.none) return 'немає прив\'язаної послуги';
     if (trafficData.notFound) return '—';
     return `${formatTB(trafficData.used)} / ${formatTB(trafficData.paid)} TB`;
@@ -1338,16 +1337,9 @@ function maybeTraffic() {
     const key = currentTicketKey();
     if (!key) return;
     if (trafficData && trafficData.key === key) { injectInfo(); return; }
-    // Новий тікет: «Информация об услуге» підтягується автоматично — один раз,
-    // лише з активної вкладки і лише якщо сесія білінга жива. Якщо сесія щойно
-    // злітала (cooldown) — показуємо плейсхолдер із ↻ (ручне завантаження),
-    // щоб не довбати білінг повторно.
-    if (tabVisible() && !sessionInCooldown()) {
-        loadTraffic(false);
-    } else {
-        trafficData = { key, idle: true };
-        injectInfo();
-    }
+    // Новий тікет — «Информация об услуге» підтягується автоматично (один раз),
+    // лише з активної вкладки і якщо сесія білінга жива.
+    if (tabVisible() && !sessionInCooldown()) loadTraffic(false);
 }
 
 // --- Тригери refresh -----------------------------------------------------
