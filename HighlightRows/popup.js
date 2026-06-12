@@ -666,7 +666,7 @@ function renderUpdate(info) {
     const cur = (chrome.runtime.getManifest && chrome.runtime.getManifest().version) || '';
     if (info && info.checking) { txt.textContent = 'Перевіряю…'; return; }
     if (info && info.hasUpdate) {
-        txt.textContent = 'Є нова: ' + (info.latest || '') + ' — оновіть архів';
+        txt.textContent = 'Є нова: ' + (info.latest || '');
         if (dot) dot.hidden = false;
         return;
     }
