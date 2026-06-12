@@ -177,48 +177,8 @@ if (chrome.alarms && chrome.alarms.onAlarm) {
     chrome.alarms.onAlarm.addListener((a) => {
         if (!a) return;
         if (a.name === 'sbpull' && typeof SB !== 'undefined') { try { SB.pull(); } catch (e) { /* ignore */ } }
-        else if (a.name === 'updateCheck') checkUpdate();
     });
 }
-
-// --- Перевірка оновлень із GitHub (не тягне код, лише порівнює версію) ----
-const UPDATE_MANIFEST_URL = 'https://raw.githubusercontent.com/a48-vitasyk/Highlight_Rows/main/HighlightRows/manifest.json';
-
-function cmpVer(a, b) {
-    const pa = String(a || '0').split('.').map((n) => parseInt(n, 10) || 0);
-    const pb = String(b || '0').split('.').map((n) => parseInt(n, 10) || 0);
-    for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-        const d = (pa[i] || 0) - (pb[i] || 0);
-        if (d) return d > 0 ? 1 : -1;
-    }
-    return 0;
-}
-
-async function checkUpdate() {
-    const current = chrome.runtime.getManifest().version;
-    try {
-        const resp = await fetch(UPDATE_MANIFEST_URL, { cache: 'no-store' });
-        if (!resp.ok) throw new Error('http ' + resp.status);
-        const j = await resp.json();
-        const latest = j.version || current;
-        chrome.storage.local.set({ updateInfo: { current, latest, hasUpdate: cmpVer(latest, current) > 0, at: Date.now(), error: false } });
-    } catch (e) {
-        chrome.storage.local.set({ updateInfo: { current, latest: null, hasUpdate: false, at: Date.now(), error: true } });
-    }
-}
-
-async function checkUpdateIfStale() {
-    const info = await new Promise((r) => { try { chrome.storage.local.get('updateInfo', (x) => r(x && x.updateInfo)); } catch (e) { r(null); } });
-    if (info && info.at && Date.now() - info.at < 3.5 * 3600 * 1000) return; // нещодавно перевіряли
-    checkUpdate();
-}
-
-// Ручна перевірка з popup (кнопка «Оновити версію»).
-chrome.runtime.onMessage.addListener((req, sender, sendResponse) => {
-    if (!req || req.action !== 'checkUpdate') return;
-    checkUpdate().then(() => sendResponse({ ok: true })).catch(() => sendResponse({ ok: false }));
-    return true;
-});
 
 // Старт (виконується при кожному «пробудженні» воркера).
 function sbBoot() {
@@ -229,7 +189,3 @@ function sbBoot() {
 if (chrome.runtime.onStartup) chrome.runtime.onStartup.addListener(sbBoot);
 if (chrome.runtime.onInstalled) chrome.runtime.onInstalled.addListener(sbBoot);
 sbBoot();
-
-// Перевірка оновлень: при старті (якщо давно не перевіряли) + кожні 4 год.
-try { chrome.alarms.create('updateCheck', { periodInMinutes: 240 }); } catch (e) { /* ignore */ }
-checkUpdateIfStale();
