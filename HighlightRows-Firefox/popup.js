@@ -141,6 +141,7 @@ const IC = {
     user16: svgIcon('<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>'),
     userOff16: svgIcon('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="17" y1="8" x2="22" y2="13"/><line x1="22" y1="8" x2="17" y2="13"/>'),
     logout: svgIcon('<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>'),
+    bookmark: svgIcon('<path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>', 14),
 };
 
 // Кнопка-тоглер: іконка показує стан (swap SVG), без заливки.
@@ -390,9 +391,53 @@ function makeClickable(item, url) {
     const u = (url || '').replace('func=ticket.edit', 'startform=ticket.edit');
     if (!u) return;
     item.style.cursor = 'pointer';
-    item.addEventListener('click', () => {
+    // Відкриваємо ПОДВІЙНИМ кліком — щоб одиночний клік по кнопках у рядку
+    // (додати в «Мої тікети» / прибрати) не відкривав тікет.
+    item.addEventListener('dblclick', () => {
         chrome.tabs.update({ url: u });
         if (!IS_PANEL) window.close(); // у панелі window.close() закрив би саму панель
+    });
+}
+
+// Дрібна кнопка-дія в рядку списку (не запускає відкриття подвійним кліком).
+function listActBtn(html, title, onClick) {
+    const b = makeEl('button', { type: 'button', className: 'ti-act', title: title || '', innerHTML: html });
+    b.addEventListener('click', (e) => { e.stopPropagation(); onClick(); });
+    b.addEventListener('dblclick', (e) => e.stopPropagation());
+    return b;
+}
+
+// --- «Мої тікети» (особистий список, storage.local) ----------------------
+function addToMyTickets(t) {
+    if (!t || !t.ticketId) return;
+    chrome.storage.local.get('myTickets', (d) => {
+        const arr = (d && d.myTickets) || [];
+        if (arr.some((x) => x.ticketId === t.ticketId)) return; // вже є
+        arr.push({ ticketId: t.ticketId, subject: t.subject || '', url: t.url || '' });
+        chrome.storage.local.set({ myTickets: arr });
+    });
+}
+function removeFromMyTickets(id) {
+    chrome.storage.local.get('myTickets', (d) => {
+        const arr = ((d && d.myTickets) || []).filter((x) => x.ticketId !== id);
+        chrome.storage.local.set({ myTickets: arr });
+    });
+}
+function renderMyTickets(arr) {
+    const box = $('myTickets');
+    if (!box) return;
+    box.innerHTML = '';
+    if (!arr || !arr.length) {
+        box.appendChild(makeEl('div', { className: 'list-empty', textContent: 'Порожньо — додайте з «Особисті тікети» кнопкою закладки' }));
+        return;
+    }
+    arr.forEach((t) => {
+        const item = makeEl('div', { className: 'stale-item', title: t.subject || '' });
+        item.appendChild(makeEl('span', { className: 'ti-num', textContent: '#' + t.ticketId }));
+        item.appendChild(makeEl('span', { className: 'ti-text', textContent: truncate(t.subject || '', 30) }));
+        item.appendChild(listActBtn('×', 'Прибрати', () => removeFromMyTickets(t.ticketId)));
+        makeClickable(item, t.url);
+        box.appendChild(item);
     });
 }
 
@@ -597,17 +642,19 @@ function renderMatchTickets(arr) {
         (m.kinds || []).forEach((k) => chips.appendChild(makeEl('span', { className: 'chip chip-' + k, innerHTML: map[k] || '' })));
         item.appendChild(chips);
         item.appendChild(makeEl('span', { className: 'ti-num', textContent: '#' + m.ticketId }));
-        item.appendChild(makeEl('span', { className: 'ti-text', textContent: truncate(m.subject, 32) }));
+        item.appendChild(makeEl('span', { className: 'ti-text', textContent: truncate(m.subject, 30) }));
+        item.appendChild(listActBtn(IC.bookmark, 'Додати в «Мої тікети»', () => addToMyTickets({ ticketId: m.ticketId, subject: m.subject, url: m.url })));
         makeClickable(item, m.url);
         box.appendChild(item);
     });
 }
 
-chrome.storage.local.get(['staleTickets', 'matchTickets', 'staleScanStatus', 'matchScanStatus'], (d) => {
+chrome.storage.local.get(['staleTickets', 'matchTickets', 'staleScanStatus', 'matchScanStatus', 'myTickets'], (d) => {
     renderStaleTickets((d && d.staleTickets) || []);
     renderMatchTickets((d && d.matchTickets) || []);
     renderStaleStatus(d && d.staleScanStatus);
     renderMatchStatus(d && d.matchScanStatus);
+    renderMyTickets((d && d.myTickets) || []);
 });
 
 // Лічильник біля «Оновити» в «Особисті тікети»: скільки тікетів зараз у списку.
@@ -640,6 +687,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
     }
     if (changes.staleScanStatus) renderStaleStatus(changes.staleScanStatus.newValue);
     if (changes.matchScanStatus) renderMatchStatus(changes.matchScanStatus.newValue);
+    if (changes.myTickets) renderMyTickets(changes.myTickets.newValue || []);
 });
 
 $('refreshMatches').addEventListener('click', () => {
