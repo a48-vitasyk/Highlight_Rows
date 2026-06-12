@@ -532,6 +532,15 @@ function flashBtn(btn, state, title) {
 // Іконка-дзвіночок (нативний вигляд: тонкі лінії, currentColor — як стрілки панелі).
 const ADD_REM_ICON = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>';
 
+// Безпечна вставка SVG (через DOMParser, без innerHTML — щоб не чіпляв лінтер AMO).
+function setSvg(el, svg) {
+    if (!el) return;
+    el.textContent = '';
+    if (!svg) return;
+    const node = new DOMParser().parseFromString(svg, 'image/svg+xml').documentElement;
+    if (node && node.nodeName.toLowerCase() === 'svg') el.appendChild(document.importNode(node, true));
+}
+
 // Група «Информация о запросе» — та, що містить мітку «Код запроса».
 function findRequestInfoGroup() {
     const wanted = (panelLabels.ticketIdLabel || DEFAULT_LABELS.ticketIdLabel);
@@ -556,7 +565,7 @@ function injectAddReminderButton() {
     btn.className = ADD_REM_BTN_CLASS;
     btn.dataset.title = 'Додати тікет у будильники на +1 год (власний)';
     btn.title = btn.dataset.title;
-    btn.innerHTML = ADD_REM_ICON;
+    setSvg(btn, ADD_REM_ICON);
     btn.addEventListener('click', (e) => {
         // не згортати блок при кліку по кнопці
         e.preventDefault();
