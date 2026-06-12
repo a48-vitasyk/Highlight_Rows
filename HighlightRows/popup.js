@@ -526,6 +526,60 @@ initCardDnD();
 initTabs();
 
 // --- Верхні вкладки (активна зберігається локально) -----------------------
+// --- Логи (аудит спільних будильників) ---
+const LOG_ACTIONS = {
+    create: 'створив', edit: 'змінив',
+    scope_shared: 'зробив загальним', scope_personal: 'зробив особистим',
+    mute: 'заглушив', unmute: 'увімкнув звук',
+    snooze: 'відклав', snooze_clear: 'скасував відкладення',
+    delete: 'видалив',
+};
+function logActionLabel(a) { return LOG_ACTIONS[a] || a || ''; }
+function fmtLogTime(iso) {
+    const d = new Date(iso);
+    if (isNaN(d)) return '';
+    const p = (n) => String(n).padStart(2, '0');
+    return p(d.getDate()) + '.' + p(d.getMonth() + 1) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
+function renderLogs(rows) {
+    const box = $('logsList');
+    if (!box) return;
+    box.innerHTML = '';
+    if (!rows || !rows.length) {
+        box.appendChild(makeEl('div', { className: 'list-empty', textContent: 'Поки немає записів' }));
+        return;
+    }
+    rows.forEach((r) => {
+        const item = makeEl('div', { className: 'stale-item', title: r.details || '' });
+        item.appendChild(makeEl('span', { className: 'log-when', textContent: fmtLogTime(r.at) }));
+        item.appendChild(makeEl('span', { className: 'log-act', textContent: logActionLabel(r.action) }));
+        item.appendChild(makeEl('span', { className: 'ti-num', textContent: '#' + (r.ticket_id || '') }));
+        item.appendChild(makeEl('span', { className: 'ti-text', textContent: (r.actor_email || '').split('@')[0] }));
+        box.appendChild(item);
+    });
+}
+function loadLogs() {
+    const box = $('logsList');
+    const st = $('logsStatus');
+    if (!box) return;
+    if (st) st.textContent = 'Завантаження…';
+    try {
+        chrome.runtime.sendMessage({ sb: 'logs', limit: 100 }, (resp) => {
+            if (chrome.runtime.lastError) { if (st) st.textContent = 'помилка'; return; }
+            if (!resp || !resp.ok) {
+                if (st) st.textContent = '';
+                box.innerHTML = '';
+                const msg = (resp && resp.error === 'not-logged-in') ? 'Увійдіть через Google, щоб бачити логи' : 'Не вдалось завантажити';
+                box.appendChild(makeEl('div', { className: 'list-empty', textContent: msg }));
+                return;
+            }
+            if (st) st.textContent = '';
+            renderLogs(resp.rows || []);
+        });
+    } catch (e) { if (st) st.textContent = 'помилка'; }
+}
+if ($('refreshLogs')) $('refreshLogs').addEventListener('click', loadLogs);
+
 function initTabs() {
     const tabs = [...document.querySelectorAll('.tab')];
     const panels = [...document.querySelectorAll('.tab-panel')];
@@ -533,6 +587,7 @@ function initTabs() {
     const activate = (name) => {
         tabs.forEach((t) => t.classList.toggle('active', t.dataset.tab === name));
         panels.forEach((p) => { p.hidden = p.dataset.panel !== name; });
+        if (name === 'logs') loadLogs();
     };
     tabs.forEach((t) => t.addEventListener('click', () => {
         activate(t.dataset.tab);

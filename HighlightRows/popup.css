@@ -216,6 +216,8 @@ body[data-view="panel"] .stale-list { max-height: 300px; }
 .stale-item:hover { background: var(--accent-weak); }
 .ti-num { font-weight: 700; color: var(--primary); flex: none; }
 .ti-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
+.log-when { flex: none; color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+.log-act { flex: none; font-weight: 600; color: var(--accent); }
 .ti-chips { display: inline-flex; gap: 3px; flex: none; }
 .chip {
     display: inline-flex; align-items: center; justify-content: center;

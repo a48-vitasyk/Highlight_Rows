@@ -76,6 +76,11 @@ chrome.runtime.onMessage.addListener((req, sender, sendResponse) => {
                 }
                 sendResponse({ ok: true });
                 return;
+            } else if (req.sb === 'logs') {
+                if (!(await SB.loggedIn())) { sendResponse({ ok: false, error: 'not-logged-in' }); return; }
+                const rows = await SB.listLogs(req.limit);
+                sendResponse({ ok: true, rows: rows || [] });
+                return;
             } else if (req.sb === 'snooze') {
                 for (const id of (req.ids || [])) await SB.setSnooze(id, req.until);
                 await SB.pull();
