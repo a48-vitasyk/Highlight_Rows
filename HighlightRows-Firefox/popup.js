@@ -31,6 +31,13 @@ const $ = (id) => document.getElementById(id);
 const IS_PANEL = new URLSearchParams(location.search).get('view') === 'panel';
 if (IS_PANEL && document.body) document.body.dataset.view = 'panel';
 
+// Версія з маніфесту в шапку (без мережі).
+{
+    const verEl = $('appVersion');
+    const ver = (chrome.runtime.getManifest && chrome.runtime.getManifest().version) || '';
+    if (verEl && ver) verEl.textContent = 'v' + ver;
+}
+
 // --- Тема (світла/темна) -------------------------------------------------
 // hrTheme у storage.local: 'light' | 'dark' | відсутнє (= за системою).
 function effectiveTheme(stored) {
