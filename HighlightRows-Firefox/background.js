@@ -106,11 +106,13 @@ function rtSchedulePull() {
     rtPullTimer = setTimeout(() => { try { SB.pull(); } catch (e) { /* ignore */ } }, 800);
 }
 
+let rtBackoff = 5000; // back-off перепідключення: 5с → ×2 → до 5 хв (без шторму)
 function rtScheduleReconnect() {
     clearTimeout(rtReconnect);
     rtReconnect = setTimeout(async () => {
         try { if (await SB.loggedIn()) rtConnect(); } catch (e) { /* ignore */ }
-    }, 5000);
+    }, rtBackoff);
+    rtBackoff = Math.min(rtBackoff * 2, 5 * 60 * 1000);
 }
 
 function rtClose(stopReconnect) {
@@ -131,6 +133,7 @@ async function rtConnect() {
     } catch (e) { rtScheduleReconnect(); return; }
 
     rtWs.onopen = () => {
+        rtBackoff = 5000; // успішне підключення — скидаємо back-off
         rtJoinRef++;
         const ref = String(rtJoinRef);
         rtWs.send(JSON.stringify([ref, ref, 'realtime:public.reminders', 'phx_join', {
@@ -220,7 +223,7 @@ chrome.runtime.onMessage.addListener((req, sender, sendResponse) => {
 // Старт (виконується при кожному «пробудженні» воркера).
 function sbBoot() {
     if (typeof SB === 'undefined') return;
-    try { chrome.alarms.create('sbpull', { periodInMinutes: 1 }); } catch (e) { /* ignore */ }
+    try { chrome.alarms.create('sbpull', { periodInMinutes: 15 }); } catch (e) { /* ignore */ }
     SB.loggedIn().then((yes) => { if (yes) rtConnect(); }).catch(() => {});
 }
 if (chrome.runtime.onStartup) chrome.runtime.onStartup.addListener(sbBoot);

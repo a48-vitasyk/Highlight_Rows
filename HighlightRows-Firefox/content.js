@@ -11,13 +11,13 @@ const TICKET_SELECTOR = 'td[data-table-column-name="ticket"] .isp-cell-content__
 const BLOCKED_PROP_SELECTOR = 'div.isp-prop[data-table-prop-name="blocked_by"]';
 
 // «Без відповіді понад N год» — через API billmgr (same-origin).
-const STALE_POLL_INTERVAL_MS = 15 * 60 * 1000; // як часто пересканувати чергу
-const STALE_POLL_DEDUP_MS = 14 * 60 * 1000;    // не сканувати, якщо інша вкладка щойно сканувала
+const STALE_POLL_INTERVAL_MS = 30 * 60 * 1000; // як часто пересканувати чергу
+const STALE_POLL_DEDUP_MS = 28 * 60 * 1000;    // не сканувати, якщо інша вкладка щойно сканувала
 const STALE_FETCH_GAP_MS = 650;                // пауза між запитами деталей (м'якше до білінгу — ~1.5 зап/с, щоб не ловити бан WAF)
 
 // Скан збігів по всій черзі (теги/блокування/будильники) — для покриття всіх сторінок.
-const MATCH_POLL_INTERVAL_MS = 15 * 60 * 1000;
-const MATCH_POLL_DEDUP_MS = 14 * 60 * 1000;
+const MATCH_POLL_INTERVAL_MS = 30 * 60 * 1000;
+const MATCH_POLL_DEDUP_MS = 28 * 60 * 1000;
 const MATCH_MAX_PAGES = 40;                     // запобіжник для пагінації
 
 // Трафік у тікеті
@@ -1314,12 +1314,14 @@ function init() {
 
             intervalRef = setInterval(refresh, REFRESH_INTERVAL_MS);
 
-            // «Без відповіді»: початкове сканування + періодичне (кожні 15 хв).
-            setTimeout(scanStaleTickets, 5000);
+            // «Без відповіді»: початкове сканування + періодичне (кожні 30 хв).
+            // Старт із затримкою — щоб коротке відкриття сторінки не запускало
+            // повний обхід черги (м'якше до WAF білінгу).
+            setTimeout(scanStaleTickets, 30000);
             staleIntervalRef = setInterval(scanStaleTickets, STALE_POLL_INTERVAL_MS);
 
             // Збіги по всій черзі (теги/блокування/будильники).
-            setTimeout(scanMatches, 8000);
+            setTimeout(scanMatches, 35000);
             matchIntervalRef = setInterval(scanMatches, MATCH_POLL_INTERVAL_MS);
 
             // Спільні будильники: періодично підтягувати зі спільної бази
