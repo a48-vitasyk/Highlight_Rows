@@ -13,7 +13,7 @@ const BLOCKED_PROP_SELECTOR = 'div.isp-prop[data-table-prop-name="blocked_by"]';
 // «Без відповіді понад N год» — через API billmgr (same-origin).
 const STALE_POLL_INTERVAL_MS = 15 * 60 * 1000; // як часто пересканувати чергу
 const STALE_POLL_DEDUP_MS = 14 * 60 * 1000;    // не сканувати, якщо інша вкладка щойно сканувала
-const STALE_FETCH_GAP_MS = 150;                // пауза між запитами деталей (м'якше до білінгу)
+const STALE_FETCH_GAP_MS = 650;                // пауза між запитами деталей (м'якше до білінгу — ~1.5 зап/с, щоб не ловити бан WAF)
 
 // Скан збігів по всій черзі (теги/блокування/будильники) — для покриття всіх сторінок.
 const MATCH_POLL_INTERVAL_MS = 15 * 60 * 1000;
