@@ -226,6 +226,13 @@ body[data-view="panel"] .stale-list { max-height: 300px; }
 .ti-age { flex: none; font-variant-numeric: tabular-nums; color: var(--muted); font-size: 10.5px; }
 .ti-age--warn { color: var(--accent-2); font-weight: 700; }
 .list-empty { color: var(--muted); text-align: center; padding: 12px 0; font-size: 10.5px; }
+.stale-item .ti-act {
+    flex: none; display: inline-flex; align-items: center; justify-content: center;
+    border: none; background: transparent; color: var(--muted); cursor: pointer;
+    padding: 2px 5px; border-radius: var(--radius-sm); font-size: 14px; line-height: 1;
+}
+.stale-item .ti-act svg { display: block; }
+.stale-item .ti-act:hover { background: var(--surface); color: var(--accent); }
 
 /* --- Рядок будильника (поля стискаються, дії переносяться разом) --- */
 .rem-row {
