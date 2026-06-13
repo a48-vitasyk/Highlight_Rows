@@ -940,7 +940,13 @@ $('save').addEventListener('click', async () => {
 });
 
 // --- Звук: тест + завантаження свого + перемикач режиму сповіщень ---
-const SOUND_BUILTIN = { beep: 'beep.wav', ding: 'sounds/ding.wav', double: 'sounds/double.wav' };
+const SOUND_BUILTIN = {
+    beep: 'beep.wav', ding: 'sounds/ding.wav', double: 'sounds/double.wav',
+    chime: 'sounds/chime.wav', bell: 'sounds/bell.wav', alarm: 'sounds/alarm.wav',
+    pop: 'sounds/pop.wav', marimba: 'sounds/marimba.wav', soft: 'sounds/soft.wav',
+    digital: 'sounds/digital.wav', triple: 'sounds/triple.wav', rising: 'sounds/rising.wav',
+    falling: 'sounds/falling.wav', knock: 'sounds/knock.wav', bubble: 'sounds/bubble.wav',
+};
 function popupPlaySound(which) {
     const sel = $(which === 'reminder' ? 'reminderSound' : 'alertSound').value;
     const vol = Math.min(1, Math.max(0, (Number($('soundVolume').value) || 100) / 100));
