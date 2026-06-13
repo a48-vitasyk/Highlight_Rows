@@ -184,17 +184,17 @@ const SB = {
         const email = (sess && sess.user && sess.user.email) || null;
         return SB.rest('snippets', {
             method: 'POST', headers: { Prefer: 'return=representation' },
-            body: JSON.stringify({ title: s.title || '', body: s.body || '', shortcut: s.shortcut || '', sort: s.sort || 0, created_by_email: email }),
+            body: JSON.stringify({ title: s.title || '', body: s.body || '', body_ru: s.bodyRu || '', body_en: s.bodyEn || '', shortcut: s.shortcut || '', sort: s.sort || 0, created_by_email: email }),
         });
     },
     updateSnippet(s) {
         return SB.rest('snippets?id=eq.' + encodeURIComponent(s.id), {
-            method: 'PATCH', body: JSON.stringify({ title: s.title || '', body: s.body || '', shortcut: s.shortcut || '', sort: s.sort || 0 }),
+            method: 'PATCH', body: JSON.stringify({ title: s.title || '', body: s.body || '', body_ru: s.bodyRu || '', body_en: s.bodyEn || '', shortcut: s.shortcut || '', sort: s.sort || 0 }),
         });
     },
     deleteSnippet(id) { return SB.rest('snippets?id=eq.' + encodeURIComponent(id), { method: 'DELETE' }); },
     async mirrorSnippets(rows) {
-        const snippets = (rows || []).map((x) => ({ id: x.id, title: x.title || '', body: x.body || '', shortcut: x.shortcut || '', creatorEmail: x.created_by_email || '' }));
+        const snippets = (rows || []).map((x) => ({ id: x.id, title: x.title || '', body: x.body || '', bodyRu: x.body_ru || '', bodyEn: x.body_en || '', shortcut: x.shortcut || '', creatorEmail: x.created_by_email || '' }));
         await new Promise((res) => { try { chrome.storage.local.set({ snippets }, res); } catch (e) { res(); } });
     },
     async pullSnippets() {
