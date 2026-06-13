@@ -1012,20 +1012,6 @@ function insertIntoReply(ta, text) {
     ta.dispatchEvent(new Event('input', { bubbles: true })); // щоб Angular ngModel підхопив
     ta.focus();
 }
-function renderSnippetMenu(menu, ta) {
-    menu.textContent = '';
-    if (!snippets.length) {
-        menu.appendChild(makeElc('div', 'hr-snip-empty', 'Немає шаблонів (додайте в налаштуваннях)'));
-        return;
-    }
-    snippets.forEach((s) => {
-        const it = makeElc('button', 'hr-snip-item', s.title || (s.body || '').slice(0, 40));
-        it.type = 'button';
-        it.title = s.body || '';
-        it.addEventListener('click', (e) => { e.preventDefault(); insertIntoReply(ta, fillSnippet(s)); menu.hidden = true; });
-        menu.appendChild(it);
-    });
-}
 function makeElc(tag, cls, text) {
     const el = document.createElement(tag);
     el.className = cls;
@@ -1122,15 +1108,8 @@ function injectSnippetButton() {
     });
     ta.addEventListener('blur', () => setTimeout(hideAc, 150));
     ta.addEventListener('scroll', hideAc);
-    const box = makeElc('div', 'hr-snip-wrap');
-    const btn = makeElc('button', 'hr-snip-btn', 'Шаблони ▾');
-    btn.type = 'button';
-    const menu = makeElc('div', 'hr-snip-menu');
-    menu.hidden = true;
-    btn.addEventListener('click', (e) => { e.preventDefault(); renderSnippetMenu(menu, ta); menu.hidden = !menu.hidden; });
-    box.appendChild(btn);
-    box.appendChild(menu);
-    ta.parentNode.insertBefore(box, ta);
+    // Якщо поле вже у фокусі під час інʼєкції — одразу показати панель.
+    if (document.activeElement === ta) showFmtBar(ta);
 }
 
 function refresh() {
@@ -1979,12 +1958,6 @@ function init() {
                 }
             }, true);
 
-            // Закрити меню шаблонів при кліку поза ним.
-            document.addEventListener('click', (e) => {
-                document.querySelectorAll('.hr-snip-menu').forEach((m) => {
-                    if (m.parentNode && !m.parentNode.contains(e.target)) m.hidden = true;
-                });
-            }, true);
 
             observerRef = new MutationObserver(scheduleRefresh);
             observerRef.observe(document.body, { childList: true, subtree: true });
