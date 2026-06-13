@@ -587,7 +587,15 @@ function renderLogs(rows) {
 let logsCache = [];
 function applyLogFilter() {
     const q = ($('logsFilter') && $('logsFilter').value.trim()) || '';
-    const rows = q ? logsCache.filter((r) => String(r.ticket_id || '').includes(q)) : logsCache;
+    const rows = (q ? logsCache.filter((r) => String(r.ticket_id || '').includes(q)) : logsCache).slice();
+    const sort = ($('logsSort') && $('logsSort').value) || 'at_desc';
+    const t = (r) => Date.parse(r.at) || 0;
+    const num = (r) => { const n = parseInt(r.ticket_id, 10); return isNaN(n) ? 0 : n; };
+    if (sort === 'at_asc') rows.sort((a, b) => t(a) - t(b));
+    else if (sort === 'ticket') rows.sort((a, b) => num(b) - num(a) || t(b) - t(a));
+    else if (sort === 'action') rows.sort((a, b) => String(a.action).localeCompare(String(b.action)) || t(b) - t(a));
+    else if (sort === 'actor') rows.sort((a, b) => String(a.actor_email || '').localeCompare(String(b.actor_email || '')) || t(b) - t(a));
+    else rows.sort((a, b) => t(b) - t(a)); // at_desc (новіші)
     renderLogs(rows);
 }
 function loadLogs() {
@@ -614,6 +622,7 @@ function loadLogs() {
 }
 if ($('refreshLogs')) $('refreshLogs').addEventListener('click', loadLogs);
 if ($('logsFilter')) $('logsFilter').addEventListener('input', applyLogFilter);
+if ($('logsSort')) $('logsSort').addEventListener('change', applyLogFilter);
 
 function initTabs() {
     const tabs = [...document.querySelectorAll('.tab')];

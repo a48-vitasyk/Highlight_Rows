@@ -135,7 +135,16 @@
             <span id="logsStatus" class="hint"></span>
             <button type="button" class="small" id="refreshLogs" title="Оновити">↻</button>
         </div>
-        <input type="text" id="logsFilter" placeholder="Фільтр за номером тікета" style="width:100%;margin-bottom:8px">
+        <div class="field row" style="margin-bottom:8px">
+            <input type="text" id="logsFilter" placeholder="Фільтр за тікетом" style="flex:1">
+            <select id="logsSort" title="Сортування">
+                <option value="at_desc">Новіші</option>
+                <option value="at_asc">Старіші</option>
+                <option value="ticket">Тікет</option>
+                <option value="action">Дія</option>
+                <option value="actor">Хто</option>
+            </select>
+        </div>
         <div id="logsList" class="stale-list"></div>
         <div class="hint">Історія дій зі спільними будильниками: хто, що, коли. Лише для авторизованих.</div>
     </div>
