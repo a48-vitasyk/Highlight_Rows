@@ -19,6 +19,7 @@ const DEFAULT_SETTINGS = {
     soundVolume: 1,
     notifyMode: 'stack',
     notifyMax: 3,
+    replyWatch: false,
     staleEnabled: false,
     staleHours: 4,
     trafficEnabled: false,
@@ -360,6 +361,7 @@ function fillForm(s, reminderState) {
     $('notifyMode').value = s.notifyMode === 'replace' ? 'replace' : 'stack';
     $('notifyMax').value = s.notifyMax || DEFAULT_SETTINGS.notifyMax;
     $('notifyMax').disabled = $('notifyMode').value === 'replace';
+    $('replyWatch').checked = s.replyWatch;
 
     $('tagRules').innerHTML = '';
     (s.tagRules || []).forEach(addTagRuleRow);
@@ -417,6 +419,7 @@ function readForm() {
         soundVolume: Math.min(1, Math.max(0, (Number($('soundVolume').value) || 100) / 100)),
         notifyMode: $('notifyMode').value === 'replace' ? 'replace' : 'stack',
         notifyMax: Math.min(5, Math.max(1, Math.round(Number($('notifyMax').value) || DEFAULT_SETTINGS.notifyMax))),
+        replyWatch: $('replyWatch').checked,
         reminders,
     };
 }
