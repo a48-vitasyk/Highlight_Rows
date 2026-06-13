@@ -84,6 +84,25 @@
 }
 .hr-snip-item:hover { background: #eef3fb; }
 .hr-snip-empty { padding: 8px; color: #888; font: 12px system-ui, sans-serif; }
+/* Інлайн-автодоповнення (плаваючий список біля поля відповіді) */
+.hr-snip-ac {
+    position: fixed; z-index: 2147483647;
+    min-width: 200px; max-width: 360px; max-height: 240px; overflow: auto;
+    background: #fff; border: 1px solid #ccc; border-radius: 8px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, .18); padding: 4px;
+}
+.hr-snip-ac-item {
+    display: flex; align-items: center; gap: 6px;
+    padding: 6px 8px; border-radius: 6px; cursor: pointer;
+    font: 13px system-ui, sans-serif; color: #222;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.hr-snip-ac-item.sel, .hr-snip-ac-item:hover { background: #eef3fb; }
+.hr-snip-ac-sc {
+    flex: none; font: 600 11px/1 ui-monospace, monospace;
+    background: #1a76e2; color: #fff; border-radius: 4px; padding: 2px 5px;
+}
+.hr-snip-ac-title { overflow: hidden; text-overflow: ellipsis; }
 
 /* Кнопка «У будильник» — нативна кнопка з іконкою в заголовку «Информация о запросе». */
 .hr-add-reminder {

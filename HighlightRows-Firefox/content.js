@@ -798,9 +798,46 @@ function snippetVars() {
     }
     return v;
 }
-function fillSnippet(text) {
+// Мова тікета за текстом вхідних повідомлень клієнта (укр-специфічні літери →
+// uk; рос-специфічні → ru; лише латиниця → en). Запасний варіант — uk.
+function detectTicketLang() {
+    let text = '';
+    const sel = '.isp-chat-bubble:not(.isp-chat-bubble_type-outcoming):not(.isp-chat-bubble_type-system):not(.isp-chat-bubble_type-ticketnote):not(.isp-chat-bubble_type-inner)';
+    document.querySelectorAll(sel).forEach((b) => { text += ' ' + (b.textContent || ''); });
+    text = text.slice(-4000);
+    if (/[іїєґ]/i.test(text)) return 'uk';
+    if (/[ыэъё]/i.test(text)) return 'ru';
+    const cyr = (text.match(/[а-я]/gi) || []).length;
+    const lat = (text.match(/[a-z]/gi) || []).length;
+    if (cyr > 0) return 'ru';      // кирилиця без укр-маркерів — вважаємо ru
+    if (lat > 3) return 'en';
+    return 'uk';
+}
+function greetingFor(lang) {
+    const h = new Date().getHours();
+    const idx = (h >= 5 && h < 12) ? 0 : (h >= 12 && h < 18) ? 1 : 2;
+    const map = {
+        uk: ['Доброго ранку', 'Доброго дня', 'Доброго вечора'],
+        ru: ['Доброе утро', 'Добрый день', 'Добрый вечер'],
+        en: ['Good morning', 'Good afternoon', 'Good evening'],
+    };
+    return (map[lang] || map.uk)[idx];
+}
+// Тіло шаблону у мові тікета (з відкатом на основне тіло, якщо переклад порожній).
+function snippetBody(snip, lang) {
+    if (lang === 'ru' && (snip.bodyRu || '').trim()) return snip.bodyRu;
+    if (lang === 'en' && (snip.bodyEn || '').trim()) return snip.bodyEn;
+    return snip.body || '';
+}
+function fillSnippet(snip) {
+    const lang = detectTicketLang();
+    const text = (typeof snip === 'string') ? snip : snippetBody(snip, lang);
     const v = snippetVars();
-    return String(text || '').replace(/\{(ticket|ip|os|start|expire|traffic|service)\}/g, (m, k) => v[k] || '');
+    const now = new Date();
+    v.greeting = greetingFor(lang);
+    v.date = now.toLocaleDateString();
+    v.time = now.toLocaleTimeString().slice(0, 5);
+    return String(text || '').replace(/\{(ticket|ip|os|start|expire|traffic|service|greeting|date|time)\}/g, (m, k) => v[k] || '');
 }
 // Tab-розгортання: токен перед курсором → шаблон, чия назва починається з токена
 // (або будь-яке слово назви починається з нього). Повертає true, якщо розгорнули.
@@ -816,24 +853,77 @@ function findSnippetByToken(token, allowTitle) {
     }
     return m || null;
 }
-function expandSnippetTab(ta) {
+function tokenBeforeCursor(ta) {
     const pos = ta.selectionStart;
-    if (pos == null) return false;
+    if (pos == null) return null;
     const before = ta.value.slice(0, pos);
     const mt = before.match(/(\S+)$/);
-    if (!mt) return false;
-    const token = mt[1];
-    if (!token) return false;
-    // по назві — від 2 символів (щоб не розгортати випадково); по скороченню — від 1
-    const snip = findSnippetByToken(token, token.length >= 2);
-    if (!snip) return false;
-    const body = fillSnippet(snip.body);
-    const tokenStart = pos - token.length;
-    ta.value = ta.value.slice(0, tokenStart) + body + ta.value.slice(pos);
-    const np = tokenStart + body.length;
+    if (!mt) return null;
+    return { token: mt[1], start: pos - mt[1].length, end: pos };
+}
+// Замінює слово перед курсором на тіло шаблону (з підстановками).
+function applySnippetAtCursor(ta, snip) {
+    const info = tokenBeforeCursor(ta);
+    if (!info) return false;
+    const body = fillSnippet(snip);
+    acInserting = true;
+    ta.value = ta.value.slice(0, info.start) + body + ta.value.slice(info.end);
+    const np = info.start + body.length;
     try { ta.setSelectionRange(np, np); } catch (e) { /* ignore */ }
     ta.dispatchEvent(new Event('input', { bubbles: true }));
+    acInserting = false;
     return true;
+}
+function expandSnippetTab(ta) {
+    const info = tokenBeforeCursor(ta);
+    if (!info || !info.token) return false;
+    // по назві — від 2 символів (щоб не розгортати випадково); по скороченню — від 1
+    const snip = findSnippetByToken(info.token, info.token.length >= 2);
+    if (!snip) return false;
+    return applySnippetAtCursor(ta, snip);
+}
+
+// --- Інлайн-автодоповнення шаблонів у полі відповіді -----------------------
+let acEl = null;        // плаваючий список підказок
+let acItems = [];       // поточні збіги
+let acIndex = 0;        // підсвічений
+let acInserting = false; // прапор, щоб вставка не перезапускала список
+function findSnippetMatches(token) {
+    const t = token.toLowerCase();
+    const seen = new Set();
+    const out = [];
+    const add = (s) => { const k = s.id || s.title; if (s && !seen.has(k)) { seen.add(k); out.push(s); } };
+    snippets.forEach((s) => { if ((s.shortcut || '').trim().toLowerCase().startsWith(t)) add(s); });
+    snippets.forEach((s) => { if ((s.title || '').toLowerCase().startsWith(t)) add(s); });
+    snippets.forEach((s) => { if ((s.title || '').toLowerCase().split(/\s+/).some((w) => w.startsWith(t))) add(s); });
+    return out.slice(0, 8);
+}
+function hideAc() { if (acEl) acEl.hidden = true; acItems = []; }
+function renderAc(ta) {
+    if (!acEl) { acEl = makeElc('div', 'hr-snip-ac'); acEl.hidden = true; document.body.appendChild(acEl); }
+    acEl.textContent = '';
+    acItems.forEach((s, i) => {
+        const it = makeElc('div', 'hr-snip-ac-item' + (i === acIndex ? ' sel' : ''));
+        if (s.shortcut) it.appendChild(makeElc('span', 'hr-snip-ac-sc', s.shortcut));
+        it.appendChild(makeElc('span', 'hr-snip-ac-title', s.title || (s.body || '').slice(0, 40)));
+        it.addEventListener('mousedown', (e) => { e.preventDefault(); applySnippetAtCursor(ta, s); hideAc(); });
+        acEl.appendChild(it);
+    });
+    const r = ta.getBoundingClientRect();
+    acEl.style.left = Math.round(r.left) + 'px';
+    acEl.style.top = Math.round(r.top + 22) + 'px';
+    acEl.style.minWidth = Math.round(Math.min(320, Math.max(200, r.width))) + 'px';
+    acEl.hidden = false;
+}
+function updateAc(ta) {
+    if (acInserting) return;
+    const info = tokenBeforeCursor(ta);
+    if (!info || info.token.length < 2) { hideAc(); return; }
+    const matches = findSnippetMatches(info.token);
+    if (!matches.length) { hideAc(); return; }
+    acItems = matches;
+    acIndex = 0;
+    renderAc(ta);
 }
 function insertIntoReply(ta, text) {
     const start = ta.selectionStart != null ? ta.selectionStart : ta.value.length;
@@ -854,7 +944,7 @@ function renderSnippetMenu(menu, ta) {
         const it = makeElc('button', 'hr-snip-item', s.title || (s.body || '').slice(0, 40));
         it.type = 'button';
         it.title = s.body || '';
-        it.addEventListener('click', (e) => { e.preventDefault(); insertIntoReply(ta, fillSnippet(s.body)); menu.hidden = true; });
+        it.addEventListener('click', (e) => { e.preventDefault(); insertIntoReply(ta, fillSnippet(s)); menu.hidden = true; });
         menu.appendChild(it);
     });
 }
@@ -868,12 +958,23 @@ function injectSnippetButton() {
     const ta = document.querySelector('textarea.ispui-input__textarea');
     if (!ta || !ta.parentNode || ta.dataset.hrSnip === '1') return;
     ta.dataset.hrSnip = '1';
-    // Tab у полі відповіді → розгорнути шаблон за початком назви.
+    // Інлайн-автодоповнення: під час набору показуємо список збігів.
+    ta.addEventListener('input', () => updateAc(ta));
     ta.addEventListener('keydown', (e) => {
+        // Навігація по списку підказок, якщо він відкритий.
+        if (acEl && !acEl.hidden && acItems.length) {
+            if (e.key === 'ArrowDown') { acIndex = (acIndex + 1) % acItems.length; renderAc(ta); e.preventDefault(); return; }
+            if (e.key === 'ArrowUp') { acIndex = (acIndex - 1 + acItems.length) % acItems.length; renderAc(ta); e.preventDefault(); return; }
+            if (e.key === 'Enter' || e.key === 'Tab') { applySnippetAtCursor(ta, acItems[acIndex]); hideAc(); e.preventDefault(); return; }
+            if (e.key === 'Escape') { hideAc(); e.preventDefault(); return; }
+        }
+        // Tab без списку → розгорнути шаблон за скороченням/початком назви.
         if (e.key === 'Tab' && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
             if (expandSnippetTab(ta)) e.preventDefault();
         }
     });
+    ta.addEventListener('blur', () => setTimeout(hideAc, 150));
+    ta.addEventListener('scroll', hideAc);
     const box = makeElc('div', 'hr-snip-wrap');
     const btn = makeElc('button', 'hr-snip-btn', 'Шаблони ▾');
     btn.type = 'button';

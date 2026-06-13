@@ -1028,11 +1028,13 @@ function snipViewRow(s) {
     }
     const label = makeEl('span', { className: 'snip-label', textContent: s.title || (s.body || '').slice(0, 48) || '(без назви)' });
     label.title = s.body || '';
+    const have = [(s.bodyRu || '').trim() && 'RU', (s.bodyEn || '').trim() && 'EN'].filter(Boolean);
     const edit = makeEl('button', { type: 'button', className: 'small', textContent: '✎', title: 'Редагувати' });
     const del = makeEl('button', { type: 'button', className: 'small remove', textContent: '×', title: 'Видалити' });
     edit.addEventListener('click', () => row.replaceWith(snipEditRow(s)));
     del.addEventListener('click', () => snipDelete(row.dataset.id));
     row.appendChild(label);
+    if (have.length) row.appendChild(makeEl('span', { className: 'snip-langs-have', textContent: have.join('·'), title: 'Є переклади: ' + have.join(', ') }));
     row.appendChild(edit);
     row.appendChild(del);
     return row;
@@ -1049,13 +1051,31 @@ function snipEditRow(s) {
     sc.value = s.shortcut || '';
     head.appendChild(title);
     head.appendChild(sc);
+    // Мовні версії: UA (основна) / RU / EN. Порожній переклад → підставиться UA.
+    const bodies = { uk: s.body || '', ru: s.bodyRu || '', en: s.bodyEn || '' };
+    let curLang = 'uk';
+    const langs = makeEl('div', { className: 'snip-langs' });
     const body = makeEl('textarea', { className: 'snip-body', placeholder: 'Текст шаблону…' });
-    body.value = s.body || '';
+    [['uk', 'UA'], ['ru', 'RU'], ['en', 'EN']].forEach(([code, lbl]) => {
+        const b = makeEl('button', { type: 'button', className: 'snip-lang' + (code === curLang ? ' active' : ''), textContent: lbl });
+        b.addEventListener('click', () => {
+            bodies[curLang] = body.value;
+            curLang = code;
+            body.value = bodies[code];
+            langs.querySelectorAll('.snip-lang').forEach((x) => x.classList.toggle('active', x === b));
+            body.placeholder = code === 'uk' ? 'Текст шаблону…' : 'Переклад (' + lbl + '), порожньо → береться UA';
+            body.focus();
+        });
+        langs.appendChild(b);
+    });
+    body.value = bodies.uk;
     body.addEventListener('focus', () => { lastSnipBody = body; });
+    body.addEventListener('input', () => { bodies[curLang] = body.value; });
     const save = makeEl('button', { type: 'button', className: 'small', textContent: '💾', title: 'Зберегти' });
     const del = makeEl('button', { type: 'button', className: 'small remove', textContent: '×', title: s.id ? 'Видалити' : 'Скасувати' });
     save.addEventListener('click', () => {
-        const snippet = { id: row.dataset.id || undefined, title: title.value.trim(), body: body.value, shortcut: sc.value.trim() };
+        bodies[curLang] = body.value;
+        const snippet = { id: row.dataset.id || undefined, title: title.value.trim(), body: bodies.uk, bodyRu: bodies.ru.trim(), bodyEn: bodies.en.trim(), shortcut: sc.value.trim() };
         if (!snippet.title && !snippet.body) return;
         const action = row.dataset.id ? 'snipUpdate' : 'snipAdd';
         $('status').textContent = 'Збереження…';
@@ -1074,6 +1094,7 @@ function snipEditRow(s) {
         else row.remove();                                   // новий — просто прибрати
     });
     row.appendChild(head);
+    row.appendChild(langs);
     row.appendChild(body);
     row.appendChild(save);
     row.appendChild(del);
