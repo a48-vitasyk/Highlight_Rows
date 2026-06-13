@@ -506,6 +506,31 @@ function removeFromMyTickets(id) {
         chrome.storage.local.set({ myTickets: arr });
     });
 }
+function goToTab(name) { const b = document.querySelector('.tab[data-tab="' + name + '"]'); if (b) b.click(); }
+// Передати тікет у Будильники (HeartBeat): додає рядок із часом +1 год і веде туди.
+function addTicketToReminders(t) {
+    const tid = String(t.ticketId || '').trim();
+    if (!tid) return;
+    const rows0 = [...document.querySelectorAll('#reminders .rm-ticket')];
+    const exists = rows0.some((i) => i.value.trim() === tid);
+    if (!exists) {
+        const d = new Date(Date.now() + 60 * 60 * 1000);
+        const hhmm = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+        addReminderRow({ id: genId(), ticketId: tid, time: hhmm, note: truncate(t.subject || '', 40), scope: 'personal' });
+        markRemindersDirty();
+    }
+    goToTab('home');
+    const rows = [...document.querySelectorAll('#reminders .rem-row')];
+    const row = exists
+        ? rows.find((r) => { const i = r.querySelector('.rm-ticket'); return i && i.value.trim() === tid; })
+        : rows[rows.length - 1];
+    if (row) { row.scrollIntoView({ block: 'center' }); const tm = row.querySelector('.rm-time'); if (tm) tm.focus(); }
+    const st = $('status');
+    if (st) {
+        st.textContent = exists ? 'Цей тікет уже в Будильниках' : 'Додано в Будильники — встановіть час і Зберегти';
+        setTimeout(() => { if (/Будильник/.test(st.textContent)) st.textContent = ''; }, 3500);
+    }
+}
 function renderMyTickets(arr) {
     const box = $('myTickets');
     if (!box) return;
@@ -518,6 +543,7 @@ function renderMyTickets(arr) {
         const item = makeEl('div', { className: 'stale-item', title: t.subject || '' });
         item.appendChild(makeEl('span', { className: 'ti-num', textContent: '#' + t.ticketId }));
         item.appendChild(makeEl('span', { className: 'ti-text', textContent: truncate(t.subject || '', 30) }));
+        item.appendChild(listActBtn(IC.bell, 'У будильник (HeartBeat)', () => addTicketToReminders(t)));
         item.appendChild(listActBtn('×', 'Прибрати', () => removeFromMyTickets(t.ticketId)));
         makeClickable(item, t.url);
         box.appendChild(item);
