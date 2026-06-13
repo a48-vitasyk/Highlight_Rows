@@ -179,6 +179,7 @@ button.small, .btn {
     border: 1px solid var(--border); border-radius: var(--radius-sm);
 }
 button.small:hover, .btn:hover { border-color: var(--accent); color: var(--accent); }
+button.file-btn { white-space: nowrap; }
 button.add {
     margin-top: 6px; padding: 6px 13px; cursor: pointer; font-weight: 700;
     background: transparent; color: var(--accent);

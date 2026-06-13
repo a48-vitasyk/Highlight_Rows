@@ -922,5 +922,7 @@ function wireSoundUpload(which, inputId, selectId) {
 }
 wireSoundUpload('reminder', 'reminderSoundFile', 'reminderSound');
 wireSoundUpload('alert', 'alertSoundFile', 'alertSound');
+if ($('reminderSoundUpload')) $('reminderSoundUpload').addEventListener('click', () => $('reminderSoundFile').click());
+if ($('alertSoundUpload')) $('alertSoundUpload').addEventListener('click', () => $('alertSoundFile').click());
 
 if ($('notifyMode')) $('notifyMode').addEventListener('change', () => { $('notifyMax').disabled = $('notifyMode').value === 'replace'; });

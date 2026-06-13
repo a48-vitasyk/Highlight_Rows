@@ -162,7 +162,7 @@
             <h2 class="card-title">Звук і сповіщення</h2>
         </div>
         <div class="field row">
-            <label for="reminderSound">Звук HeartBeat:</label>
+            <label for="reminderSound">HeartBeat</label>
             <select id="reminderSound">
                 <option value="beep">Beep</option>
                 <option value="ding">Ding</option>
@@ -170,10 +170,11 @@
                 <option value="custom">Свій файл…</option>
             </select>
             <button type="button" class="small" id="testReminderSound" title="Прослухати">▶</button>
-            <input type="file" id="reminderSoundFile" accept="audio/*" style="max-width:130px">
+            <button type="button" class="small file-btn" id="reminderSoundUpload" title="Завантажити свій звук">Файл…</button>
+            <input type="file" id="reminderSoundFile" accept="audio/*" hidden>
         </div>
         <div class="field row">
-            <label for="alertSound">Звук тегів/блок.:</label>
+            <label for="alertSound">Теги</label>
             <select id="alertSound">
                 <option value="beep">Beep</option>
                 <option value="ding">Ding</option>
@@ -181,7 +182,8 @@
                 <option value="custom">Свій файл…</option>
             </select>
             <button type="button" class="small" id="testAlertSound" title="Прослухати">▶</button>
-            <input type="file" id="alertSoundFile" accept="audio/*" style="max-width:130px">
+            <button type="button" class="small file-btn" id="alertSoundUpload" title="Завантажити свій звук">Файл…</button>
+            <input type="file" id="alertSoundFile" accept="audio/*" hidden>
         </div>
         <div class="field row">
             <label for="soundVolume">Гучність:</label>
