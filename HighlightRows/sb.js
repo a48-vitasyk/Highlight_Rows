@@ -204,6 +204,28 @@ const SB = {
         return rows;
     },
 
+    // --- Категорії шаблонів (спільний список) ---
+    listCategories() { return SB.rest('snippet_categories?select=*&order=name.asc'); },
+    async insertCategory(name) {
+        const sess = await SB.getSession();
+        const email = (sess && sess.user && sess.user.email) || null;
+        return SB.rest('snippet_categories', {
+            method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
+            body: JSON.stringify({ name: String(name || '').trim(), created_by_email: email }),
+        });
+    },
+    deleteCategory(name) { return SB.rest('snippet_categories?name=eq.' + encodeURIComponent(name), { method: 'DELETE' }); },
+    async mirrorCategories(rows) {
+        const snippetCats = (rows || []).map((x) => x.name).filter(Boolean);
+        await new Promise((res) => { try { chrome.storage.local.set({ snippetCats }, res); } catch (e) { res(); } });
+    },
+    async pullCategories() {
+        if (!SB.configured() || !(await SB.loggedIn())) return null;
+        const rows = await SB.listCategories();
+        await SB.mirrorCategories(rows);
+        return rows;
+    },
+
     // Синхронізує будильники форми зі спільною базою: upsert рядків форми та
     // видалення ЛИШЕ явно прибраних (removedIds) — щоб не стерти чужі будильники,
     // додані паралельно (їх просто немає у нашій формі). Потім оновлює дзеркало.

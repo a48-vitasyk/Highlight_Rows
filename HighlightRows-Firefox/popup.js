@@ -862,6 +862,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
     if (changes.matchScanStatus) renderMatchStatus(changes.matchScanStatus.newValue);
     if (changes.myTickets) renderMyTickets(changes.myTickets.newValue || []);
     if (changes.snippets) renderSnippets();
+    if (changes.snippetCats) { snipCatsCache = changes.snippetCats.newValue || []; }
 });
 
 $('refreshMatches').addEventListener('click', () => {
@@ -1009,16 +1010,20 @@ function snipMatchesSearch(s, q) {
         .some((x) => (x || '').toLowerCase().includes(q));
 }
 let snipListCache = []; // останній прочитаний список шаблонів (для категорій)
+let snipCatsCache = []; // стійкий спільний список категорій (storage.local.snippetCats)
 function getSnippetCategories() {
-    return [...new Set(snipListCache.map((s) => (s.category || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    const fromSnips = snipListCache.map((s) => (s.category || '').trim()).filter(Boolean);
+    return [...new Set([...snipCatsCache, ...fromSnips])].sort((a, b) => a.localeCompare(b));
 }
-// Видалити категорію: прибрати її з усіх шаблонів, що її мають.
+// Видалити категорію: прибрати зі спільного списку + з усіх шаблонів, що її мають.
 function deleteCategory(name, onDone) {
     const affected = snipListCache.filter((s) => (s.category || '').trim() === name && s.id);
     const msg = affected.length
         ? 'Видалити категорію «' + name + '»? Її буде прибрано з ' + affected.length + ' шаблон(ів).'
         : 'Видалити категорію «' + name + '»?';
     if (!confirm(msg)) return;
+    snipCatsCache = snipCatsCache.filter((c) => c !== name); // оптимістично
+    try { chrome.runtime.sendMessage({ sb: 'catDel', name }, () => { void chrome.runtime.lastError; }); } catch (e) { /* ignore */ }
     let left = affected.length;
     if (!left) { onDone && onDone(); return; }
     affected.forEach((s) => {
@@ -1093,7 +1098,17 @@ function snipCatSelector(initial) {
         const add = makeEl('div', { className: 'snip-cat-add' });
         const inp = makeEl('input', { type: 'text', placeholder: 'Нова категорія' });
         const addBtn = makeEl('button', { type: 'button', className: 'small', textContent: '+' });
-        const doAdd = () => { const v = inp.value.trim(); if (!v) return; value = v; setLabel(); menu.hidden = true; };
+        const doAdd = () => {
+            const v = inp.value.trim();
+            if (!v) return;
+            value = v;
+            setLabel();
+            menu.hidden = true;
+            if (!snipCatsCache.includes(v)) {
+                snipCatsCache = [...snipCatsCache, v]; // оптимістично — щоб одразу зʼявилась у списку
+                try { chrome.runtime.sendMessage({ sb: 'catAdd', name: v }, () => { void chrome.runtime.lastError; }); } catch (e) { /* ignore */ }
+            }
+        };
         addBtn.addEventListener('click', doAdd);
         inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); doAdd(); } });
         add.appendChild(inp); add.appendChild(addBtn);
@@ -1221,5 +1236,7 @@ document.querySelectorAll('#snipVars .chip-var').forEach((chip) => {
         insertAtCursor(el, chip.dataset.token);
     });
 });
-// Початковий підтяг спільних шаблонів (оновити дзеркало) + рендер.
+// Початковий підтяг спільних шаблонів і категорій (оновити дзеркало) + рендер.
+chrome.storage.local.get('snippetCats', (d) => { snipCatsCache = (d && d.snippetCats) || []; });
 try { chrome.runtime.sendMessage({ sb: 'snipPull' }, () => { void chrome.runtime.lastError; renderSnippets(); }); } catch (e) { /* ignore */ }
+try { chrome.runtime.sendMessage({ sb: 'catPull' }, () => { void chrome.runtime.lastError; }); } catch (e) { /* ignore */ }

@@ -139,6 +139,17 @@ chrome.runtime.onMessage.addListener((req, sender, sendResponse) => {
             } else if (req.sb === 'snipDel') {
                 await SB.deleteSnippet(req.id);
                 await SB.pullSnippets();
+            } else if (req.sb === 'catPull') {
+                if (!(await SB.loggedIn())) { sendResponse({ ok: false, error: 'not-logged-in' }); return; }
+                const rows = await SB.pullCategories();
+                sendResponse({ ok: true, rows: rows || [] });
+                return;
+            } else if (req.sb === 'catAdd') {
+                await SB.insertCategory(req.name || '');
+                await SB.pullCategories();
+            } else if (req.sb === 'catDel') {
+                await SB.deleteCategory(req.name || '');
+                await SB.pullCategories();
             }
             sendResponse({ ok: true });
         } catch (e) {
@@ -233,7 +244,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
 if (chrome.alarms && chrome.alarms.onAlarm) {
     chrome.alarms.onAlarm.addListener((a) => {
         if (!a) return;
-        if (a.name === 'sbpull' && typeof SB !== 'undefined') { try { SB.pull(); SB.pullSnippets(); } catch (e) { /* ignore */ } }
+        if (a.name === 'sbpull' && typeof SB !== 'undefined') { try { SB.pull(); SB.pullSnippets(); SB.pullCategories(); } catch (e) { /* ignore */ } }
     });
 }
 
@@ -241,7 +252,7 @@ if (chrome.alarms && chrome.alarms.onAlarm) {
 function sbBoot() {
     if (typeof SB === 'undefined') return;
     try { chrome.alarms.create('sbpull', { periodInMinutes: 15 }); } catch (e) { /* ignore */ }
-    SB.loggedIn().then((yes) => { if (yes) { rtConnect(); try { SB.pullSnippets(); } catch (e) { /* ignore */ } } }).catch(() => {});
+    SB.loggedIn().then((yes) => { if (yes) { rtConnect(); try { SB.pullSnippets(); SB.pullCategories(); } catch (e) { /* ignore */ } } }).catch(() => {});
 }
 if (chrome.runtime.onStartup) chrome.runtime.onStartup.addListener(sbBoot);
 if (chrome.runtime.onInstalled) chrome.runtime.onInstalled.addListener(sbBoot);
