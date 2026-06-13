@@ -586,8 +586,10 @@ function renderLogs(rows) {
 }
 let logsCache = [];
 function applyLogFilter() {
-    const q = ($('logsFilter') && $('logsFilter').value.trim()) || '';
-    const rows = (q ? logsCache.filter((r) => String(r.ticket_id || '').includes(q)) : logsCache).slice();
+    const ql = (($('logsFilter') && $('logsFilter').value.trim()) || '').toLowerCase();
+    const match = (r) => !ql || [r.ticket_id, r.action, logActionLabel(r.action), r.actor_email, r.details]
+        .some((v) => String(v || '').toLowerCase().includes(ql));
+    const rows = logsCache.filter(match).slice();
     const sort = ($('logsSort') && $('logsSort').value) || 'at_desc';
     const t = (r) => Date.parse(r.at) || 0;
     const num = (r) => { const n = parseInt(r.ticket_id, 10); return isNaN(n) ? 0 : n; };
