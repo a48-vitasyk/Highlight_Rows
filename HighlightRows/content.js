@@ -337,7 +337,13 @@ function unlockAudio() {
     if (alive) refresh();
 }
 
-const BUILTIN_SOUNDS = { beep: 'beep.wav', ding: 'sounds/ding.wav', double: 'sounds/double.wav' };
+const BUILTIN_SOUNDS = {
+    beep: 'beep.wav', ding: 'sounds/ding.wav', double: 'sounds/double.wav',
+    chime: 'sounds/chime.wav', bell: 'sounds/bell.wav', alarm: 'sounds/alarm.wav',
+    pop: 'sounds/pop.wav', marimba: 'sounds/marimba.wav', soft: 'sounds/soft.wav',
+    digital: 'sounds/digital.wav', triple: 'sounds/triple.wav', rising: 'sounds/rising.wav',
+    falling: 'sounds/falling.wav', knock: 'sounds/knock.wav', bubble: 'sounds/bubble.wav',
+};
 let customSounds = { reminder: '', alert: '' }; // data URL зі storage.local
 function loadCustomSounds() {
     try {
