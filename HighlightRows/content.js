@@ -796,6 +796,32 @@ function fillSnippet(text) {
     const v = snippetVars();
     return String(text || '').replace(/\{(ticket|ip|os|start|expire|traffic|service)\}/g, (m, k) => v[k] || '');
 }
+// Tab-розгортання: токен перед курсором → шаблон, чия назва починається з токена
+// (або будь-яке слово назви починається з нього). Повертає true, якщо розгорнули.
+function findSnippetByToken(token) {
+    const t = token.toLowerCase();
+    let m = snippets.find((s) => (s.title || '').toLowerCase().startsWith(t));
+    if (!m) m = snippets.find((s) => (s.title || '').toLowerCase().split(/\s+/).some((w) => w.startsWith(t)));
+    return m || null;
+}
+function expandSnippetTab(ta) {
+    const pos = ta.selectionStart;
+    if (pos == null) return false;
+    const before = ta.value.slice(0, pos);
+    const mt = before.match(/(\S+)$/);
+    if (!mt) return false;
+    const token = mt[1];
+    if (token.length < 2) return false; // надто короткий — не чіпаємо
+    const snip = findSnippetByToken(token);
+    if (!snip) return false;
+    const body = fillSnippet(snip.body);
+    const tokenStart = pos - token.length;
+    ta.value = ta.value.slice(0, tokenStart) + body + ta.value.slice(pos);
+    const np = tokenStart + body.length;
+    try { ta.setSelectionRange(np, np); } catch (e) { /* ignore */ }
+    ta.dispatchEvent(new Event('input', { bubbles: true }));
+    return true;
+}
 function insertIntoReply(ta, text) {
     const start = ta.selectionStart != null ? ta.selectionStart : ta.value.length;
     const end = ta.selectionEnd != null ? ta.selectionEnd : ta.value.length;
@@ -829,6 +855,12 @@ function injectSnippetButton() {
     const ta = document.querySelector('textarea.ispui-input__textarea');
     if (!ta || !ta.parentNode || ta.dataset.hrSnip === '1') return;
     ta.dataset.hrSnip = '1';
+    // Tab у полі відповіді → розгорнути шаблон за початком назви.
+    ta.addEventListener('keydown', (e) => {
+        if (e.key === 'Tab' && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
+            if (expandSnippetTab(ta)) e.preventDefault();
+        }
+    });
     const box = makeElc('div', 'hr-snip-wrap');
     const btn = makeElc('button', 'hr-snip-btn', 'Шаблони ▾');
     btn.type = 'button';
