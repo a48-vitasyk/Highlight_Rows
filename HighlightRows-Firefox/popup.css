@@ -217,6 +217,14 @@ button.file-btn { white-space: nowrap; }
 .snip-lang.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 .snip-langs-have { flex: none; font: 600 9px/1 system-ui; color: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 2px 4px; }
 .snip-search { width: 100%; box-sizing: border-box; margin-bottom: 8px; }
+.snip-foot { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.snip-foot .add { flex: none; }
+.snip-actions { margin-left: auto; display: flex; gap: 6px; }
+.snip-actions:empty { display: none; }
+.snip-actions button { display: inline-flex; align-items: center; justify-content: center; padding: 5px 7px; }
+.snip-actions button svg { display: block; }
+.snip-save { color: var(--accent); }
+.snip-actions .remove:hover { color: var(--danger); border-color: var(--danger); }
 /* Дропдаун категорії в редакторі шаблону */
 .snip-cat { position: relative; flex: none; }
 .snip-cat-btn {
