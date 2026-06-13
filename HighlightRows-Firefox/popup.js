@@ -984,6 +984,15 @@ if ($('alertSoundUpload')) $('alertSoundUpload').addEventListener('click', () =>
 if ($('notifyMode')) $('notifyMode').addEventListener('change', () => { $('notifyMax').disabled = $('notifyMode').value === 'replace'; });
 
 // --- Шаблони відповідей (спільні) — керування у Налаштуваннях ---
+let lastSnipBody = null; // останнє сфокусоване поле тексту шаблону (для вставки чипів)
+function insertAtCursor(el, text) {
+    const start = el.selectionStart != null ? el.selectionStart : el.value.length;
+    const end = el.selectionEnd != null ? el.selectionEnd : el.value.length;
+    el.value = el.value.slice(0, start) + text + el.value.slice(end);
+    const pos = start + text.length;
+    el.focus();
+    try { el.setSelectionRange(pos, pos); } catch (e) { /* ignore */ }
+}
 function renderSnippets() {
     const box = $('snippetsList');
     if (!box) return;
@@ -1009,8 +1018,9 @@ function addSnippetRow(s) {
     if (s.id) row.dataset.id = s.id;
     const title = makeEl('input', { type: 'text', className: 'snip-title', placeholder: 'Назва' });
     title.value = s.title || '';
-    const body = makeEl('textarea', { className: 'snip-body', placeholder: 'Текст шаблону… ({ticket} {ip} {os} {start} {expire} {traffic} {service})' });
+    const body = makeEl('textarea', { className: 'snip-body', placeholder: 'Текст шаблону…' });
     body.value = s.body || '';
+    body.addEventListener('focus', () => { lastSnipBody = body; });
     const save = makeEl('button', { type: 'button', className: 'small', textContent: '💾', title: 'Зберегти' });
     const del = makeEl('button', { type: 'button', className: 'small remove', textContent: '×', title: 'Видалити' });
     save.addEventListener('click', () => {
@@ -1039,5 +1049,19 @@ function addSnippetRow(s) {
     box.appendChild(row);
 }
 if ($('addSnippet')) $('addSnippet').addEventListener('click', () => addSnippetRow({}));
+// Чипи підстановок: клік вставляє токен у поточне поле тексту шаблону.
+document.querySelectorAll('#snipVars .chip-var').forEach((chip) => {
+    chip.addEventListener('mousedown', (e) => e.preventDefault()); // не забирати фокус з textarea
+    chip.addEventListener('click', () => {
+        const a = document.activeElement;
+        const el = (a && a.classList && a.classList.contains('snip-body')) ? a : lastSnipBody;
+        if (!el) {
+            $('status').textContent = 'Клікніть у текст шаблону, потім — підстановку';
+            setTimeout(() => { if ($('status').textContent.indexOf('Клікніть') === 0) $('status').textContent = ''; }, 2500);
+            return;
+        }
+        insertAtCursor(el, chip.dataset.token);
+    });
+});
 // Початковий підтяг спільних шаблонів (оновити дзеркало) + рендер.
 try { chrome.runtime.sendMessage({ sb: 'snipPull' }, () => { void chrome.runtime.lastError; renderSnippets(); }); } catch (e) { /* ignore */ }
