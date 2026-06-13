@@ -1195,8 +1195,14 @@ function snipEditRow(s) {
         const action = row.dataset.id ? 'snipUpdate' : 'snipAdd';
         $('status').textContent = 'Збереження…';
         try {
-            chrome.runtime.sendMessage({ sb: action, snippet }, () => {
+            chrome.runtime.sendMessage({ sb: action, snippet }, (resp) => {
                 void chrome.runtime.lastError;
+                if (!resp || !resp.ok) {
+                    const err = String((resp && resp.error) || '');
+                    if (/not-logged-in|unauthorized|401/i.test(err)) { $('status').textContent = 'Не збережено: увійдіть через Google'; promptLogin(); }
+                    else { $('status').textContent = 'Помилка збереження' + (err ? ': ' + err : ''); }
+                    return;
+                }
                 $('status').textContent = 'Шаблон збережено';
                 setTimeout(() => { if ($('status').textContent === 'Шаблон збережено') $('status').textContent = ''; }, 1500);
                 renderSnippets();
