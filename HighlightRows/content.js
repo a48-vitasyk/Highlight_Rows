@@ -1032,10 +1032,73 @@ function makeElc(tag, cls, text) {
     if (text != null) el.textContent = text;
     return el;
 }
+// --- Панель форматування у полі відповіді (Markdown, як у BILLmanager) -----
+const HR_FMT = { bold: ['**', '**'], italic: ['_', '_'], strike: ['~~', '~~'], code: ['`', '`'] };
+function hrFmtWrap(ta, pre, post) {
+    if (!ta || ta.selectionStart == null) return;
+    const s = ta.selectionStart;
+    const e = ta.selectionEnd;
+    const sel = ta.value.slice(s, e);
+    ta.value = ta.value.slice(0, s) + pre + sel + post + ta.value.slice(e);
+    const ns = s + pre.length;
+    try { ta.setSelectionRange(ns, ns + sel.length); } catch (err) { /* ignore */ }
+    ta.focus();
+    ta.dispatchEvent(new Event('input', { bubbles: true }));
+}
+function hrFmtPrefix(ta, prefix) {
+    if (!ta || ta.selectionStart == null) return;
+    const s = ta.selectionStart;
+    const e = ta.selectionEnd;
+    const start = ta.value.lastIndexOf('\n', s - 1) + 1;
+    const block = ta.value.slice(start, e) || '';
+    const replaced = block.split('\n').map((l) => prefix + l).join('\n');
+    ta.value = ta.value.slice(0, start) + replaced + ta.value.slice(e);
+    try { ta.setSelectionRange(start, start + replaced.length); } catch (err) { /* ignore */ }
+    ta.focus();
+    ta.dispatchEvent(new Event('input', { bubbles: true }));
+}
+let fmtBar = null;
+let fmtBarTa = null;
+function positionFmtBar(ta) {
+    const r = ta.getBoundingClientRect();
+    fmtBar.style.left = Math.round(r.left) + 'px';
+    fmtBar.style.width = Math.round(r.width) + 'px';
+    fmtBar.style.top = Math.round(r.bottom - 32) + 'px'; // у нижньому відступі поля
+}
+function ensureFmtBar() {
+    if (fmtBar) return fmtBar;
+    fmtBar = makeElc('div', 'hr-fmt-bar');
+    fmtBar.hidden = true;
+    const mk = (label, cls, title, fn) => {
+        const b = makeElc('button', 'hr-fmt-btn' + (cls ? ' ' + cls : ''), label);
+        b.type = 'button';
+        b.title = title;
+        b.addEventListener('mousedown', (e) => e.preventDefault()); // не губити виділення/фокус
+        b.addEventListener('click', (e) => { e.preventDefault(); if (fmtBarTa) fn(fmtBarTa); });
+        return b;
+    };
+    fmtBar.appendChild(mk('B', 'hr-fmt-b', 'Жирний (Ctrl+B)', (ta) => hrFmtWrap(ta, HR_FMT.bold[0], HR_FMT.bold[1])));
+    fmtBar.appendChild(mk('I', 'hr-fmt-i', 'Курсив (Ctrl+I)', (ta) => hrFmtWrap(ta, HR_FMT.italic[0], HR_FMT.italic[1])));
+    fmtBar.appendChild(mk('S', 'hr-fmt-s', 'Закреслений', (ta) => hrFmtWrap(ta, HR_FMT.strike[0], HR_FMT.strike[1])));
+    fmtBar.appendChild(mk('</>', '', 'Код', (ta) => hrFmtWrap(ta, HR_FMT.code[0], HR_FMT.code[1])));
+    fmtBar.appendChild(mk('•', '', 'Список', (ta) => hrFmtPrefix(ta, '- ')));
+    fmtBar.appendChild(mk('›', '', 'Цитата', (ta) => hrFmtPrefix(ta, '> ')));
+    document.body.appendChild(fmtBar);
+    window.addEventListener('scroll', () => { if (!fmtBar.hidden && fmtBarTa) positionFmtBar(fmtBarTa); }, true);
+    window.addEventListener('resize', () => { if (!fmtBar.hidden && fmtBarTa) positionFmtBar(fmtBarTa); });
+    return fmtBar;
+}
+function showFmtBar(ta) { ensureFmtBar(); fmtBarTa = ta; fmtBar.hidden = false; positionFmtBar(ta); }
+function hideFmtBar() { if (fmtBar) fmtBar.hidden = true; }
 function injectSnippetButton() {
     const ta = document.querySelector('textarea.ispui-input__textarea');
     if (!ta || !ta.parentNode || ta.dataset.hrSnip === '1') return;
     ta.dataset.hrSnip = '1';
+    // Місце знизу під панель форматування (щоб не перекривала текст).
+    ta.style.setProperty('padding-bottom', '36px', 'important');
+    ta.addEventListener('focus', () => showFmtBar(ta));
+    ta.addEventListener('blur', () => setTimeout(hideFmtBar, 200));
+    ta.addEventListener('input', () => { if (fmtBar && !fmtBar.hidden) positionFmtBar(ta); });
     // Інлайн-автодоповнення: під час набору показуємо список збігів.
     ta.addEventListener('input', () => updateAc(ta));
     ta.addEventListener('keydown', (e) => {
@@ -1049,6 +1112,12 @@ function injectSnippetButton() {
         // Tab без списку → розгорнути шаблон за скороченням/початком назви.
         if (e.key === 'Tab' && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
             if (expandSnippetTab(ta)) e.preventDefault();
+        }
+        // Ctrl/Cmd+B / +I → форматування.
+        if ((e.ctrlKey || e.metaKey) && !e.altKey) {
+            const k = (e.key || '').toLowerCase();
+            if (k === 'b') { e.preventDefault(); hrFmtWrap(ta, HR_FMT.bold[0], HR_FMT.bold[1]); }
+            else if (k === 'i') { e.preventDefault(); hrFmtWrap(ta, HR_FMT.italic[0], HR_FMT.italic[1]); }
         }
     });
     ta.addEventListener('blur', () => setTimeout(hideAc, 150));

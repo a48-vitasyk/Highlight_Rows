@@ -128,6 +128,22 @@
 .hr-pal-title { flex: none; max-width: 45%; font-weight: 600; color: #222; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hr-pal-prev { flex: 1; min-width: 0; color: #888; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hr-pal-empty { padding: 16px; text-align: center; color: #888; }
+/* Панель форматування у полі відповіді */
+.hr-fmt-bar {
+    position: fixed; z-index: 2147483646; box-sizing: border-box;
+    display: flex; gap: 4px; padding: 4px 6px;
+    background: #fff; border: 1px solid #e0e0e0;
+    border-radius: 0 0 6px 6px; box-shadow: 0 4px 12px rgba(0, 0, 0, .12);
+}
+.hr-fmt-btn {
+    min-width: 26px; padding: 3px 7px; cursor: pointer;
+    background: #f5f6f8; border: 1px solid #d8dade; border-radius: 5px;
+    font: 12px system-ui, sans-serif; color: #333; line-height: 1.4;
+}
+.hr-fmt-btn:hover { border-color: #1a76e2; color: #1a76e2; }
+.hr-fmt-b { font-weight: 800; }
+.hr-fmt-i { font-style: italic; }
+.hr-fmt-s { text-decoration: line-through; }
 
 /* Кнопка «У будильник» — нативна кнопка з іконкою в заголовку «Информация о запросе». */
 .hr-add-reminder {
