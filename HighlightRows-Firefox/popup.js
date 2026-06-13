@@ -1195,8 +1195,9 @@ let snipFmtBar = null;
 let snipFmtTa = null;
 function posSnipFmtBar(ta) {
     const r = ta.getBoundingClientRect();
-    snipFmtBar.style.left = Math.round(r.left) + 'px';
-    snipFmtBar.style.top = Math.round(r.bottom - 30) + 'px'; // ліворуч, щоб не закривати хват ресайзу
+    const bw = snipFmtBar.offsetWidth || 180;
+    snipFmtBar.style.left = Math.round(r.left + (r.width - bw) / 2) + 'px'; // по центру нижньої кромки
+    snipFmtBar.style.top = Math.round(r.bottom - 30) + 'px';
 }
 function updateSnipFmtBar(ta) {
     if (ta.selectionStart != null && ta.selectionStart !== ta.selectionEnd) showSnipFmtBar(ta);

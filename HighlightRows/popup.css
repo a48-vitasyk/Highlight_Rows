@@ -23,6 +23,7 @@
     --shadow: 0 2px 8px rgba(20, 25, 40, 0.06), 0 1px 2px rgba(20, 25, 40, 0.04);
     --shadow-lg: 0 8px 22px rgba(20, 25, 40, 0.12);
     --font: 'Inter', 'Helvetica Neue', 'Segoe UI', system-ui, Arial, sans-serif;
+    --fmt-btn-bg: #e3e5ea; --fmt-btn-bd: #c4c8d0; --fmt-btn-fg: #2b3038; /* світла тема — темніші кнопки */
 }
 
 @media (prefers-color-scheme: dark) {
@@ -33,6 +34,7 @@
         --primary: #4e6da0; --primary-weak: rgba(78, 109, 160, 0.18);
         --danger: #ff6b5e; --ok: #6bd58a;
         --shadow: 0 2px 8px rgba(0, 0, 0, 0.4); --shadow-lg: 0 8px 22px rgba(0, 0, 0, 0.5);
+        --fmt-btn-bg: #3c424d; --fmt-btn-bd: #525a66; --fmt-btn-fg: #f0f2f5; /* темна тема — світліші кнопки */
     }
 }
 :root[data-theme="dark"] {
@@ -42,6 +44,7 @@
     --primary: #4e6da0; --primary-weak: rgba(78, 109, 160, 0.18);
     --danger: #ff6b5e; --ok: #6bd58a;
     --shadow: 0 2px 8px rgba(0, 0, 0, 0.4); --shadow-lg: 0 8px 22px rgba(0, 0, 0, 0.5);
+    --fmt-btn-bg: #3c424d; --fmt-btn-bd: #525a66; --fmt-btn-fg: #f0f2f5; /* темна тема — світліші кнопки */
 }
 
 * { box-sizing: border-box; }
@@ -213,9 +216,10 @@ button.file-btn { white-space: nowrap; }
     display: flex; gap: 3px; padding: 0; background: none; border: none; box-shadow: none;
 }
 .snip-fmt-btn {
-    min-width: 26px; padding: 3px 6px; cursor: pointer;
-    background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
-    color: var(--text); font: 12px/1 system-ui; text-align: center;
+    min-width: 26px; padding: 4px 7px; cursor: pointer;
+    background: var(--fmt-btn-bg); border: 1px solid var(--fmt-btn-bd); border-radius: var(--radius-sm);
+    color: var(--fmt-btn-fg); font: 12px/1 system-ui; text-align: center;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, .28);
 }
 .snip-fmt-btn:hover { border-color: var(--accent); color: var(--accent); }
 .snip-body { flex-basis: 100%; min-height: 46px; resize: vertical; font: inherit; }

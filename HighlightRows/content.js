@@ -1047,8 +1047,9 @@ let fmtBar = null;
 let fmtBarTa = null;
 function positionFmtBar(ta) {
     const r = ta.getBoundingClientRect();
-    fmtBar.style.left = Math.round(r.left) + 'px';
-    fmtBar.style.top = Math.round(r.bottom - 32) + 'px'; // у нижньому відступі поля (ліворуч, щоб не закривати хват ресайзу)
+    const bw = fmtBar.offsetWidth || 200;
+    fmtBar.style.left = Math.round(r.left + (r.width - bw) / 2) + 'px'; // по центру нижньої кромки
+    fmtBar.style.top = Math.round(r.bottom - 32) + 'px';
 }
 function updateFmtBar(ta) {
     if (ta.selectionStart != null && ta.selectionStart !== ta.selectionEnd) showFmtBar(ta);
