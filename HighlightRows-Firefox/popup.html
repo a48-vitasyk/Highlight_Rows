@@ -265,6 +265,29 @@
         </div>
         <div class="hint">Спільні для команди. Під час набору спливає <b>автодоповнення</b> (↑↓, Enter/Tab — вставити, Esc — закрити); або введіть <b>скорочення</b>/початок назви й <b>Tab</b>. Версії <b>UA/RU/EN</b> підставляються за мовою тікета. {greeting} — за часом доби. ({expire}/{traffic}/{service} — за наявності даних послуги.)</div>
     </div>
+    <div class="card card-disabled" data-card="outline" aria-disabled="true">
+        <div class="card-head">
+            <span class="card-icon"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></span>
+            <h2 class="card-title">Outline (база знань)</h2>
+            <span class="soon">Скоро</span>
+        </div>
+        <div class="card-body">
+        <div class="field row">
+            <label for="outlineUrl">URL:</label>
+            <input type="text" id="outlineUrl" class="grow" placeholder="https://app.getoutline.com" value="https://app.getoutline.com" disabled>
+        </div>
+        <div class="field row">
+            <label for="outlineToken">API-ключ:</label>
+            <input type="password" id="outlineToken" class="grow" placeholder="ol_api_…" disabled>
+        </div>
+        <div class="field row">
+            <label for="outlineCollection">Колекція:</label>
+            <input type="text" id="outlineCollection" class="grow" placeholder="ID або назва колекції з відмашками" disabled>
+            <button type="button" class="small" id="outlineSync" disabled>Синхр.</button>
+        </div>
+        <div class="hint">Підтягуватиме відмашки з документів Outline у бібліотеку шаблонів (лише читання). Запит виконує фоновий скрипт (ключ зберігається локально, не в репозиторії). Поки вимкнено — повернемось пізніше.</div>
+        </div>
+    </div>
 </div>
 
 <div class="footer">
