@@ -80,6 +80,10 @@ const DEFAULT_SETTINGS = {
     reverseEnabled: false,
     resizeEnabled: false,
     resizePx: 300,
+    // переклад і підказки
+    myLang: 'uk',                 // моя мова — ціль перекладу вхідних повідомлень (uk|ru|en)
+    autoTranslateIncoming: false, // авто-переклад нових вхідних повідомлень
+    snipSuggest: true,            // показувати рядок підказок шаблонів у тікеті
 };
 
 // Кеш у пам'яті, щоб refresh() був синхронним і без гонок.
@@ -175,6 +179,9 @@ function normalizeSettings(raw) {
     s.resizePx = Number(s.resizePx);
     if (!(s.resizePx > 0)) s.resizePx = DEFAULT_SETTINGS.resizePx;
     if (s.resizePx > 2000) s.resizePx = 2000;
+    s.myLang = ['uk', 'ru', 'en'].indexOf(s.myLang) !== -1 ? s.myLang : DEFAULT_SETTINGS.myLang;
+    s.autoTranslateIncoming = !!s.autoTranslateIncoming;
+    s.snipSuggest = s.snipSuggest !== false;
     {
         const raw = (s.serviceShow && typeof s.serviceShow === 'object') ? s.serviceShow : {};
         s.serviceShow = {};
@@ -798,12 +805,13 @@ function snippetVars() {
     }
     return v;
 }
+// Селектор вхідних (клієнтських) повідомлень — не outcoming/system/ticketnote/inner.
+const INCOMING_BUBBLE_SEL = '.isp-chat-bubble:not(.isp-chat-bubble_type-outcoming):not(.isp-chat-bubble_type-system):not(.isp-chat-bubble_type-ticketnote):not(.isp-chat-bubble_type-inner)';
 // Мова тікета за текстом вхідних повідомлень клієнта (укр-специфічні літери →
 // uk; рос-специфічні → ru; лише латиниця → en). Запасний варіант — uk.
 function detectTicketLang() {
     let text = '';
-    const sel = '.isp-chat-bubble:not(.isp-chat-bubble_type-outcoming):not(.isp-chat-bubble_type-system):not(.isp-chat-bubble_type-ticketnote):not(.isp-chat-bubble_type-inner)';
-    document.querySelectorAll(sel).forEach((b) => { text += ' ' + (b.textContent || ''); });
+    document.querySelectorAll(INCOMING_BUBBLE_SEL).forEach((b) => { text += ' ' + (b.textContent || ''); });
     text = text.slice(-4000);
     if (/[іїєґ]/i.test(text)) return 'uk';
     if (/[ыэъё]/i.test(text)) return 'ru';
@@ -932,7 +940,16 @@ let palItems = [];
 let palIndex = 0;
 function paletteMatches(q) {
     q = q.trim().toLowerCase();
-    if (!q) return snippets.slice(0, 30);
+    if (!q) {
+        // Порожній запит — найрелевантніші до відкритого тікета вгорі.
+        const kw = ticketKeywords();
+        if (!kw.size) return snippets.slice(0, 30);
+        return snippets
+            .map((s) => ({ s, score: snippetScore(s, kw) }))
+            .sort((a, b) => b.score - a.score)
+            .slice(0, 30)
+            .map((x) => x.s);
+    }
     const scored = [];
     snippets.forEach((s) => {
         const title = (s.title || '').toLowerCase();
@@ -1043,6 +1060,29 @@ function hrFmtPrefix(ta, prefix) {
     ta.focus();
     ta.dispatchEvent(new Event('input', { bubbles: true }));
 }
+// Переклад через фоновий безключовий ендпоінт. cb(text|null).
+function hrTranslate(text, target, cb) {
+    try {
+        chrome.runtime.sendMessage({ gt: 'translate', q: text, target, source: 'auto' }, (resp) => {
+            void chrome.runtime.lastError;
+            cb(resp && resp.ok ? (resp.text || '') : null);
+        });
+    } catch (e) { cb(null); }
+}
+// Перекласти виділений текст у полі відповіді на мову клієнта (заміна на місці).
+function hrTranslateSelection(ta) {
+    const s = ta.selectionStart;
+    const e = ta.selectionEnd;
+    if (s == null || s === e) return;
+    const sel = ta.value.slice(s, e);
+    hrTranslate(sel, detectTicketLang(), (out) => {
+        if (out == null) return;
+        ta.value = ta.value.slice(0, s) + out + ta.value.slice(e);
+        try { ta.setSelectionRange(s, s + out.length); } catch (err) { /* ignore */ }
+        ta.focus();
+        ta.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+}
 let fmtBar = null;
 let fmtBarTa = null;
 function positionFmtBar(ta) {
@@ -1073,6 +1113,7 @@ function ensureFmtBar() {
     fmtBar.appendChild(mk('</>', '', 'Код', (ta) => hrFmtWrap(ta, HR_FMT.code[0], HR_FMT.code[1])));
     fmtBar.appendChild(mk('•', '', 'Список', (ta) => hrFmtPrefix(ta, '- ')));
     fmtBar.appendChild(mk('›', '', 'Цитата', (ta) => hrFmtPrefix(ta, '> ')));
+    fmtBar.appendChild(mk('🌐→', 'hr-fmt-tr', 'Перекласти виділене → мова клієнта (Ctrl+A — все)', (ta) => hrTranslateSelection(ta)));
     document.body.appendChild(fmtBar);
     window.addEventListener('scroll', () => { if (!fmtBar.hidden && fmtBarTa) positionFmtBar(fmtBarTa); }, true);
     window.addEventListener('resize', () => { if (!fmtBar.hidden && fmtBarTa) positionFmtBar(fmtBarTa); });
@@ -1124,11 +1165,105 @@ function injectSnippetButton() {
     ta.addEventListener('scroll', hideAc);
 }
 
+// Кнопка перекладу біля кожного вхідного повідомлення клієнта.
+function injectMsgTranslate() {
+    document.querySelectorAll(INCOMING_BUBBLE_SEL).forEach((bubble) => {
+        if (bubble.dataset.hrTr === '1') return;
+        bubble.dataset.hrTr = '1';
+        const original = (bubble.textContent || '').trim();
+        let box = null;
+        const btn = makeElc('button', 'hr-msg-tr', '🌐');
+        btn.type = 'button';
+        btn.title = 'Перекласти повідомлення';
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            if (box) { box.remove(); box = null; return; }
+            if (!original) return;
+            btn.textContent = '…';
+            hrTranslate(original, settings.myLang, (out) => {
+                btn.textContent = '🌐';
+                if (out == null) return;
+                box = makeElc('div', 'hr-msg-tr-text', out);
+                bubble.parentNode.insertBefore(box, bubble.nextSibling);
+            });
+        });
+        bubble.appendChild(btn);
+        if (settings.autoTranslateIncoming && original) btn.click();
+    });
+}
+
+// --- Розумні підказки шаблонів за змістом тікета ---------------------------
+function ticketKeywords() {
+    let text = '';
+    document.querySelectorAll(INCOMING_BUBBLE_SEL).forEach((b) => { text += ' ' + (b.textContent || ''); });
+    const title = document.querySelector('.isp-inline-group__title, h1');
+    if (title) text += ' ' + (title.textContent || '');
+    const words = (text.slice(0, 4000).match(/[a-zа-яіїєґ0-9]{4,}/gi) || []).map((w) => w.toLowerCase());
+    return new Set(words);
+}
+function snippetScore(s, kw) {
+    if (!kw.size) return 0;
+    const cnt = (str, weight) => {
+        let n = 0;
+        (String(str || '').match(/[a-zа-яіїєґ0-9]{4,}/gi) || []).forEach((w) => { if (kw.has(w.toLowerCase())) n += weight; });
+        return n;
+    };
+    return cnt(s.title, 3) + cnt(s.category, 3) + cnt(s.body, 1);
+}
+function suggestSnippets(limit) {
+    const kw = ticketKeywords();
+    return snippets
+        .map((s) => ({ s, score: snippetScore(s, kw) }))
+        .filter((x) => x.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, limit || 3)
+        .map((x) => x.s);
+}
+let lastSuggestTicket = null;
+let suggestDismissed = null;
+function injectSnippetSuggest() {
+    const ta = document.querySelector('textarea.ispui-input__textarea');
+    if (!ta || !ta.parentNode) return;
+    if (!settings.snipSuggest) {
+        const ex = document.getElementById('hr-suggest');
+        if (ex) ex.remove();
+        lastSuggestTicket = null;
+        return;
+    }
+    if (!snippets.length) return; // шаблони ще не завантажились — спробуємо наступного refresh
+    const tid = readTicketId() || '';
+    if (suggestDismissed === tid) return;
+    if (lastSuggestTicket === tid && document.getElementById('hr-suggest')) return;
+    lastSuggestTicket = tid;
+    const old = document.getElementById('hr-suggest');
+    if (old) old.remove();
+    const sugg = suggestSnippets(3);
+    if (!sugg.length) return;
+    const row = makeElc('div', 'hr-suggest');
+    row.id = 'hr-suggest';
+    row.appendChild(makeElc('span', 'hr-suggest-label', 'Підказки:'));
+    sugg.forEach((s) => {
+        const chip = makeElc('button', 'hr-suggest-chip', s.title || (s.body || '').slice(0, 24));
+        chip.type = 'button';
+        chip.title = (s.body || '').slice(0, 200);
+        chip.addEventListener('click', (ev) => { ev.preventDefault(); insertIntoReply(ta, fillSnippet(s)); });
+        row.appendChild(chip);
+    });
+    const close = makeElc('button', 'hr-suggest-x', '×');
+    close.type = 'button';
+    close.title = 'Сховати';
+    close.addEventListener('click', (ev) => { ev.preventDefault(); row.remove(); suggestDismissed = tid; });
+    row.appendChild(close);
+    ta.parentNode.insertBefore(row, ta);
+}
+
 function refresh() {
     if (!alive) return;
     if (!extensionAlive()) { teardown(); return; }
     injectAddReminderButton();
     injectSnippetButton();
+    injectMsgTranslate();
+    injectSnippetSuggest();
 
     // Підстраховка висоти поля відповіді (стильову таблицю міг перебити inline).
     const ta = document.querySelector('textarea.ispui-input__textarea');

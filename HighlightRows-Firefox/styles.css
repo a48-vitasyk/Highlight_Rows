@@ -148,6 +148,36 @@
     .hr-fmt-btn { background: #3c424d; border-color: #525a66; color: #f0f2f5; box-shadow: 0 2px 6px rgba(0, 0, 0, .5); }
 }
 
+/* Переклад вхідних повідомлень */
+.hr-msg-tr {
+    margin-left: 6px; padding: 0 4px; cursor: pointer; vertical-align: middle;
+    border: none; background: transparent; font-size: 13px; line-height: 1; opacity: .55;
+}
+.hr-msg-tr:hover { opacity: 1; }
+.hr-msg-tr-text {
+    margin: 4px 0 2px; padding: 6px 9px; border-left: 3px solid #1a76e2;
+    background: rgba(26, 118, 226, .08); border-radius: 4px;
+    font: 13px/1.4 system-ui, sans-serif; color: #333; white-space: pre-wrap;
+}
+@media (prefers-color-scheme: dark) {
+    .hr-msg-tr-text { background: rgba(78, 109, 160, .18); color: #e8eaed; }
+}
+
+/* Розумні підказки шаблонів */
+.hr-suggest {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 5px; margin: 0 0 6px;
+    font: 12px system-ui, sans-serif;
+}
+.hr-suggest-label { color: #888; }
+.hr-suggest-chip {
+    cursor: pointer; padding: 3px 9px; border-radius: 999px;
+    border: 1px solid #c3c8d0; background: #eef3fb; color: #1a4a8a;
+    font: 12px system-ui, sans-serif; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.hr-suggest-chip:hover { background: #1a76e2; color: #fff; border-color: #1a76e2; }
+.hr-suggest-x { cursor: pointer; border: none; background: transparent; color: #999; font-size: 15px; line-height: 1; padding: 0 4px; }
+.hr-suggest-x:hover { color: #d33; }
+
 /* Кнопка «У будильник» — нативна кнопка з іконкою в заголовку «Информация о запросе». */
 .hr-add-reminder {
     display: inline-flex;
