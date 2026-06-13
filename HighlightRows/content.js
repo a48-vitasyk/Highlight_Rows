@@ -925,6 +925,84 @@ function updateAc(ta) {
     acIndex = 0;
     renderAc(ta);
 }
+
+// --- Ctrl+K: палітра швидкого пошуку шаблонів ------------------------------
+let paletteEl = null;   // { overlay, input, list, ta }
+let palItems = [];
+let palIndex = 0;
+function paletteMatches(q) {
+    q = q.trim().toLowerCase();
+    if (!q) return snippets.slice(0, 30);
+    const scored = [];
+    snippets.forEach((s) => {
+        const title = (s.title || '').toLowerCase();
+        const sc = (s.shortcut || '').trim().toLowerCase();
+        const body = (s.body || '').toLowerCase();
+        let score = 0;
+        if (sc && sc === q) score = 100;
+        else if (sc && sc.startsWith(q)) score = 80;
+        else if (title.startsWith(q)) score = 60;
+        else if (title.includes(q)) score = 40;
+        else if (body.includes(q)) score = 20;
+        if (score) scored.push({ s, score });
+    });
+    scored.sort((a, b) => b.score - a.score);
+    return scored.slice(0, 30).map((x) => x.s);
+}
+function renderPaletteList() {
+    const { input, list } = paletteEl;
+    palItems = paletteMatches(input.value);
+    if (palIndex >= palItems.length) palIndex = 0;
+    list.textContent = '';
+    if (!palItems.length) { list.appendChild(makeElc('div', 'hr-pal-empty', 'Нічого не знайдено')); return; }
+    palItems.forEach((s, i) => {
+        const it = makeElc('div', 'hr-pal-item' + (i === palIndex ? ' sel' : ''));
+        if (s.shortcut) it.appendChild(makeElc('span', 'hr-snip-ac-sc', s.shortcut));
+        it.appendChild(makeElc('span', 'hr-pal-title', s.title || (s.body || '').slice(0, 60)));
+        it.appendChild(makeElc('span', 'hr-pal-prev', (s.body || '').replace(/\s+/g, ' ').slice(0, 90)));
+        it.addEventListener('mousedown', (e) => { e.preventDefault(); choosePalette(i); });
+        it.addEventListener('mousemove', () => { if (palIndex !== i) { palIndex = i; markPaletteSel(); } });
+        list.appendChild(it);
+    });
+}
+function markPaletteSel() {
+    const items = paletteEl.list.querySelectorAll('.hr-pal-item');
+    items.forEach((el, i) => el.classList.toggle('sel', i === palIndex));
+    const sel = items[palIndex];
+    if (sel) sel.scrollIntoView({ block: 'nearest' });
+}
+function choosePalette(i) {
+    const s = palItems[i];
+    const ta = paletteEl && paletteEl.ta;
+    closePalette();
+    if (s && ta) insertIntoReply(ta, fillSnippet(s));
+}
+function closePalette() { if (paletteEl) { paletteEl.overlay.remove(); paletteEl = null; } }
+function openPalette() {
+    const ta = document.querySelector('textarea.ispui-input__textarea');
+    const overlay = makeElc('div', 'hr-pal-overlay');
+    const box = makeElc('div', 'hr-pal');
+    const input = makeElc('input', 'hr-pal-input');
+    input.type = 'text';
+    input.placeholder = 'Пошук шаблону… (↑↓ · Enter — вставити · Esc — закрити)';
+    const list = makeElc('div', 'hr-pal-list');
+    box.appendChild(input);
+    box.appendChild(list);
+    overlay.appendChild(box);
+    overlay.addEventListener('mousedown', (e) => { if (e.target === overlay) closePalette(); });
+    input.addEventListener('input', () => { palIndex = 0; renderPaletteList(); });
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowDown') { palIndex = Math.min(palIndex + 1, palItems.length - 1); markPaletteSel(); e.preventDefault(); }
+        else if (e.key === 'ArrowUp') { palIndex = Math.max(palIndex - 1, 0); markPaletteSel(); e.preventDefault(); }
+        else if (e.key === 'Enter') { choosePalette(palIndex); e.preventDefault(); }
+        else if (e.key === 'Escape') { closePalette(); e.preventDefault(); }
+    });
+    document.body.appendChild(overlay);
+    paletteEl = { overlay, input, list, ta };
+    palIndex = 0;
+    renderPaletteList();
+    input.focus();
+}
 function insertIntoReply(ta, text) {
     const start = ta.selectionStart != null ? ta.selectionStart : ta.value.length;
     const end = ta.selectionEnd != null ? ta.selectionEnd : ta.value.length;
@@ -1821,6 +1899,16 @@ function init() {
                 else if (k === 'd') { e.preventDefault(); doneActiveShared(); }
                 else if (k === 's') { e.preventDefault(); snoozeActiveReminders(); }
             });
+
+            // Ctrl+K (Cmd+K) — палітра швидкого пошуку шаблонів (лише в тікеті з полем відповіді).
+            document.addEventListener('keydown', (e) => {
+                if (!alive) return;
+                if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && (e.key === 'k' || e.key === 'K')) {
+                    if (!document.querySelector('textarea.ispui-input__textarea')) return;
+                    e.preventDefault();
+                    if (paletteEl) closePalette(); else openPalette();
+                }
+            }, true);
 
             // Закрити меню шаблонів при кліку поза ним.
             document.addEventListener('click', (e) => {

@@ -124,6 +124,8 @@ body[data-view="panel"] { width: auto; max-width: 440px; }
     margin-bottom: 9px;
 }
 .card.dragging { opacity: 0.4; box-shadow: var(--shadow-lg); }
+.card-disabled { opacity: 0.55; }
+.card-disabled .card-body { pointer-events: none; }
 .card-head {
     display: flex; align-items: center; gap: 7px;
     margin: -1px 0 9px; padding-bottom: 7px;
