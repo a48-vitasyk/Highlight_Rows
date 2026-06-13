@@ -177,6 +177,33 @@ const SB = {
         return rows;
     },
 
+    // --- Шаблони відповідей (спільні) ---
+    listSnippets() { return SB.rest('snippets?select=*&order=sort.asc,updated_at.desc'); },
+    async insertSnippet(s) {
+        const sess = await SB.getSession();
+        const email = (sess && sess.user && sess.user.email) || null;
+        return SB.rest('snippets', {
+            method: 'POST', headers: { Prefer: 'return=representation' },
+            body: JSON.stringify({ title: s.title || '', body: s.body || '', sort: s.sort || 0, created_by_email: email }),
+        });
+    },
+    updateSnippet(s) {
+        return SB.rest('snippets?id=eq.' + encodeURIComponent(s.id), {
+            method: 'PATCH', body: JSON.stringify({ title: s.title || '', body: s.body || '', sort: s.sort || 0 }),
+        });
+    },
+    deleteSnippet(id) { return SB.rest('snippets?id=eq.' + encodeURIComponent(id), { method: 'DELETE' }); },
+    async mirrorSnippets(rows) {
+        const snippets = (rows || []).map((x) => ({ id: x.id, title: x.title || '', body: x.body || '', creatorEmail: x.created_by_email || '' }));
+        await new Promise((res) => { try { chrome.storage.local.set({ snippets }, res); } catch (e) { res(); } });
+    },
+    async pullSnippets() {
+        if (!SB.configured() || !(await SB.loggedIn())) return null;
+        const rows = await SB.listSnippets();
+        await SB.mirrorSnippets(rows);
+        return rows;
+    },
+
     // Синхронізує будильники форми зі спільною базою: upsert рядків форми та
     // видалення ЛИШЕ явно прибраних (removedIds) — щоб не стерти чужі будильники,
     // додані паралельно (їх просто немає у нашій формі). Потім оновлює дзеркало.

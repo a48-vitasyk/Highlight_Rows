@@ -979,3 +979,62 @@ if ($('reminderSoundUpload')) $('reminderSoundUpload').addEventListener('click',
 if ($('alertSoundUpload')) $('alertSoundUpload').addEventListener('click', () => $('alertSoundFile').click());
 
 if ($('notifyMode')) $('notifyMode').addEventListener('change', () => { $('notifyMax').disabled = $('notifyMode').value === 'replace'; });
+
+// --- Шаблони відповідей (спільні) — керування у Налаштуваннях ---
+function renderSnippets() {
+    const box = $('snippetsList');
+    if (!box) return;
+    box.innerHTML = '';
+    if (!isLoggedIn) {
+        box.appendChild(makeEl('div', { className: 'list-empty', textContent: 'Увійдіть через Google, щоб керувати шаблонами' }));
+        return;
+    }
+    chrome.storage.local.get('snippets', (d) => {
+        const list = (d && d.snippets) || [];
+        box.innerHTML = '';
+        if (!list.length) { box.appendChild(makeEl('div', { className: 'list-empty', textContent: 'Поки немає шаблонів' })); return; }
+        list.forEach(addSnippetRow);
+    });
+}
+function addSnippetRow(s) {
+    s = s || { title: '', body: '' };
+    const box = $('snippetsList');
+    if (!box) return;
+    const empty = box.querySelector('.list-empty');
+    if (empty) empty.remove();
+    const row = makeEl('div', { className: 'snip-row' });
+    if (s.id) row.dataset.id = s.id;
+    const title = makeEl('input', { type: 'text', className: 'snip-title', placeholder: 'Назва' });
+    title.value = s.title || '';
+    const body = makeEl('textarea', { className: 'snip-body', placeholder: 'Текст шаблону… ({ticket}, {ip})' });
+    body.value = s.body || '';
+    const save = makeEl('button', { type: 'button', className: 'small', textContent: '💾', title: 'Зберегти' });
+    const del = makeEl('button', { type: 'button', className: 'small remove', textContent: '×', title: 'Видалити' });
+    save.addEventListener('click', () => {
+        const snippet = { id: row.dataset.id || undefined, title: title.value.trim(), body: body.value };
+        if (!snippet.title && !snippet.body) return;
+        const action = row.dataset.id ? 'snipUpdate' : 'snipAdd';
+        $('status').textContent = 'Збереження…';
+        try {
+            chrome.runtime.sendMessage({ sb: action, snippet }, () => {
+                void chrome.runtime.lastError;
+                $('status').textContent = 'Шаблон збережено';
+                setTimeout(() => { if ($('status').textContent === 'Шаблон збережено') $('status').textContent = ''; }, 1500);
+                renderSnippets();
+            });
+        } catch (e) { /* ignore */ }
+    });
+    del.addEventListener('click', () => {
+        if (row.dataset.id) {
+            try { chrome.runtime.sendMessage({ sb: 'snipDel', id: row.dataset.id }, () => { void chrome.runtime.lastError; renderSnippets(); }); } catch (e) { /* ignore */ }
+        } else { row.remove(); }
+    });
+    row.appendChild(title);
+    row.appendChild(body);
+    row.appendChild(save);
+    row.appendChild(del);
+    box.appendChild(row);
+}
+if ($('addSnippet')) $('addSnippet').addEventListener('click', () => addSnippetRow({}));
+// Початковий підтяг спільних шаблонів (оновити дзеркало) + рендер.
+try { chrome.runtime.sendMessage({ sb: 'snipPull' }, () => { void chrome.runtime.lastError; renderSnippets(); }); } catch (e) { /* ignore */ }

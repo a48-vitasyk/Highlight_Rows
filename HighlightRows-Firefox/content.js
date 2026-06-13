@@ -93,6 +93,10 @@ function loadMyEmail() {
         });
     } catch (e) { /* ignore */ }
 }
+let snippets = []; // спільні шаблони відповідей (дзеркало storage.local)
+function loadSnippets() {
+    try { chrome.storage.local.get('snippets', (d) => { snippets = (d && d.snippets) || []; }); } catch (e) { /* ignore */ }
+}
 let reminderNotifiedAt = {}; // { [reminderId]: ts } — троттлінг сповіщень (у пам'яті)
 let trafficData = null;   // { key, used, paid, none?, notFound? } — кеш трафіку поточного тікета
 let trafficLoading = false;
@@ -748,10 +752,70 @@ function applyPanelTweaks() {
     ) : '');
 }
 
+// --- Шаблони відповідей: кнопка «Шаблони ▾» біля поля відповіді ------------
+function readSummaryItemValue(label) {
+    for (const lbl of document.querySelectorAll('.isp-item-label')) {
+        if ((lbl.textContent || '').trim() === label) {
+            const v = lbl.parentElement && lbl.parentElement.querySelector('.isp-item-value');
+            if (v) return (v.textContent || '').trim();
+        }
+    }
+    return '';
+}
+function fillSnippet(text) {
+    return String(text || '')
+        .replace(/\{ticket\}/g, readTicketId() || '')
+        .replace(/\{ip\}/g, readSummaryItemValue('IP адрес') || '');
+}
+function insertIntoReply(ta, text) {
+    const start = ta.selectionStart != null ? ta.selectionStart : ta.value.length;
+    const end = ta.selectionEnd != null ? ta.selectionEnd : ta.value.length;
+    ta.value = ta.value.slice(0, start) + text + ta.value.slice(end);
+    const pos = start + text.length;
+    try { ta.setSelectionRange(pos, pos); } catch (e) { /* ignore */ }
+    ta.dispatchEvent(new Event('input', { bubbles: true })); // щоб Angular ngModel підхопив
+    ta.focus();
+}
+function renderSnippetMenu(menu, ta) {
+    menu.textContent = '';
+    if (!snippets.length) {
+        menu.appendChild(makeElc('div', 'hr-snip-empty', 'Немає шаблонів (додайте в налаштуваннях)'));
+        return;
+    }
+    snippets.forEach((s) => {
+        const it = makeElc('button', 'hr-snip-item', s.title || (s.body || '').slice(0, 40));
+        it.type = 'button';
+        it.title = s.body || '';
+        it.addEventListener('click', (e) => { e.preventDefault(); insertIntoReply(ta, fillSnippet(s.body)); menu.hidden = true; });
+        menu.appendChild(it);
+    });
+}
+function makeElc(tag, cls, text) {
+    const el = document.createElement(tag);
+    el.className = cls;
+    if (text != null) el.textContent = text;
+    return el;
+}
+function injectSnippetButton() {
+    const ta = document.querySelector('textarea.ispui-input__textarea');
+    if (!ta || !ta.parentNode || ta.dataset.hrSnip === '1') return;
+    ta.dataset.hrSnip = '1';
+    const box = makeElc('div', 'hr-snip-wrap');
+    const btn = makeElc('button', 'hr-snip-btn', 'Шаблони ▾');
+    btn.type = 'button';
+    const menu = makeElc('div', 'hr-snip-menu');
+    menu.hidden = true;
+    btn.addEventListener('click', (e) => { e.preventDefault(); renderSnippetMenu(menu, ta); menu.hidden = !menu.hidden; });
+    box.appendChild(btn);
+    box.appendChild(menu);
+    ta.parentNode.insertBefore(box, ta);
+}
+
 function refresh() {
     if (!alive) return;
     if (!extensionAlive()) { teardown(); return; }
     injectAddReminderButton();
+    injectSnippetButton();
 
     // Підстраховка висоти поля відповіді (стильову таблицю міг перебити inline).
     const ta = document.querySelector('textarea.ispui-input__textarea');
@@ -1503,6 +1567,7 @@ function init() {
         applyPanelTweaks();
         loadMyEmail();
         loadCustomSounds();
+        loadSnippets();
         refresh();
         pingNewShared();
 
@@ -1536,6 +1601,8 @@ function init() {
                     loadMyEmail();
                 } else if (area === 'local' && changes.soundData) {
                     loadCustomSounds();
+                } else if (area === 'local' && changes.snippets) {
+                    loadSnippets();
                 }
             });
 
@@ -1563,6 +1630,13 @@ function init() {
                 else if (k === 'd') { e.preventDefault(); doneActiveShared(); }
                 else if (k === 's') { e.preventDefault(); snoozeActiveReminders(); }
             });
+
+            // Закрити меню шаблонів при кліку поза ним.
+            document.addEventListener('click', (e) => {
+                document.querySelectorAll('.hr-snip-menu').forEach((m) => {
+                    if (m.parentNode && !m.parentNode.contains(e.target)) m.hidden = true;
+                });
+            }, true);
 
             observerRef = new MutationObserver(scheduleRefresh);
             observerRef.observe(document.body, { childList: true, subtree: true });
