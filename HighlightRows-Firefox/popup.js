@@ -1220,6 +1220,12 @@ function ensureSnipFmtBar() {
     snipFmtBar.appendChild(mk('&rsaquo;', 'Цитата', (ta) => fmtPrefixLines(ta, '> ')));
     document.body.appendChild(snipFmtBar);
     window.addEventListener('scroll', () => { if (!snipFmtBar.hidden && snipFmtTa) posSnipFmtBar(snipFmtTa); }, true);
+    // Надійне відстеження виділення: панель видно лише поки воно є.
+    document.addEventListener('selectionchange', () => {
+        const ae = document.activeElement;
+        if (ae && ae.classList && ae.classList.contains('snip-body') && ae.selectionStart !== ae.selectionEnd) updateSnipFmtBar(ae);
+        else hideSnipFmtBar();
+    });
     return snipFmtBar;
 }
 function showSnipFmtBar(ta) { ensureSnipFmtBar(); snipFmtTa = ta; snipFmtBar.hidden = false; posSnipFmtBar(ta); }
@@ -1295,6 +1301,7 @@ function snipEditRow(s) {
             if (k === 'b') { e.preventDefault(); fmtWrap(body, FMT_WRAP.bold[0], FMT_WRAP.bold[1]); }
             else if (k === 'i') { e.preventDefault(); fmtWrap(body, FMT_WRAP.italic[0], FMT_WRAP.italic[1]); }
         }
+        if (e.key === 'Escape') hideSnipFmtBar();
     });
     const save = makeEl('button', { type: 'button', className: 'small snip-save', title: 'Зберегти', innerHTML: IC.save });
     const del = makeEl('button', { type: 'button', className: 'small remove', title: s.id ? 'Видалити' : 'Скасувати', innerHTML: IC.close });
