@@ -463,7 +463,7 @@ function renderMyTickets(arr) {
     if (!box) return;
     box.innerHTML = '';
     if (!arr || !arr.length) {
-        box.appendChild(makeEl('div', { className: 'list-empty', textContent: 'Порожньо — додайте з «Особисті тікети» кнопкою закладки' }));
+        box.appendChild(makeEl('div', { className: 'list-empty', textContent: 'Порожньо — додайте з «Мої тікети» кнопкою закладки' }));
         return;
     }
     arr.forEach((t) => {
@@ -744,7 +744,7 @@ function renderMatchTickets(arr) {
         item.appendChild(chips);
         item.appendChild(makeEl('span', { className: 'ti-num', textContent: '#' + m.ticketId }));
         item.appendChild(makeEl('span', { className: 'ti-text', textContent: truncate(m.subject, 30) }));
-        item.appendChild(listActBtn(IC.bookmark, 'Додати в «Мої тікети»', () => addToMyTickets({ ticketId: m.ticketId, subject: m.subject, url: m.url })));
+        item.appendChild(listActBtn(IC.bookmark, 'Додати в «Тікети»', () => addToMyTickets({ ticketId: m.ticketId, subject: m.subject, url: m.url })));
         makeClickable(item, m.url);
         box.appendChild(item);
     });
