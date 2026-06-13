@@ -1166,8 +1166,8 @@ function snipViewRow(s) {
     row.appendChild(del);
     return row;
 }
-// Маркери форматування (Slack/Markdown). Щоб перейти на HTML — змінити тут.
-const FMT_WRAP = { bold: ['*', '*'], italic: ['_', '_'], strike: ['~', '~'], code: ['`', '`'] };
+// Маркери форматування (стандартний Markdown — BILLmanager рендерить його в тікетах).
+const FMT_WRAP = { bold: ['**', '**'], italic: ['_', '_'], strike: ['~~', '~~'], code: ['`', '`'] };
 function fmtWrap(ta, pre, post) {
     const s = ta.selectionStart != null ? ta.selectionStart : ta.value.length;
     const e = ta.selectionEnd != null ? ta.selectionEnd : ta.value.length;
