@@ -62,6 +62,29 @@
 #hr-reminder-banner .hr-rb-done { color: #1e7e34; }
 #hr-reminder-banner .hr-reminder-banner-btn[hidden] { display: none; }
 
+/* Кнопка «Шаблони ▾» біля поля відповіді + випадайка. */
+.hr-snip-wrap { position: relative; display: inline-block; margin: 0 0 6px; }
+.hr-snip-btn {
+    border: 1px solid #ccc; background: #fff; color: #1a76e2;
+    border-radius: 6px; padding: 4px 10px; cursor: pointer;
+    font: 600 12px system-ui, sans-serif;
+}
+.hr-snip-btn:hover { border-color: #1a76e2; }
+.hr-snip-menu {
+    position: absolute; z-index: 2147483646; top: 100%; left: 0;
+    min-width: 220px; max-width: 380px; max-height: 300px; overflow: auto;
+    background: #fff; border: 1px solid #ccc; border-radius: 8px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, .18); padding: 4px; margin-top: 2px;
+}
+.hr-snip-item {
+    display: block; width: 100%; text-align: left; border: none; background: transparent;
+    padding: 6px 8px; border-radius: 6px; cursor: pointer;
+    font: 13px system-ui, sans-serif; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    color: #222;
+}
+.hr-snip-item:hover { background: #eef3fb; }
+.hr-snip-empty { padding: 8px; color: #888; font: 12px system-ui, sans-serif; }
+
 /* Кнопка «У будильник» — нативна кнопка з іконкою в заголовку «Информация о запросе». */
 .hr-add-reminder {
     display: inline-flex;

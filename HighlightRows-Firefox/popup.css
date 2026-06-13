@@ -180,6 +180,9 @@ button.small, .btn {
 }
 button.small:hover, .btn:hover { border-color: var(--accent); color: var(--accent); }
 button.file-btn { white-space: nowrap; }
+.snip-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-start; margin-bottom: 8px; }
+.snip-title { flex: 1; min-width: 120px; }
+.snip-body { flex-basis: 100%; min-height: 46px; resize: vertical; font: inherit; }
 button.add {
     margin-top: 6px; padding: 6px 13px; cursor: pointer; font-weight: 700;
     background: transparent; color: var(--accent);
