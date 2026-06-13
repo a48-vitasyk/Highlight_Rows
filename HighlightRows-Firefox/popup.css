@@ -172,14 +172,15 @@ label { font-weight: 600; }
 .card-body { transition: opacity .15s ease; }
 .card:has(.switch input:not(:checked)) .card-body { opacity: .45; pointer-events: none; }
 
-input[type="text"], input[type="number"], input[type="time"], textarea, select {
+input[type="text"], input[type="number"], input[type="time"], input[type="search"], input[type="password"], textarea, select {
     font: inherit; color: var(--text);
     background: var(--surface-2);
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     padding: 5px 8px;
+    -webkit-appearance: none; appearance: none;
 }
-input[type="text"], textarea { box-sizing: border-box; }
+input[type="text"], input[type="search"], input[type="password"], textarea { box-sizing: border-box; }
 input[type="number"] { width: 56px; }
 textarea { width: 100%; resize: vertical; }
 input:focus, textarea:focus, select:focus, button:focus-visible {
