@@ -1166,6 +1166,29 @@ function snipViewRow(s) {
     row.appendChild(del);
     return row;
 }
+// Маркери форматування (Slack/Markdown). Щоб перейти на HTML — змінити тут.
+const FMT_WRAP = { bold: ['*', '*'], italic: ['_', '_'], strike: ['~', '~'], code: ['`', '`'] };
+function fmtWrap(ta, pre, post) {
+    const s = ta.selectionStart != null ? ta.selectionStart : ta.value.length;
+    const e = ta.selectionEnd != null ? ta.selectionEnd : ta.value.length;
+    const sel = ta.value.slice(s, e);
+    ta.value = ta.value.slice(0, s) + pre + sel + post + ta.value.slice(e);
+    ta.focus();
+    const ns = s + pre.length;
+    try { ta.setSelectionRange(ns, ns + sel.length); } catch (err) { /* ignore */ }
+    ta.dispatchEvent(new Event('input', { bubbles: true }));
+}
+function fmtPrefixLines(ta, prefix) {
+    const s = ta.selectionStart != null ? ta.selectionStart : 0;
+    const e = ta.selectionEnd != null ? ta.selectionEnd : ta.value.length;
+    const start = ta.value.lastIndexOf('\n', s - 1) + 1;
+    const block = ta.value.slice(start, e) || '';
+    const replaced = block.split('\n').map((l) => prefix + l).join('\n');
+    ta.value = ta.value.slice(0, start) + replaced + ta.value.slice(e);
+    ta.focus();
+    try { ta.setSelectionRange(start, start + replaced.length); } catch (err) { /* ignore */ }
+    ta.dispatchEvent(new Event('input', { bubbles: true }));
+}
 // Рядок редагування: назва + текст + 💾 зберегти + × (видалити/скасувати).
 function snipEditRow(s) {
     s = s || { title: '', body: '' };
@@ -1225,6 +1248,27 @@ function snipEditRow(s) {
     body.value = bodies.uk;
     body.addEventListener('focus', () => { lastSnipBody = body; });
     body.addEventListener('input', () => { bodies[curLang] = body.value; });
+    // Панель форматування (Slack-стиль). mousedown preventDefault — щоб не губити виділення.
+    const fmt = makeEl('div', { className: 'snip-fmt' });
+    const fbtn = (html, title, fn) => {
+        const b = makeEl('button', { type: 'button', className: 'snip-fmt-btn', title, innerHTML: html });
+        b.addEventListener('mousedown', (e) => e.preventDefault());
+        b.addEventListener('click', fn);
+        return b;
+    };
+    fmt.appendChild(fbtn('<b>B</b>', 'Жирний (Ctrl+B)', () => fmtWrap(body, FMT_WRAP.bold[0], FMT_WRAP.bold[1])));
+    fmt.appendChild(fbtn('<i>I</i>', 'Курсив (Ctrl+I)', () => fmtWrap(body, FMT_WRAP.italic[0], FMT_WRAP.italic[1])));
+    fmt.appendChild(fbtn('<s>S</s>', 'Закреслений', () => fmtWrap(body, FMT_WRAP.strike[0], FMT_WRAP.strike[1])));
+    fmt.appendChild(fbtn('&lt;/&gt;', 'Код', () => fmtWrap(body, FMT_WRAP.code[0], FMT_WRAP.code[1])));
+    fmt.appendChild(fbtn('•', 'Список', () => fmtPrefixLines(body, '- ')));
+    fmt.appendChild(fbtn('&rsaquo;', 'Цитата', () => fmtPrefixLines(body, '> ')));
+    body.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && !e.altKey) {
+            const k = (e.key || '').toLowerCase();
+            if (k === 'b') { e.preventDefault(); fmtWrap(body, FMT_WRAP.bold[0], FMT_WRAP.bold[1]); }
+            else if (k === 'i') { e.preventDefault(); fmtWrap(body, FMT_WRAP.italic[0], FMT_WRAP.italic[1]); }
+        }
+    });
     const save = makeEl('button', { type: 'button', className: 'small snip-save', title: 'Зберегти', innerHTML: IC.save });
     const del = makeEl('button', { type: 'button', className: 'small remove', title: s.id ? 'Видалити' : 'Скасувати', innerHTML: IC.close });
     save.addEventListener('click', () => {
@@ -1254,6 +1298,7 @@ function snipEditRow(s) {
     });
     row.appendChild(head);
     row.appendChild(langs);
+    row.appendChild(fmt);
     row.appendChild(body);
     // Кнопки зберегти/закрити — у спільному футері (праворуч), лише поки редагуємо.
     const acts = $('snipActions');

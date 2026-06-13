@@ -207,6 +207,13 @@ button.file-btn { white-space: nowrap; }
 .snip-head { display: flex; gap: 6px; flex-basis: 100%; }
 .snip-title { flex: 1; min-width: 120px; }
 .snip-sc-input { width: 70px; flex: none; text-align: center; }
+.snip-fmt { display: flex; gap: 3px; flex-basis: 100%; margin-bottom: 4px; }
+.snip-fmt-btn {
+    min-width: 26px; padding: 3px 6px; cursor: pointer;
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+    color: var(--text); font: 12px/1 system-ui; text-align: center;
+}
+.snip-fmt-btn:hover { border-color: var(--accent); color: var(--accent); }
 .snip-body { flex-basis: 100%; min-height: 46px; resize: vertical; font: inherit; }
 .snip-view { flex-wrap: nowrap; align-items: center; }
 .snip-sc { flex: none; font: 11px/1 ui-monospace, monospace; background: var(--accent); color: #fff; border-radius: 4px; padding: 2px 5px; }
