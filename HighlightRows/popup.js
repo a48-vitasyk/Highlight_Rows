@@ -1016,6 +1016,10 @@ function snipDelete(id, onDone) {
 function snipViewRow(s) {
     const row = makeEl('div', { className: 'snip-row snip-view' });
     if (s.id) row.dataset.id = s.id;
+    if (s.shortcut) {
+        const sc = makeEl('span', { className: 'snip-sc', textContent: s.shortcut, title: 'Скорочення (Tab у полі відповіді)' });
+        row.appendChild(sc);
+    }
     const label = makeEl('span', { className: 'snip-label', textContent: s.title || (s.body || '').slice(0, 48) || '(без назви)' });
     label.title = s.body || '';
     const edit = makeEl('button', { type: 'button', className: 'small', textContent: '✎', title: 'Редагувати' });
@@ -1032,15 +1036,20 @@ function snipEditRow(s) {
     s = s || { title: '', body: '' };
     const row = makeEl('div', { className: 'snip-row snip-edit' });
     if (s.id) row.dataset.id = s.id;
+    const head = makeEl('div', { className: 'snip-head' });
     const title = makeEl('input', { type: 'text', className: 'snip-title', placeholder: 'Назва' });
     title.value = s.title || '';
+    const sc = makeEl('input', { type: 'text', className: 'snip-sc-input', placeholder: 'скор.', title: 'Скорочення: введіть у полі відповіді й натисніть Tab' });
+    sc.value = s.shortcut || '';
+    head.appendChild(title);
+    head.appendChild(sc);
     const body = makeEl('textarea', { className: 'snip-body', placeholder: 'Текст шаблону…' });
     body.value = s.body || '';
     body.addEventListener('focus', () => { lastSnipBody = body; });
     const save = makeEl('button', { type: 'button', className: 'small', textContent: '💾', title: 'Зберегти' });
     const del = makeEl('button', { type: 'button', className: 'small remove', textContent: '×', title: s.id ? 'Видалити' : 'Скасувати' });
     save.addEventListener('click', () => {
-        const snippet = { id: row.dataset.id || undefined, title: title.value.trim(), body: body.value };
+        const snippet = { id: row.dataset.id || undefined, title: title.value.trim(), body: body.value, shortcut: sc.value.trim() };
         if (!snippet.title && !snippet.body) return;
         const action = row.dataset.id ? 'snipUpdate' : 'snipAdd';
         $('status').textContent = 'Збереження…';
@@ -1058,7 +1067,7 @@ function snipEditRow(s) {
         else if (s && s.id) row.replaceWith(snipViewRow(s)); // (не трапляється) повернути перегляд
         else row.remove();                                   // новий — просто прибрати
     });
-    row.appendChild(title);
+    row.appendChild(head);
     row.appendChild(body);
     row.appendChild(save);
     row.appendChild(del);

@@ -181,9 +181,12 @@ button.small, .btn {
 button.small:hover, .btn:hover { border-color: var(--accent); color: var(--accent); }
 button.file-btn { white-space: nowrap; }
 .snip-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-start; margin-bottom: 8px; }
+.snip-head { display: flex; gap: 6px; flex-basis: 100%; }
 .snip-title { flex: 1; min-width: 120px; }
+.snip-sc-input { width: 70px; flex: none; text-align: center; }
 .snip-body { flex-basis: 100%; min-height: 46px; resize: vertical; font: inherit; }
 .snip-view { flex-wrap: nowrap; align-items: center; }
+.snip-sc { flex: none; font: 11px/1 ui-monospace, monospace; background: var(--accent); color: #fff; border-radius: 4px; padding: 2px 5px; }
 .snip-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .snip-vars { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin: 4px 0 6px; }
 .chip-var {
