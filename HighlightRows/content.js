@@ -63,6 +63,12 @@ const DEFAULT_SETTINGS = {
     reminders: [], // { id, ticketId, time: "HH:MM", note }
     snoozeMinutes: 10, // тривалість снузу кнопки «Заглушити»
     escalateMinutes: 10, // спільний HeartBeat: взяв і не закрив → через N хв дзвонить усім
+    // звук і сповіщення
+    reminderSound: 'beep',  // beep | ding | double | custom (custom — data URL у storage.local)
+    alertSound: 'beep',     // звук тегів/блокування
+    soundVolume: 1,         // 0..1
+    notifyMode: 'stack',    // replace | stack
+    notifyMax: 3,           // 1..5 — макс. накопичених сповіщень
     // «без відповіді понад N год» — список у popup
     staleEnabled: false, // вимкнено за замовч.: скан відкриває тікети й гасить позначку нового повідомлення
     staleHours: 4,
@@ -171,6 +177,12 @@ function normalizeSettings(raw) {
     if (!(s.snoozeMinutes > 0)) s.snoozeMinutes = DEFAULT_SETTINGS.snoozeMinutes;
     s.escalateMinutes = Number(s.escalateMinutes);
     if (!(s.escalateMinutes > 0)) s.escalateMinutes = DEFAULT_SETTINGS.escalateMinutes;
+    s.reminderSound = String(s.reminderSound || DEFAULT_SETTINGS.reminderSound);
+    s.alertSound = String(s.alertSound || DEFAULT_SETTINGS.alertSound);
+    s.soundVolume = Number(s.soundVolume);
+    if (!(s.soundVolume >= 0 && s.soundVolume <= 1)) s.soundVolume = DEFAULT_SETTINGS.soundVolume;
+    s.notifyMode = s.notifyMode === 'replace' ? 'replace' : 'stack';
+    s.notifyMax = Math.min(5, Math.max(1, Math.round(Number(s.notifyMax) || DEFAULT_SETTINGS.notifyMax)));
     s.reminders = (Array.isArray(s.reminders) ? s.reminders : [])
         .map((r) => ({
             id: r.id || genId(),
@@ -315,9 +327,27 @@ function unlockAudio() {
     if (alive) refresh();
 }
 
+const BUILTIN_SOUNDS = { beep: 'beep.wav', ding: 'sounds/ding.wav', double: 'sounds/double.wav' };
+let customSounds = { reminder: '', alert: '' }; // data URL зі storage.local
+function loadCustomSounds() {
+    try {
+        chrome.storage.local.get('soundData', (d) => {
+            const sd = (d && d.soundData) || {};
+            customSounds = { reminder: sd.reminder || '', alert: sd.alert || '' };
+            if (reminderAudio) { try { reminderAudio.pause(); } catch (e) { /* ignore */ } reminderAudio = null; }
+        });
+    } catch (e) { /* ignore */ }
+}
+function soundSrc(which) {
+    const key = which === 'reminder' ? settings.reminderSound : settings.alertSound;
+    if (key === 'custom') return customSounds[which] || chrome.runtime.getURL('beep.wav');
+    return chrome.runtime.getURL(BUILTIN_SOUNDS[key] || 'beep.wav');
+}
+
 function playBeep() {
     try {
-        const audio = new Audio(chrome.runtime.getURL('beep.wav'));
+        const audio = new Audio(soundSrc('alert'));
+        audio.volume = settings.soundVolume;
         audio.play().catch(() => {/* autoplay може бути заблоковано без жесту */});
     } catch (e) {
         // ігноруємо
@@ -328,7 +358,7 @@ function fireAlert(label, opts) {
     if (opts.sound) playBeep();
     if (opts.notify) {
         try {
-            chrome.runtime.sendMessage({ action: 'redAlert', name: label });
+            chrome.runtime.sendMessage({ action: 'redAlert', name: label, url: (opts && opts.url) || '' });
         } catch (e) {
             teardown();
         }
@@ -337,10 +367,14 @@ function fireAlert(label, opts) {
 
 function startReminderAudio() {
     try {
-        if (!reminderAudio) {
-            reminderAudio = new Audio(chrome.runtime.getURL('beep.wav'));
+        const src = soundSrc('reminder');
+        if (!reminderAudio || reminderAudio._hrSrc !== src) {
+            if (reminderAudio) { try { reminderAudio.pause(); } catch (e) { /* ignore */ } }
+            reminderAudio = new Audio(src);
+            reminderAudio._hrSrc = src;
             reminderAudio.loop = true;
         }
+        reminderAudio.volume = settings.soundVolume;
         if (reminderAudio.paused) reminderAudio.play().catch(() => {});
     } catch (e) {
         // ігноруємо
@@ -1077,7 +1111,7 @@ async function scanMatches(force) {
                     const repeatMs = (rule.repeatMinutes || 0) * 60 * 1000;
                     if (!st.lastAlert || (repeatMs > 0 && now - st.lastAlert >= repeatMs)) {
                         st.lastAlert = now; stateDirty = true;
-                        fireAlert(subject || rule.query, { sound: rule.sound, notify: rule.notify });
+                        fireAlert(subject || rule.query, { sound: rule.sound, notify: rule.notify, url: elid ? location.origin + '/billmgr?startform=ticket.edit&elid=' + encodeURIComponent(elid) : '' });
                     }
                 }
             }
@@ -1100,7 +1134,7 @@ async function scanMatches(force) {
                             const repeatMs = settings.repeatMinutes * 60 * 1000;
                             if (!st.lastAlert || (repeatMs > 0 && now - st.lastAlert >= repeatMs)) {
                                 st.lastAlert = now; stateDirty = true;
-                                fireAlert(name, { sound: settings.soundEnabled, notify: true });
+                                fireAlert(name, { sound: settings.soundEnabled, notify: true, url: elid ? location.origin + '/billmgr?startform=ticket.edit&elid=' + encodeURIComponent(elid) : '' });
                             }
                         }
                     }
@@ -1467,6 +1501,7 @@ function init() {
         matchAlertState = loadedMatchState && typeof loadedMatchState === 'object' ? loadedMatchState : {};
         applyPanelTweaks();
         loadMyEmail();
+        loadCustomSounds();
         refresh();
         pingNewShared();
 
@@ -1498,6 +1533,8 @@ function init() {
                     refresh();
                 } else if (area === 'local' && changes.sbSession) {
                     loadMyEmail();
+                } else if (area === 'local' && changes.soundData) {
+                    loadCustomSounds();
                 }
             });
 

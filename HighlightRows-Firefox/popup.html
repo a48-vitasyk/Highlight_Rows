@@ -156,6 +156,48 @@
             <span class="hint">px</span>
         </div>
     </div>
+    <div class="card">
+        <div class="card-head">
+            <span class="card-icon"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg></span>
+            <h2 class="card-title">Звук і сповіщення</h2>
+        </div>
+        <div class="field row">
+            <label for="reminderSound">Звук HeartBeat:</label>
+            <select id="reminderSound">
+                <option value="beep">Beep</option>
+                <option value="ding">Ding</option>
+                <option value="double">Подвійний</option>
+                <option value="custom">Свій файл…</option>
+            </select>
+            <button type="button" class="small" id="testReminderSound" title="Прослухати">▶</button>
+            <input type="file" id="reminderSoundFile" accept="audio/*" style="max-width:130px">
+        </div>
+        <div class="field row">
+            <label for="alertSound">Звук тегів/блок.:</label>
+            <select id="alertSound">
+                <option value="beep">Beep</option>
+                <option value="ding">Ding</option>
+                <option value="double">Подвійний</option>
+                <option value="custom">Свій файл…</option>
+            </select>
+            <button type="button" class="small" id="testAlertSound" title="Прослухати">▶</button>
+            <input type="file" id="alertSoundFile" accept="audio/*" style="max-width:130px">
+        </div>
+        <div class="field row">
+            <label for="soundVolume">Гучність:</label>
+            <input type="range" id="soundVolume" min="0" max="100" step="5" style="flex:1">
+        </div>
+        <div class="field row">
+            <label for="notifyMode">Сповіщення:</label>
+            <select id="notifyMode">
+                <option value="stack">Накопичувати</option>
+                <option value="replace">Заміняти</option>
+            </select>
+            <label for="notifyMax">макс:</label>
+            <input type="number" id="notifyMax" min="1" max="5" step="1" style="width:50px">
+        </div>
+        <div class="hint">Свій файл — до 1 МБ; зберігається локально. Зміни застосовуються після «Зберегти».</div>
+    </div>
 </div>
 
 <div class="footer">
