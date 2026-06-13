@@ -861,6 +861,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
     if (changes.staleScanStatus) renderStaleStatus(changes.staleScanStatus.newValue);
     if (changes.matchScanStatus) renderMatchStatus(changes.matchScanStatus.newValue);
     if (changes.myTickets) renderMyTickets(changes.myTickets.newValue || []);
+    if (changes.snippets) renderSnippets();
 });
 
 $('refreshMatches').addEventListener('click', () => {
@@ -1007,12 +1008,28 @@ function snipMatchesSearch(s, q) {
     return [s.title, s.shortcut, s.body, s.bodyRu, s.bodyEn, s.category]
         .some((x) => (x || '').toLowerCase().includes(q));
 }
-function fillSnipCats(list) {
-    const dl = $('snipCatList');
-    if (!dl) return;
-    const cats = [...new Set(list.map((s) => (s.category || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
-    dl.innerHTML = '';
-    cats.forEach((c) => dl.appendChild(makeEl('option', { value: c })));
+let snipListCache = []; // останній прочитаний список шаблонів (для категорій)
+function getSnippetCategories() {
+    return [...new Set(snipListCache.map((s) => (s.category || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+}
+// Видалити категорію: прибрати її з усіх шаблонів, що її мають.
+function deleteCategory(name, onDone) {
+    const affected = snipListCache.filter((s) => (s.category || '').trim() === name && s.id);
+    const msg = affected.length
+        ? 'Видалити категорію «' + name + '»? Її буде прибрано з ' + affected.length + ' шаблон(ів).'
+        : 'Видалити категорію «' + name + '»?';
+    if (!confirm(msg)) return;
+    let left = affected.length;
+    if (!left) { onDone && onDone(); return; }
+    affected.forEach((s) => {
+        const snippet = { id: s.id, title: s.title, body: s.body, bodyRu: s.bodyRu, bodyEn: s.bodyEn, shortcut: s.shortcut, category: '' };
+        try {
+            chrome.runtime.sendMessage({ sb: 'snipUpdate', snippet }, () => {
+                void chrome.runtime.lastError;
+                if (--left <= 0) { renderSnippets(); onDone && onDone(); }
+            });
+        } catch (e) { if (--left <= 0) { renderSnippets(); onDone && onDone(); } }
+    });
 }
 function renderSnippets() {
     const box = $('snippetsList');
@@ -1024,7 +1041,7 @@ function renderSnippets() {
     }
     chrome.storage.local.get('snippets', (d) => {
         const all = (d && d.snippets) || [];
-        fillSnipCats(all);
+        snipListCache = all;
         box.innerHTML = '';
         if (!all.length) { box.appendChild(makeEl('div', { className: 'list-empty', textContent: 'Поки немає шаблонів' })); return; }
         const q = snipSearch.trim();
@@ -1047,6 +1064,52 @@ function renderSnippets() {
     });
 }
 if ($('snipSearch')) $('snipSearch').addEventListener('input', (e) => { snipSearch = e.target.value; renderSnippets(); });
+// Дропдаун вибору категорії в редакторі: вибір наявної / додати нову / видалити.
+function snipCatSelector(initial) {
+    const wrap = makeEl('div', { className: 'snip-cat' });
+    let value = (initial || '').trim();
+    const btn = makeEl('button', { type: 'button', className: 'snip-cat-btn' });
+    const menu = makeEl('div', { className: 'snip-cat-menu' });
+    menu.hidden = true;
+    const setLabel = () => { btn.textContent = (value || 'Категорія…') + ' ▾'; btn.classList.toggle('empty', !value); };
+    const opt = (name, label, isMuted) => {
+        const o = makeEl('div', { className: 'snip-cat-opt' + (name === value ? ' sel' : '') });
+        o.appendChild(makeEl('span', { className: 'snip-cat-opt-name' + (isMuted ? ' muted' : ''), textContent: label }));
+        o.querySelector('.snip-cat-opt-name').addEventListener('click', () => { value = name; setLabel(); menu.hidden = true; });
+        return o;
+    };
+    function buildMenu() {
+        menu.innerHTML = '';
+        menu.appendChild(opt('', '(без категорії)', true));
+        getSnippetCategories().forEach((c) => {
+            const o = opt(c, c, false);
+            const del = makeEl('button', { type: 'button', className: 'snip-cat-del', textContent: '×', title: 'Видалити категорію' });
+            del.addEventListener('click', (e) => { e.stopPropagation(); deleteCategory(c, () => { if (value === c) value = ''; setLabel(); buildMenu(); }); });
+            o.appendChild(del);
+            menu.appendChild(o);
+        });
+        const add = makeEl('div', { className: 'snip-cat-add' });
+        const inp = makeEl('input', { type: 'text', placeholder: 'Нова категорія' });
+        const addBtn = makeEl('button', { type: 'button', className: 'small', textContent: '+' });
+        const doAdd = () => { const v = inp.value.trim(); if (!v) return; value = v; setLabel(); menu.hidden = true; };
+        addBtn.addEventListener('click', doAdd);
+        inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); doAdd(); } });
+        add.appendChild(inp); add.appendChild(addBtn);
+        menu.appendChild(add);
+    }
+    btn.addEventListener('click', () => { if (menu.hidden) { buildMenu(); menu.hidden = false; } else menu.hidden = true; });
+    setLabel();
+    wrap.appendChild(btn);
+    wrap.appendChild(menu);
+    wrap.getValue = () => value;
+    return wrap;
+}
+// Закрити відкриті дропдауни категорій при кліку поза ними.
+document.addEventListener('click', (e) => {
+    document.querySelectorAll('.snip-cat-menu:not([hidden])').forEach((m) => {
+        if (!m.parentNode.contains(e.target)) m.hidden = true;
+    });
+});
 function snipDelete(id, onDone) {
     if (!id) { onDone && onDone(); return; }
     try { chrome.runtime.sendMessage({ sb: 'snipDel', id }, () => { void chrome.runtime.lastError; renderSnippets(); }); } catch (e) { /* ignore */ }
@@ -1082,9 +1145,7 @@ function snipEditRow(s) {
     title.value = s.title || '';
     const sc = makeEl('input', { type: 'text', className: 'snip-sc-input', placeholder: 'скор.', title: 'Скорочення: введіть у полі відповіді й натисніть Tab' });
     sc.value = s.shortcut || '';
-    const cat = makeEl('input', { type: 'text', className: 'snip-cat-input', placeholder: 'категорія', title: 'Категорія (для групування)' });
-    cat.setAttribute('list', 'snipCatList');
-    cat.value = s.category || '';
+    const cat = snipCatSelector(s.category || '');
     head.appendChild(title);
     head.appendChild(sc);
     head.appendChild(cat);
@@ -1112,7 +1173,7 @@ function snipEditRow(s) {
     const del = makeEl('button', { type: 'button', className: 'small remove', textContent: '×', title: s.id ? 'Видалити' : 'Скасувати' });
     save.addEventListener('click', () => {
         bodies[curLang] = body.value;
-        const snippet = { id: row.dataset.id || undefined, title: title.value.trim(), body: bodies.uk, bodyRu: bodies.ru.trim(), bodyEn: bodies.en.trim(), shortcut: sc.value.trim(), category: cat.value.trim() };
+        const snippet = { id: row.dataset.id || undefined, title: title.value.trim(), body: bodies.uk, bodyRu: bodies.ru.trim(), bodyEn: bodies.en.trim(), shortcut: sc.value.trim(), category: cat.getValue() };
         if (!snippet.title && !snippet.body) return;
         const action = row.dataset.id ? 'snipUpdate' : 'snipAdd';
         $('status').textContent = 'Збереження…';
