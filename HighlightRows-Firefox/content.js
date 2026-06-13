@@ -1048,8 +1048,11 @@ let fmtBarTa = null;
 function positionFmtBar(ta) {
     const r = ta.getBoundingClientRect();
     fmtBar.style.left = Math.round(r.left) + 'px';
-    fmtBar.style.width = Math.round(r.width) + 'px';
-    fmtBar.style.top = Math.round(r.bottom - 32) + 'px'; // у нижньому відступі поля
+    fmtBar.style.top = Math.round(r.bottom - 32) + 'px'; // у нижньому відступі поля (ліворуч, щоб не закривати хват ресайзу)
+}
+function updateFmtBar(ta) {
+    if (ta.selectionStart != null && ta.selectionStart !== ta.selectionEnd) showFmtBar(ta);
+    else hideFmtBar();
 }
 function ensureFmtBar() {
     if (fmtBar) return fmtBar;
@@ -1082,7 +1085,10 @@ function injectSnippetButton() {
     ta.dataset.hrSnip = '1';
     // Місце знизу під панель форматування (щоб не перекривала текст).
     ta.style.setProperty('padding-bottom', '36px', 'important');
-    ta.addEventListener('focus', () => showFmtBar(ta));
+    // Панель зʼявляється лише коли виділено текст.
+    ta.addEventListener('select', () => updateFmtBar(ta));
+    ta.addEventListener('keyup', () => updateFmtBar(ta));
+    ta.addEventListener('mouseup', () => updateFmtBar(ta));
     ta.addEventListener('blur', () => setTimeout(hideFmtBar, 200));
     ta.addEventListener('input', () => { if (fmtBar && !fmtBar.hidden) positionFmtBar(ta); });
     // Інлайн-автодоповнення: під час набору показуємо список збігів.
@@ -1108,8 +1114,6 @@ function injectSnippetButton() {
     });
     ta.addEventListener('blur', () => setTimeout(hideAc, 150));
     ta.addEventListener('scroll', hideAc);
-    // Якщо поле вже у фокусі під час інʼєкції — одразу показати панель.
-    if (document.activeElement === ta) showFmtBar(ta);
 }
 
 function refresh() {

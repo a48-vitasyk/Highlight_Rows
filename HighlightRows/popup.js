@@ -1196,8 +1196,11 @@ let snipFmtTa = null;
 function posSnipFmtBar(ta) {
     const r = ta.getBoundingClientRect();
     snipFmtBar.style.left = Math.round(r.left) + 'px';
-    snipFmtBar.style.width = Math.round(r.width) + 'px';
-    snipFmtBar.style.top = Math.round(r.bottom - 30) + 'px';
+    snipFmtBar.style.top = Math.round(r.bottom - 30) + 'px'; // ліворуч, щоб не закривати хват ресайзу
+}
+function updateSnipFmtBar(ta) {
+    if (ta.selectionStart != null && ta.selectionStart !== ta.selectionEnd) showSnipFmtBar(ta);
+    else hideSnipFmtBar();
 }
 function ensureSnipFmtBar() {
     if (snipFmtBar) return snipFmtBar;
@@ -1279,7 +1282,11 @@ function snipEditRow(s) {
     langs.appendChild(cat); // категорія — на одному рівні з вибором мови (праворуч)
     body.value = bodies.uk;
     body.style.paddingBottom = '34px'; // місце під спливаючу панель форматування
-    body.addEventListener('focus', () => { lastSnipBody = body; showSnipFmtBar(body); });
+    body.addEventListener('focus', () => { lastSnipBody = body; });
+    // Панель зʼявляється лише коли виділено текст.
+    body.addEventListener('select', () => updateSnipFmtBar(body));
+    body.addEventListener('keyup', () => updateSnipFmtBar(body));
+    body.addEventListener('mouseup', () => updateSnipFmtBar(body));
     body.addEventListener('blur', () => setTimeout(() => { if (snipFmtTa === body) hideSnipFmtBar(); }, 200));
     body.addEventListener('input', () => { bodies[curLang] = body.value; });
     body.addEventListener('keydown', (e) => {
