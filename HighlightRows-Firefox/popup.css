@@ -205,6 +205,8 @@ button.small, .btn {
     border: 1px solid var(--border); border-radius: var(--radius-sm);
 }
 button.small:hover, .btn:hover { border-color: var(--accent); color: var(--accent); }
+button.icon-btn { display: inline-flex; align-items: center; justify-content: center; padding: 5px 8px; }
+button.icon-btn svg { display: block; }
 button.file-btn { white-space: nowrap; }
 .snip-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-start; margin-bottom: 8px; }
 .snip-head { display: flex; gap: 6px; flex-basis: 100%; }
