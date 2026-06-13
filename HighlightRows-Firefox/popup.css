@@ -207,7 +207,12 @@ button.file-btn { white-space: nowrap; }
 .snip-head { display: flex; gap: 6px; flex-basis: 100%; }
 .snip-title { flex: 1; min-width: 120px; }
 .snip-sc-input { width: 70px; flex: none; text-align: center; }
-.snip-fmt { display: flex; gap: 3px; flex-basis: 100%; margin-bottom: 4px; }
+.snip-fmt-bar {
+    position: fixed; z-index: 50; box-sizing: border-box;
+    display: flex; gap: 3px; padding: 4px 6px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 0 0 var(--radius-sm) var(--radius-sm); box-shadow: var(--shadow-lg, 0 6px 20px rgba(0,0,0,.18));
+}
 .snip-fmt-btn {
     min-width: 26px; padding: 3px 6px; cursor: pointer;
     background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
