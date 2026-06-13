@@ -1081,7 +1081,9 @@ function snipCatSelector(initial) {
     function buildMenu() {
         menu.innerHTML = '';
         menu.appendChild(opt('', '(без категорії)', true));
-        getSnippetCategories().forEach((c) => {
+        // показуємо збережені категорії + поточну (щойно введену, ще не збережену).
+        const cats = [...new Set([...(value ? [value] : []), ...getSnippetCategories()])].sort((a, b) => a.localeCompare(b));
+        cats.forEach((c) => {
             const o = opt(c, c, false);
             const del = makeEl('button', { type: 'button', className: 'snip-cat-del', textContent: '×', title: 'Видалити категорію' });
             del.addEventListener('click', (e) => { e.stopPropagation(); deleteCategory(c, () => { if (value === c) value = ''; setLabel(); buildMenu(); }); });
@@ -1148,7 +1150,6 @@ function snipEditRow(s) {
     const cat = snipCatSelector(s.category || '');
     head.appendChild(title);
     head.appendChild(sc);
-    head.appendChild(cat);
     // Мовні версії: UA (основна) / RU / EN. Порожній переклад → підставиться UA.
     const bodies = { uk: s.body || '', ru: s.bodyRu || '', en: s.bodyEn || '' };
     let curLang = 'uk';
@@ -1166,6 +1167,7 @@ function snipEditRow(s) {
         });
         langs.appendChild(b);
     });
+    langs.appendChild(cat); // категорія — на одному рівні з вибором мови (праворуч)
     body.value = bodies.uk;
     body.addEventListener('focus', () => { lastSnipBody = body; });
     body.addEventListener('input', () => { bodies[curLang] = body.value; });
