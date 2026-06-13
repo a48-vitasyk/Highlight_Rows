@@ -211,7 +211,8 @@ button.file-btn { white-space: nowrap; }
 .snip-view { flex-wrap: nowrap; align-items: center; }
 .snip-sc { flex: none; font: 11px/1 ui-monospace, monospace; background: var(--accent); color: #fff; border-radius: 4px; padding: 2px 5px; }
 .snip-langs { display: flex; align-items: center; gap: 5px; flex-basis: 100%; margin-bottom: 4px; }
-.snip-langs .snip-cat { margin-left: auto; }
+.snip-langs .snip-cat { flex: 1; }
+.snip-langs .snip-cat-btn { max-width: none; width: 100%; text-align: left; }
 .snip-lang { font: 700 12px/1 system-ui; padding: 6px 12px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); border-radius: var(--radius-sm); cursor: pointer; }
 .snip-lang.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 .snip-langs-have { flex: none; font: 600 9px/1 system-ui; color: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 2px 4px; }
