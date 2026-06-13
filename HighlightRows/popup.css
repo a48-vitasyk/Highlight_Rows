@@ -207,6 +207,7 @@ button.file-btn { white-space: nowrap; }
 .snip-head { display: flex; gap: 6px; flex-basis: 100%; }
 .snip-title { flex: 1; min-width: 120px; }
 .snip-sc-input { width: 70px; flex: none; text-align: center; }
+.snip-fmt-bar[hidden] { display: none; }
 .snip-fmt-bar {
     position: fixed; z-index: 50; box-sizing: border-box;
     display: flex; gap: 3px; padding: 4px 6px;
