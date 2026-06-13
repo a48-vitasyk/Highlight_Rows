@@ -1075,6 +1075,12 @@ function ensureFmtBar() {
     document.body.appendChild(fmtBar);
     window.addEventListener('scroll', () => { if (!fmtBar.hidden && fmtBarTa) positionFmtBar(fmtBarTa); }, true);
     window.addEventListener('resize', () => { if (!fmtBar.hidden && fmtBarTa) positionFmtBar(fmtBarTa); });
+    // Надійне відстеження виділення: панель видно лише поки воно є.
+    document.addEventListener('selectionchange', () => {
+        const ae = document.activeElement;
+        if (ae && ae.classList && ae.classList.contains('ispui-input__textarea') && ae.selectionStart !== ae.selectionEnd) updateFmtBar(ae);
+        else hideFmtBar();
+    });
     return fmtBar;
 }
 function showFmtBar(ta) { ensureFmtBar(); fmtBarTa = ta; fmtBar.hidden = false; positionFmtBar(ta); }
@@ -1111,6 +1117,7 @@ function injectSnippetButton() {
             if (k === 'b') { e.preventDefault(); hrFmtWrap(ta, HR_FMT.bold[0], HR_FMT.bold[1]); }
             else if (k === 'i') { e.preventDefault(); hrFmtWrap(ta, HR_FMT.italic[0], HR_FMT.italic[1]); }
         }
+        if (e.key === 'Escape') hideFmtBar();
     });
     ta.addEventListener('blur', () => setTimeout(hideAc, 150));
     ta.addEventListener('scroll', hideAc);
