@@ -1006,7 +1006,7 @@ function addSnippetRow(s) {
     if (s.id) row.dataset.id = s.id;
     const title = makeEl('input', { type: 'text', className: 'snip-title', placeholder: 'Назва' });
     title.value = s.title || '';
-    const body = makeEl('textarea', { className: 'snip-body', placeholder: 'Текст шаблону… ({ticket}, {ip})' });
+    const body = makeEl('textarea', { className: 'snip-body', placeholder: 'Текст шаблону… ({ticket} {ip} {os} {start} {expire} {traffic} {service})' });
     body.value = s.body || '';
     const save = makeEl('button', { type: 'button', className: 'small', textContent: '💾', title: 'Зберегти' });
     const del = makeEl('button', { type: 'button', className: 'small remove', textContent: '×', title: 'Видалити' });

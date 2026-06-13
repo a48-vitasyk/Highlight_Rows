@@ -753,19 +753,42 @@ function applyPanelTweaks() {
 }
 
 // --- Шаблони відповідей: кнопка «Шаблони ▾» біля поля відповіді ------------
-function readSummaryItemValue(label) {
+function readSummaryItemValue(labels) {
+    const arr = Array.isArray(labels) ? labels : [labels];
     for (const lbl of document.querySelectorAll('.isp-item-label')) {
-        if ((lbl.textContent || '').trim() === label) {
+        const t = (lbl.textContent || '').trim();
+        if (arr.indexOf(t) !== -1) {
             const v = lbl.parentElement && lbl.parentElement.querySelector('.isp-item-value');
             if (v) return (v.textContent || '').trim();
         }
     }
     return '';
 }
+// Значення підстановок: ОС/IP/дата відкриття — з DOM панелі; діє-до/трафік/id
+// послуги — із завантажених даних послуги (trafficData; якщо є).
+function snippetVars() {
+    const v = {
+        ticket: readTicketId() || '',
+        ip: readSummaryItemValue(['IP адрес', 'IP адреса', 'IP-адреса']),
+        os: readSummaryItemValue(['Операционная система', 'Операційна система', 'ОС']),
+        start: readSummaryItemValue(['Дата открытия', 'Дата відкриття']),
+        expire: '', traffic: '', service: '',
+    };
+    if (trafficData && trafficData.service) {
+        if (!v.os) v.os = trafficData.service.os || '';
+        v.expire = trafficData.service.expiredate || '';
+    }
+    if (trafficData) {
+        if (trafficData.used != null && trafficData.paid != null && !trafficData.notFound && !trafficData.none) {
+            v.traffic = formatTB(trafficData.used) + ' / ' + formatTB(trafficData.paid) + ' TB';
+        }
+        v.service = trafficData.id || '';
+    }
+    return v;
+}
 function fillSnippet(text) {
-    return String(text || '')
-        .replace(/\{ticket\}/g, readTicketId() || '')
-        .replace(/\{ip\}/g, readSummaryItemValue('IP адрес') || '');
+    const v = snippetVars();
+    return String(text || '').replace(/\{(ticket|ip|os|start|expire|traffic|service)\}/g, (m, k) => v[k] || '');
 }
 function insertIntoReply(ta, text) {
     const start = ta.selectionStart != null ? ta.selectionStart : ta.value.length;
@@ -1504,6 +1527,7 @@ async function loadTraffic(force) {
             trafficData = match
                 ? {
                     key,
+                    id: fieldVal(match.id),
                     used: fieldVal(match.used_traffic),
                     paid: fieldVal(match.paid_traffic),
                     service: buildService(match),
