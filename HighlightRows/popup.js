@@ -14,6 +14,11 @@ const DEFAULT_SETTINGS = {
     reminders: [],
     snoozeMinutes: 10,
     escalateMinutes: 10,
+    reminderSound: 'beep',
+    alertSound: 'beep',
+    soundVolume: 1,
+    notifyMode: 'stack',
+    notifyMax: 3,
     staleEnabled: false,
     staleHours: 4,
     trafficEnabled: false,
@@ -331,6 +336,12 @@ function fillForm(s, reminderState) {
     $('reminderColor').value = s.reminderColor || DEFAULT_SETTINGS.reminderColor;
     $('snoozeMinutes').value = s.snoozeMinutes || DEFAULT_SETTINGS.snoozeMinutes;
     $('escalateMinutes').value = s.escalateMinutes || DEFAULT_SETTINGS.escalateMinutes;
+    $('reminderSound').value = s.reminderSound || DEFAULT_SETTINGS.reminderSound;
+    $('alertSound').value = s.alertSound || DEFAULT_SETTINGS.alertSound;
+    $('soundVolume').value = Math.round((s.soundVolume != null ? s.soundVolume : 1) * 100);
+    $('notifyMode').value = s.notifyMode === 'replace' ? 'replace' : 'stack';
+    $('notifyMax').value = s.notifyMax || DEFAULT_SETTINGS.notifyMax;
+    $('notifyMax').disabled = $('notifyMode').value === 'replace';
 
     $('tagRules').innerHTML = '';
     (s.tagRules || []).forEach(addTagRuleRow);
@@ -383,6 +394,11 @@ function readForm() {
         reminderColor: $('reminderColor').value,
         snoozeMinutes: Number($('snoozeMinutes').value) > 0 ? Number($('snoozeMinutes').value) : DEFAULT_SETTINGS.snoozeMinutes,
         escalateMinutes: Number($('escalateMinutes').value) > 0 ? Number($('escalateMinutes').value) : DEFAULT_SETTINGS.escalateMinutes,
+        reminderSound: $('reminderSound').value || 'beep',
+        alertSound: $('alertSound').value || 'beep',
+        soundVolume: Math.min(1, Math.max(0, (Number($('soundVolume').value) || 100) / 100)),
+        notifyMode: $('notifyMode').value === 'replace' ? 'replace' : 'stack',
+        notifyMax: Math.min(5, Math.max(1, Math.round(Number($('notifyMax').value) || DEFAULT_SETTINGS.notifyMax))),
         reminders,
     };
 }
@@ -866,3 +882,45 @@ $('save').addEventListener('click', async () => {
         setTimeout(() => { status.textContent = ''; }, 1800);
     });
 });
+
+// --- Звук: тест + завантаження свого + перемикач режиму сповіщень ---
+const SOUND_BUILTIN = { beep: 'beep.wav', ding: 'sounds/ding.wav', double: 'sounds/double.wav' };
+function popupPlaySound(which) {
+    const sel = $(which === 'reminder' ? 'reminderSound' : 'alertSound').value;
+    const vol = Math.min(1, Math.max(0, (Number($('soundVolume').value) || 100) / 100));
+    const play = (src) => { try { const a = new Audio(src); a.volume = vol; a.play().catch(() => {}); } catch (e) { /* ignore */ } };
+    if (sel === 'custom') {
+        chrome.storage.local.get('soundData', (d) => { const sd = (d && d.soundData) || {}; play(sd[which] || chrome.runtime.getURL('beep.wav')); });
+    } else {
+        play(chrome.runtime.getURL(SOUND_BUILTIN[sel] || 'beep.wav'));
+    }
+}
+if ($('testReminderSound')) $('testReminderSound').addEventListener('click', () => popupPlaySound('reminder'));
+if ($('testAlertSound')) $('testAlertSound').addEventListener('click', () => popupPlaySound('alert'));
+
+function wireSoundUpload(which, inputId, selectId) {
+    const inp = $(inputId);
+    if (!inp) return;
+    inp.addEventListener('change', () => {
+        const f = inp.files && inp.files[0];
+        if (!f) return;
+        if (f.size > 1024 * 1024) { $('status').textContent = 'Файл завеликий (макс 1 МБ)'; inp.value = ''; return; }
+        const fr = new FileReader();
+        fr.onload = () => {
+            chrome.storage.local.get('soundData', (d) => {
+                const sd = (d && d.soundData) || {};
+                sd[which] = fr.result;
+                chrome.storage.local.set({ soundData: sd }, () => {
+                    $(selectId).value = 'custom';
+                    $('status').textContent = 'Звук завантажено — натисніть «Зберегти»';
+                    setTimeout(() => { $('status').textContent = ''; }, 2500);
+                });
+            });
+        };
+        fr.readAsDataURL(f);
+    });
+}
+wireSoundUpload('reminder', 'reminderSoundFile', 'reminderSound');
+wireSoundUpload('alert', 'alertSoundFile', 'alertSound');
+
+if ($('notifyMode')) $('notifyMode').addEventListener('change', () => { $('notifyMax').disabled = $('notifyMode').value === 'replace'; });

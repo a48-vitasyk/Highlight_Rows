@@ -9,29 +9,51 @@
 // підключає його окремо через background.scripts, тож там importScripts немає.
 if (typeof importScripts === 'function') { try { importScripts('sb.js'); } catch (e) { /* ignore */ } }
 
-function showNotification(id, title, message) {
-    const options = { type: 'basic', iconUrl: 'images/icon48.png', title, message };
-    chrome.notifications.create(id, options);
+const notifUrls = {};   // id → url (клік по сповіщенню відкриває тікет)
+let redIds = [];        // id накопичених «redAlert» (для ліміту notifyMax)
+
+function getSyncSettings() {
+    return new Promise((res) => {
+        try { chrome.storage.sync.get('settings', (d) => res((d && d.settings) || {})); }
+        catch (e) { res({}); }
+    });
+}
+
+function showNotification(id, title, message, url) {
+    try { chrome.notifications.create(id, { type: 'basic', iconUrl: 'images/icon48.png', title, message }); }
+    catch (e) { return; }
+    if (url) notifUrls[id] = url;
 }
 
 chrome.runtime.onMessage.addListener((request) => {
     if (!request) return;
 
     if (request.action === 'redAlert') {
-        // Унікальний id щоразу — сповіщення різних рядків накопичуються стосом.
-        showNotification(
-            'redAlert:' + (request.name || '') + ':' + Date.now(),
-            'Увага!',
-            `Рядок з «${request.name}» виділено червоним.`
-        );
+        getSyncSettings().then((s) => {
+            const stack = (s.notifyMode || 'stack') !== 'replace';
+            const max = Math.min(5, Math.max(1, Math.round(Number(s.notifyMax) || 3)));
+            const id = stack
+                ? ('redAlert:' + Date.now() + ':' + Math.random().toString(36).slice(2, 7))
+                : 'redAlert'; // сталий id → одне сповіщення оновлюється
+            showNotification(id, 'Увага!', `Рядок з «${request.name}» виділено червоним.`, request.url || '');
+            if (stack) {
+                redIds = redIds.filter((x) => x !== id);
+                redIds.push(id);
+                while (redIds.length > max) {
+                    const old = redIds.shift();
+                    try { chrome.notifications.clear(old); } catch (e) { /* ignore */ }
+                    delete notifUrls[old];
+                }
+            }
+        });
     } else if (request.action === 'reminderAlert') {
         const note = request.note ? ` — ${request.note}` : '';
-        // Стабільний id на тікет — повторне нагадування замінює попереднє,
-        // а не засмічує центр сповіщень новим стосом щохвилини.
+        // Стабільний id на тікет — повторне нагадування замінює попереднє.
         showNotification(
             'reminderAlarm:' + (request.ticketId || ''),
             'Нагадування по тікету',
-            `Тікет ${request.ticketId}${note}`
+            `Тікет ${request.ticketId}${note}`,
+            request.url || ''
         );
     } else if (request.action === 'setBadge') {
         const n = Number(request.count) || 0;
@@ -41,6 +63,16 @@ chrome.runtime.onMessage.addListener((request) => {
         } catch (e) { /* ignore */ }
     }
 });
+
+// Клік по сповіщенню → відкрити тікет (якщо знаємо url).
+if (chrome.notifications && chrome.notifications.onClicked) {
+    chrome.notifications.onClicked.addListener((id) => {
+        const url = notifUrls[id];
+        if (url) { try { chrome.tabs.create({ url }); } catch (e) { /* ignore */ } }
+        try { chrome.notifications.clear(id); } catch (e) { /* ignore */ }
+        delete notifUrls[id];
+    });
+}
 
 // Синхронізація спільних будильників (виклики від content.js / popup).
 chrome.runtime.onMessage.addListener((req, sender, sendResponse) => {
