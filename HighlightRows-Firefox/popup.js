@@ -190,6 +190,8 @@ const IC = {
     userOff16: svgIcon('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="17" y1="8" x2="22" y2="13"/><line x1="22" y1="8" x2="17" y2="13"/>'),
     logout: svgIcon('<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>'),
     bookmark: svgIcon('<path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>', 14),
+    save: svgIcon('<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>', 15),
+    close: svgIcon('<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>', 15),
 };
 
 // Кнопка-тоглер: іконка показує стан (swap SVG), без заливки.
@@ -1036,9 +1038,21 @@ function deleteCategory(name, onDone) {
         } catch (e) { if (--left <= 0) { renderSnippets(); onDone && onDone(); } }
     });
 }
+let curEditor = null; // активний рядок редагування { row, snippet } (один за раз)
+function clearEditorActions() { const a = $('snipActions'); if (a) a.innerHTML = ''; }
+function closeEditor() {
+    if (curEditor) {
+        const { row, snippet } = curEditor;
+        if (snippet && snippet.id) { try { row.replaceWith(snipViewRow(snippet)); } catch (e) { /* ignore */ } }
+        else { try { row.remove(); } catch (e) { /* ignore */ } }
+        curEditor = null;
+    }
+    clearEditorActions();
+}
 function renderSnippets() {
     const box = $('snippetsList');
     if (!box) return;
+    curEditor = null; clearEditorActions(); // список перебудовується — редактор закривається
     box.innerHTML = '';
     if (!isLoggedIn) {
         box.appendChild(makeEl('div', { className: 'list-empty', textContent: 'Увійдіть через Google, щоб керувати шаблонами' }));
@@ -1155,6 +1169,7 @@ function snipViewRow(s) {
 // Рядок редагування: назва + текст + 💾 зберегти + × (видалити/скасувати).
 function snipEditRow(s) {
     s = s || { title: '', body: '' };
+    closeEditor(); // лише один редактор одночасно
     const row = makeEl('div', { className: 'snip-row snip-edit' });
     if (s.id) row.dataset.id = s.id;
     const head = makeEl('div', { className: 'snip-head' });
@@ -1194,9 +1209,7 @@ function snipEditRow(s) {
                 chrome.runtime.sendMessage({ gt: 'translate', q: bodies.uk, target, source: 'uk' }, (resp) => {
                     void chrome.runtime.lastError;
                     if (!resp || !resp.ok) {
-                        $('status').textContent = (resp && resp.error === 'no-key')
-                            ? 'Додайте Google Translate API-ключ нижче'
-                            : 'Помилка перекладу' + ((resp && resp.error) ? ': ' + resp.error : '');
+                        $('status').textContent = 'Помилка перекладу' + ((resp && resp.error) ? ': ' + resp.error : '');
                         return;
                     }
                     bodies[target] = resp.text;
@@ -1212,8 +1225,8 @@ function snipEditRow(s) {
     body.value = bodies.uk;
     body.addEventListener('focus', () => { lastSnipBody = body; });
     body.addEventListener('input', () => { bodies[curLang] = body.value; });
-    const save = makeEl('button', { type: 'button', className: 'small', textContent: '💾', title: 'Зберегти' });
-    const del = makeEl('button', { type: 'button', className: 'small remove', textContent: '×', title: s.id ? 'Видалити' : 'Скасувати' });
+    const save = makeEl('button', { type: 'button', className: 'small snip-save', title: 'Зберегти', innerHTML: IC.save });
+    const del = makeEl('button', { type: 'button', className: 'small remove', title: s.id ? 'Видалити' : 'Скасувати', innerHTML: IC.close });
     save.addEventListener('click', () => {
         bodies[curLang] = body.value;
         const snippet = { id: row.dataset.id || undefined, title: title.value.trim(), body: bodies.uk, bodyRu: bodies.ru.trim(), bodyEn: bodies.en.trim(), shortcut: sc.value.trim(), category: cat.getValue() };
@@ -1236,15 +1249,16 @@ function snipEditRow(s) {
         } catch (e) { /* ignore */ }
     });
     del.addEventListener('click', () => {
-        if (row.dataset.id) snipDelete(row.dataset.id);     // наявний — видалити в базі
-        else if (s && s.id) row.replaceWith(snipViewRow(s)); // (не трапляється) повернути перегляд
-        else row.remove();                                   // новий — просто прибрати
+        if (row.dataset.id) snipDelete(row.dataset.id); // наявний — видалити в базі
+        else closeEditor();                             // новий — просто прибрати
     });
     row.appendChild(head);
     row.appendChild(langs);
     row.appendChild(body);
-    row.appendChild(save);
-    row.appendChild(del);
+    // Кнопки зберегти/закрити — у спільному футері (праворуч), лише поки редагуємо.
+    const acts = $('snipActions');
+    if (acts) { acts.innerHTML = ''; acts.appendChild(save); acts.appendChild(del); }
+    curEditor = { row, snippet: s };
     return row;
 }
 if ($('addSnippet')) $('addSnippet').addEventListener('click', () => {
@@ -1268,11 +1282,6 @@ document.querySelectorAll('#snipVars .chip-var').forEach((chip) => {
         insertAtCursor(el, chip.dataset.token);
     });
 });
-// Google Translate API-ключ (локально): підвантажити в поле + зберігати при зміні.
-if ($('gtApiKey')) {
-    chrome.storage.local.get('gtApiKey', (d) => { $('gtApiKey').value = (d && d.gtApiKey) || ''; });
-    $('gtApiKey').addEventListener('change', (e) => { try { chrome.storage.local.set({ gtApiKey: e.target.value.trim() }); } catch (err) { /* ignore */ } });
-}
 // Початковий підтяг спільних шаблонів і категорій (оновити дзеркало) + рендер.
 chrome.storage.local.get('snippetCats', (d) => { snipCatsCache = (d && d.snippetCats) || []; });
 try { chrome.runtime.sendMessage({ sb: 'snipPull' }, () => { void chrome.runtime.lastError; renderSnippets(); }); } catch (e) { /* ignore */ }

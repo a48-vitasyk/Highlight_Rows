@@ -168,31 +168,13 @@ chrome.runtime.onMessage.addListener((req, sender, sendResponse) => {
             const target = String(req.target || '');
             const source = req.source || 'uk';
             if (!q.trim() || !target) { sendResponse({ ok: true, text: '' }); return; }
-            const key = await new Promise((res) => {
-                try { chrome.storage.local.get('gtApiKey', (d) => res((d && d.gtApiKey) || '')); }
-                catch (e) { res(''); }
-            });
-            if (key) {
-                // Офіційний Cloud Translation API (за наявності ключа).
-                const url = 'https://translation.googleapis.com/language/translate/v2?key=' + encodeURIComponent(key);
-                const resp = await fetch(url, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ q, target, source, format: 'text' }),
-                });
-                const data = await resp.json().catch(() => null);
-                if (!resp.ok) { sendResponse({ ok: false, error: (data && data.error && data.error.message) || ('HTTP ' + resp.status) }); return; }
-                const text = data && data.data && data.data.translations && data.data.translations[0] && data.data.translations[0].translatedText;
-                sendResponse({ ok: true, text: text || '' });
-            } else {
-                // Безкоштовний неофіційний ендпоінт (ключ не потрібен).
-                const url = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=' + encodeURIComponent(source) + '&tl=' + encodeURIComponent(target) + '&dt=t&q=' + encodeURIComponent(q);
-                const resp = await fetch(url);
-                if (!resp.ok) { sendResponse({ ok: false, error: 'HTTP ' + resp.status }); return; }
-                const data = await resp.json().catch(() => null);
-                const text = (data && Array.isArray(data[0])) ? data[0].map((s) => (s && s[0]) || '').join('') : '';
-                sendResponse({ ok: true, text });
-            }
+            // Безкоштовний неофіційний ендпоінт Google Translate (без ключа).
+            const url = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=' + encodeURIComponent(source) + '&tl=' + encodeURIComponent(target) + '&dt=t&q=' + encodeURIComponent(q);
+            const resp = await fetch(url);
+            if (!resp.ok) { sendResponse({ ok: false, error: 'HTTP ' + resp.status }); return; }
+            const data = await resp.json().catch(() => null);
+            const text = (data && Array.isArray(data[0])) ? data[0].map((s) => (s && s[0]) || '').join('') : '';
+            sendResponse({ ok: true, text });
         } catch (e) {
             sendResponse({ ok: false, error: String(e) });
         }
