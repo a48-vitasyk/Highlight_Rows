@@ -183,6 +183,8 @@ button.file-btn { white-space: nowrap; }
 .snip-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-start; margin-bottom: 8px; }
 .snip-title { flex: 1; min-width: 120px; }
 .snip-body { flex-basis: 100%; min-height: 46px; resize: vertical; font: inherit; }
+.snip-view { flex-wrap: nowrap; align-items: center; }
+.snip-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .snip-vars { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin: 4px 0 6px; }
 .chip-var {
     border: 1px solid var(--border); background: var(--surface); color: var(--accent);
