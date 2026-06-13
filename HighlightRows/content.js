@@ -69,6 +69,7 @@ const DEFAULT_SETTINGS = {
     soundVolume: 1,         // 0..1
     notifyMode: 'stack',    // replace | stack
     notifyMax: 3,           // 1..5 — макс. накопичених сповіщень
+    replyWatch: false,      // сигнал, коли в черзі зʼявляється нове повідомлення клієнта (DOM)
     // «без відповіді понад N год» — список у popup
     staleEnabled: false, // вимкнено за замовч.: скан відкриває тікети й гасить позначку нового повідомлення
     staleHours: 4,
@@ -85,6 +86,10 @@ const DEFAULT_SETTINGS = {
 let settings = { ...DEFAULT_SETTINGS };
 let rowTimers = {};       // { [key]: { firstSeen, lastAlert } } — для blocked та tag-алертів
 let reminderState = {};   // { [reminderId]: { mutedDate: 'Y-M-D' } } — пише popup
+let repliedSeen = null;   // Set тікетів із новим повідомленням клієнта (стеження з DOM)
+function rowHasNewMsg(row) {
+    return !!row.querySelector('[class*="newmsg"], use[href*="newmsg"], use[*|href*="newmsg"]');
+}
 let myEmail = '';         // email поточної сесії (для маршрутизації дзвінка shared HeartBeat)
 function loadMyEmail() {
     try {
@@ -187,6 +192,7 @@ function normalizeSettings(raw) {
     if (!(s.soundVolume >= 0 && s.soundVolume <= 1)) s.soundVolume = DEFAULT_SETTINGS.soundVolume;
     s.notifyMode = s.notifyMode === 'replace' ? 'replace' : 'stack';
     s.notifyMax = Math.min(5, Math.max(1, Math.round(Number(s.notifyMax) || DEFAULT_SETTINGS.notifyMax)));
+    s.replyWatch = !!s.replyWatch;
     s.reminders = (Array.isArray(s.reminders) ? s.reminders : [])
         .map((r) => ({
             id: r.id || genId(),
@@ -858,6 +864,7 @@ function refresh() {
     const applied = new Set();
     const matchedTimerKeys = new Set();
     const visible = new Set();
+    const newMsgNow = new Set();
     let timersDirty = false;
 
     // Час-залежні будильники рахуються незалежно від наявності рядка.
@@ -868,6 +875,7 @@ function refresh() {
         const subject = getCellText(row, SUBJECT_SELECTOR);
         const ticket = getCellText(row, TICKET_SELECTOR);
         if (ticket) visible.add(ticket); // для API-скану: цей тікет зараз видно
+        if (settings.replyWatch && ticket && rowHasNewMsg(row)) newMsgNow.add(ticket);
 
         // 1) Правило за тегом (найнижчий пріоритет).
         const tag = tagRuleForRow(subject);
@@ -930,6 +938,19 @@ function refresh() {
         if (!matchedTimerKeys.has(key)) { delete rowTimers[key]; timersDirty = true; }
     }
     if (timersDirty) persistRowTimers();
+
+    // Стеження за відповіддю клієнта (DOM): сигнал, коли в черзі зʼявився новий
+    // маркер повідомлення. Перший прохід лише засіває (без сигналу). Вимкнено → скид.
+    if (settings.replyWatch) {
+        if (repliedSeen) {
+            newMsgNow.forEach((t) => {
+                if (!repliedSeen.has(t)) fireAlert('Відповідь клієнта: #' + t, { sound: settings.soundEnabled, notify: true });
+            });
+        }
+        repliedSeen = newMsgNow;
+    } else {
+        repliedSeen = null;
+    }
 
     // Безперервний звук + банер + повторювані сповіщення будильників.
     if (activeReminders.length) {
