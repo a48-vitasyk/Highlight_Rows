@@ -1048,11 +1048,12 @@ function closeEditor() {
         curEditor = null;
     }
     clearEditorActions();
+    hideSnipFmtBar();
 }
 function renderSnippets() {
     const box = $('snippetsList');
     if (!box) return;
-    curEditor = null; clearEditorActions(); // список перебудовується — редактор закривається
+    curEditor = null; clearEditorActions(); hideSnipFmtBar(); // список перебудовується — редактор закривається
     box.innerHTML = '';
     if (!isLoggedIn) {
         box.appendChild(makeEl('div', { className: 'list-empty', textContent: 'Увійдіть через Google, щоб керувати шаблонами' }));
@@ -1189,6 +1190,37 @@ function fmtPrefixLines(ta, prefix) {
     try { ta.setSelectionRange(start, start + replaced.length); } catch (err) { /* ignore */ }
     ta.dispatchEvent(new Event('input', { bubbles: true }));
 }
+// Спливаюча панель форматування знизу поля тексту шаблону (на фокусі).
+let snipFmtBar = null;
+let snipFmtTa = null;
+function posSnipFmtBar(ta) {
+    const r = ta.getBoundingClientRect();
+    snipFmtBar.style.left = Math.round(r.left) + 'px';
+    snipFmtBar.style.width = Math.round(r.width) + 'px';
+    snipFmtBar.style.top = Math.round(r.bottom - 30) + 'px';
+}
+function ensureSnipFmtBar() {
+    if (snipFmtBar) return snipFmtBar;
+    snipFmtBar = makeEl('div', { className: 'snip-fmt-bar' });
+    snipFmtBar.hidden = true;
+    const mk = (html, title, fn) => {
+        const b = makeEl('button', { type: 'button', className: 'snip-fmt-btn', title, innerHTML: html });
+        b.addEventListener('mousedown', (e) => e.preventDefault()); // не губити виділення
+        b.addEventListener('click', (e) => { e.preventDefault(); if (snipFmtTa) fn(snipFmtTa); });
+        return b;
+    };
+    snipFmtBar.appendChild(mk('<b>B</b>', 'Жирний (Ctrl+B)', (ta) => fmtWrap(ta, FMT_WRAP.bold[0], FMT_WRAP.bold[1])));
+    snipFmtBar.appendChild(mk('<i>I</i>', 'Курсив (Ctrl+I)', (ta) => fmtWrap(ta, FMT_WRAP.italic[0], FMT_WRAP.italic[1])));
+    snipFmtBar.appendChild(mk('<s>S</s>', 'Закреслений', (ta) => fmtWrap(ta, FMT_WRAP.strike[0], FMT_WRAP.strike[1])));
+    snipFmtBar.appendChild(mk('&lt;/&gt;', 'Код', (ta) => fmtWrap(ta, FMT_WRAP.code[0], FMT_WRAP.code[1])));
+    snipFmtBar.appendChild(mk('•', 'Список', (ta) => fmtPrefixLines(ta, '- ')));
+    snipFmtBar.appendChild(mk('&rsaquo;', 'Цитата', (ta) => fmtPrefixLines(ta, '> ')));
+    document.body.appendChild(snipFmtBar);
+    window.addEventListener('scroll', () => { if (!snipFmtBar.hidden && snipFmtTa) posSnipFmtBar(snipFmtTa); }, true);
+    return snipFmtBar;
+}
+function showSnipFmtBar(ta) { ensureSnipFmtBar(); snipFmtTa = ta; snipFmtBar.hidden = false; posSnipFmtBar(ta); }
+function hideSnipFmtBar() { if (snipFmtBar) snipFmtBar.hidden = true; }
 // Рядок редагування: назва + текст + 💾 зберегти + × (видалити/скасувати).
 function snipEditRow(s) {
     s = s || { title: '', body: '' };
@@ -1246,22 +1278,10 @@ function snipEditRow(s) {
     langs.appendChild(tr);
     langs.appendChild(cat); // категорія — на одному рівні з вибором мови (праворуч)
     body.value = bodies.uk;
-    body.addEventListener('focus', () => { lastSnipBody = body; });
+    body.style.paddingBottom = '34px'; // місце під спливаючу панель форматування
+    body.addEventListener('focus', () => { lastSnipBody = body; showSnipFmtBar(body); });
+    body.addEventListener('blur', () => setTimeout(() => { if (snipFmtTa === body) hideSnipFmtBar(); }, 200));
     body.addEventListener('input', () => { bodies[curLang] = body.value; });
-    // Панель форматування (Slack-стиль). mousedown preventDefault — щоб не губити виділення.
-    const fmt = makeEl('div', { className: 'snip-fmt' });
-    const fbtn = (html, title, fn) => {
-        const b = makeEl('button', { type: 'button', className: 'snip-fmt-btn', title, innerHTML: html });
-        b.addEventListener('mousedown', (e) => e.preventDefault());
-        b.addEventListener('click', fn);
-        return b;
-    };
-    fmt.appendChild(fbtn('<b>B</b>', 'Жирний (Ctrl+B)', () => fmtWrap(body, FMT_WRAP.bold[0], FMT_WRAP.bold[1])));
-    fmt.appendChild(fbtn('<i>I</i>', 'Курсив (Ctrl+I)', () => fmtWrap(body, FMT_WRAP.italic[0], FMT_WRAP.italic[1])));
-    fmt.appendChild(fbtn('<s>S</s>', 'Закреслений', () => fmtWrap(body, FMT_WRAP.strike[0], FMT_WRAP.strike[1])));
-    fmt.appendChild(fbtn('&lt;/&gt;', 'Код', () => fmtWrap(body, FMT_WRAP.code[0], FMT_WRAP.code[1])));
-    fmt.appendChild(fbtn('•', 'Список', () => fmtPrefixLines(body, '- ')));
-    fmt.appendChild(fbtn('&rsaquo;', 'Цитата', () => fmtPrefixLines(body, '> ')));
     body.addEventListener('keydown', (e) => {
         if ((e.ctrlKey || e.metaKey) && !e.altKey) {
             const k = (e.key || '').toLowerCase();
@@ -1298,7 +1318,6 @@ function snipEditRow(s) {
     });
     row.appendChild(head);
     row.appendChild(langs);
-    row.appendChild(fmt);
     row.appendChild(body);
     // Кнопки зберегти/закрити — у спільному футері (праворуч), лише поки редагуємо.
     const acts = $('snipActions');
