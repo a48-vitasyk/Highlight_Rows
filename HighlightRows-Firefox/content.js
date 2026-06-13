@@ -798,10 +798,16 @@ function fillSnippet(text) {
 }
 // Tab-розгортання: токен перед курсором → шаблон, чия назва починається з токена
 // (або будь-яке слово назви починається з нього). Повертає true, якщо розгорнули.
-function findSnippetByToken(token) {
+function findSnippetByToken(token, allowTitle) {
     const t = token.toLowerCase();
-    let m = snippets.find((s) => (s.title || '').toLowerCase().startsWith(t));
-    if (!m) m = snippets.find((s) => (s.title || '').toLowerCase().split(/\s+/).some((w) => w.startsWith(t)));
+    // 1) точний збіг по скороченню (тригер) — працює навіть для 1 літери
+    let m = snippets.find((s) => (s.shortcut || '').trim().toLowerCase() === t);
+    if (!m && allowTitle) {
+        // 2) назва починається з токена
+        m = snippets.find((s) => (s.title || '').toLowerCase().startsWith(t));
+        // 3) будь-яке слово назви починається з токена
+        if (!m) m = snippets.find((s) => (s.title || '').toLowerCase().split(/\s+/).some((w) => w.startsWith(t)));
+    }
     return m || null;
 }
 function expandSnippetTab(ta) {
@@ -811,8 +817,9 @@ function expandSnippetTab(ta) {
     const mt = before.match(/(\S+)$/);
     if (!mt) return false;
     const token = mt[1];
-    if (token.length < 2) return false; // надто короткий — не чіпаємо
-    const snip = findSnippetByToken(token);
+    if (!token) return false;
+    // по назві — від 2 символів (щоб не розгортати випадково); по скороченню — від 1
+    const snip = findSnippetByToken(token, token.length >= 2);
     if (!snip) return false;
     const body = fillSnippet(snip.body);
     const tokenStart = pos - token.length;
