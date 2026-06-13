@@ -1005,16 +1005,32 @@ function renderSnippets() {
         const list = (d && d.snippets) || [];
         box.innerHTML = '';
         if (!list.length) { box.appendChild(makeEl('div', { className: 'list-empty', textContent: 'Поки немає шаблонів' })); return; }
-        list.forEach(addSnippetRow);
+        list.forEach((s) => box.appendChild(snipViewRow(s)));
     });
 }
-function addSnippetRow(s) {
+function snipDelete(id, onDone) {
+    if (!id) { onDone && onDone(); return; }
+    try { chrome.runtime.sendMessage({ sb: 'snipDel', id }, () => { void chrome.runtime.lastError; renderSnippets(); }); } catch (e) { /* ignore */ }
+}
+// Згорнутий рядок збереженого шаблону: назва + ✎ редагувати + × видалити.
+function snipViewRow(s) {
+    const row = makeEl('div', { className: 'snip-row snip-view' });
+    if (s.id) row.dataset.id = s.id;
+    const label = makeEl('span', { className: 'snip-label', textContent: s.title || (s.body || '').slice(0, 48) || '(без назви)' });
+    label.title = s.body || '';
+    const edit = makeEl('button', { type: 'button', className: 'small', textContent: '✎', title: 'Редагувати' });
+    const del = makeEl('button', { type: 'button', className: 'small remove', textContent: '×', title: 'Видалити' });
+    edit.addEventListener('click', () => row.replaceWith(snipEditRow(s)));
+    del.addEventListener('click', () => snipDelete(row.dataset.id));
+    row.appendChild(label);
+    row.appendChild(edit);
+    row.appendChild(del);
+    return row;
+}
+// Рядок редагування: назва + текст + 💾 зберегти + × (видалити/скасувати).
+function snipEditRow(s) {
     s = s || { title: '', body: '' };
-    const box = $('snippetsList');
-    if (!box) return;
-    const empty = box.querySelector('.list-empty');
-    if (empty) empty.remove();
-    const row = makeEl('div', { className: 'snip-row' });
+    const row = makeEl('div', { className: 'snip-row snip-edit' });
     if (s.id) row.dataset.id = s.id;
     const title = makeEl('input', { type: 'text', className: 'snip-title', placeholder: 'Назва' });
     title.value = s.title || '';
@@ -1022,7 +1038,7 @@ function addSnippetRow(s) {
     body.value = s.body || '';
     body.addEventListener('focus', () => { lastSnipBody = body; });
     const save = makeEl('button', { type: 'button', className: 'small', textContent: '💾', title: 'Зберегти' });
-    const del = makeEl('button', { type: 'button', className: 'small remove', textContent: '×', title: 'Видалити' });
+    const del = makeEl('button', { type: 'button', className: 'small remove', textContent: '×', title: s.id ? 'Видалити' : 'Скасувати' });
     save.addEventListener('click', () => {
         const snippet = { id: row.dataset.id || undefined, title: title.value.trim(), body: body.value };
         if (!snippet.title && !snippet.body) return;
@@ -1038,17 +1054,23 @@ function addSnippetRow(s) {
         } catch (e) { /* ignore */ }
     });
     del.addEventListener('click', () => {
-        if (row.dataset.id) {
-            try { chrome.runtime.sendMessage({ sb: 'snipDel', id: row.dataset.id }, () => { void chrome.runtime.lastError; renderSnippets(); }); } catch (e) { /* ignore */ }
-        } else { row.remove(); }
+        if (row.dataset.id) snipDelete(row.dataset.id);     // наявний — видалити в базі
+        else if (s && s.id) row.replaceWith(snipViewRow(s)); // (не трапляється) повернути перегляд
+        else row.remove();                                   // новий — просто прибрати
     });
     row.appendChild(title);
     row.appendChild(body);
     row.appendChild(save);
     row.appendChild(del);
-    box.appendChild(row);
+    return row;
 }
-if ($('addSnippet')) $('addSnippet').addEventListener('click', () => addSnippetRow({}));
+if ($('addSnippet')) $('addSnippet').addEventListener('click', () => {
+    const box = $('snippetsList');
+    if (!box) return;
+    const empty = box.querySelector('.list-empty');
+    if (empty) empty.remove();
+    box.appendChild(snipEditRow({}));
+});
 // Чипи підстановок: клік вставляє токен у поточне поле тексту шаблону.
 document.querySelectorAll('#snipVars .chip-var').forEach((chip) => {
     chip.addEventListener('mousedown', (e) => e.preventDefault()); // не забирати фокус з textarea
