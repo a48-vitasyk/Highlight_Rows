@@ -27,6 +27,9 @@ const DEFAULT_SETTINGS = {
     reverseEnabled: false,
     resizeEnabled: false,
     resizePx: 300,
+    myLang: 'uk',
+    autoTranslateIncoming: false,
+    snipSuggest: true,
 };
 
 const SERVICE_KEYS = ['status', 'os', 'cost', 'expiredate', 'traffic'];
@@ -352,6 +355,9 @@ function fillForm(s, reminderState) {
     $('reverseEnabled').checked = s.reverseEnabled;
     $('resizeEnabled').checked = s.resizeEnabled;
     $('resizePx').value = s.resizePx || DEFAULT_SETTINGS.resizePx;
+    if ($('snipSuggest')) $('snipSuggest').checked = s.snipSuggest !== false;
+    if ($('myLang')) $('myLang').value = ['uk', 'ru', 'en'].indexOf(s.myLang) !== -1 ? s.myLang : 'uk';
+    if ($('autoTranslateIncoming')) $('autoTranslateIncoming').checked = !!s.autoTranslateIncoming;
     const sv = s.serviceShow || {};
     SERVICE_KEYS.forEach((k) => { const el = $('show_' + k); if (el) el.checked = sv[k] !== false; });
     $('reminderColor').value = s.reminderColor || DEFAULT_SETTINGS.reminderColor;
@@ -405,6 +411,9 @@ function readForm() {
         reverseEnabled: $('reverseEnabled').checked,
         resizeEnabled: $('resizeEnabled').checked,
         resizePx: Number($('resizePx').value) > 0 ? Number($('resizePx').value) : DEFAULT_SETTINGS.resizePx,
+        snipSuggest: $('snipSuggest') ? $('snipSuggest').checked : true,
+        myLang: $('myLang') ? $('myLang').value : 'uk',
+        autoTranslateIncoming: $('autoTranslateIncoming') ? $('autoTranslateIncoming').checked : false,
         serviceShow: {
             status: $('show_status').checked,
             os: $('show_os').checked,
