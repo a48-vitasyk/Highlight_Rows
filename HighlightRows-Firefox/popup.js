@@ -1182,6 +1182,32 @@ function snipEditRow(s) {
         });
         langs.appendChild(b);
     });
+    // Автопереклад UA → RU/EN (Google Translate). Результат можна редагувати.
+    const tr = makeEl('button', { type: 'button', className: 'snip-lang snip-tr', textContent: '🌐', title: 'Перекласти UA → RU і EN (Google)' });
+    tr.addEventListener('click', () => {
+        if (curLang === 'uk') bodies.uk = body.value;
+        const src = (bodies.uk || '').trim();
+        if (!src) { $('status').textContent = 'Спершу введіть текст UA'; return; }
+        $('status').textContent = 'Переклад…';
+        ['ru', 'en'].forEach((target) => {
+            try {
+                chrome.runtime.sendMessage({ gt: 'translate', q: bodies.uk, target, source: 'uk' }, (resp) => {
+                    void chrome.runtime.lastError;
+                    if (!resp || !resp.ok) {
+                        $('status').textContent = (resp && resp.error === 'no-key')
+                            ? 'Додайте Google Translate API-ключ нижче'
+                            : 'Помилка перекладу' + ((resp && resp.error) ? ': ' + resp.error : '');
+                        return;
+                    }
+                    bodies[target] = resp.text;
+                    if (curLang === target) body.value = resp.text;
+                    $('status').textContent = 'Перекладено';
+                    setTimeout(() => { if ($('status').textContent === 'Перекладено') $('status').textContent = ''; }, 1500);
+                });
+            } catch (e) { /* ignore */ }
+        });
+    });
+    langs.appendChild(tr);
     langs.appendChild(cat); // категорія — на одному рівні з вибором мови (праворуч)
     body.value = bodies.uk;
     body.addEventListener('focus', () => { lastSnipBody = body; });
@@ -1242,6 +1268,11 @@ document.querySelectorAll('#snipVars .chip-var').forEach((chip) => {
         insertAtCursor(el, chip.dataset.token);
     });
 });
+// Google Translate API-ключ (локально): підвантажити в поле + зберігати при зміні.
+if ($('gtApiKey')) {
+    chrome.storage.local.get('gtApiKey', (d) => { $('gtApiKey').value = (d && d.gtApiKey) || ''; });
+    $('gtApiKey').addEventListener('change', (e) => { try { chrome.storage.local.set({ gtApiKey: e.target.value.trim() }); } catch (err) { /* ignore */ } });
+}
 // Початковий підтяг спільних шаблонів і категорій (оновити дзеркало) + рендер.
 chrome.storage.local.get('snippetCats', (d) => { snipCatsCache = (d && d.snippetCats) || []; });
 try { chrome.runtime.sendMessage({ sb: 'snipPull' }, () => { void chrome.runtime.lastError; renderSnippets(); }); } catch (e) { /* ignore */ }
