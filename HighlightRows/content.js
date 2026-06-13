@@ -449,11 +449,12 @@ function ensureReminderBanner(active) {
     const takeBtn = banner.querySelector('.hr-rb-take');
     const doneBtn = banner.querySelector('.hr-rb-done');
     const snoozeBtn = banner.querySelector('.hr-rb-snooze');
-    if (takeBtn) { takeBtn.hidden = !hasShared; if (takeBtn.textContent !== 'Взяти') takeBtn.textContent = 'Взяти'; }
-    if (doneBtn) { doneBtn.hidden = !hasShared; if (doneBtn.textContent !== 'Відписав') doneBtn.textContent = 'Відписав'; }
+    if (takeBtn) { takeBtn.hidden = !hasShared; if (takeBtn.textContent !== 'Взяти') takeBtn.textContent = 'Взяти'; takeBtn.title = 'Взяти (клавіша T)'; }
+    if (doneBtn) { doneBtn.hidden = !hasShared; if (doneBtn.textContent !== 'Відписав') doneBtn.textContent = 'Відписав'; doneBtn.title = 'Відписав (клавіша D)'; }
     if (snoozeBtn) {
         const sl = 'Відкласти на ' + settings.snoozeMinutes + ' хв';
         if (snoozeBtn.textContent !== sl) snoozeBtn.textContent = sl;
+        snoozeBtn.title = 'Заглушити (клавіша S)';
     }
 }
 
@@ -1549,6 +1550,19 @@ function init() {
             // Розблокування звуку після першого жесту користувача (autoplay).
             document.addEventListener('pointerdown', unlockAudio, true);
             document.addEventListener('keydown', unlockAudio, true);
+
+            // Гарячі клавіші — лише коли висить банер HeartBeat і фокус не в полі вводу.
+            document.addEventListener('keydown', (e) => {
+                if (!alive || !document.getElementById('hr-reminder-banner')) return;
+                if (e.ctrlKey || e.altKey || e.metaKey) return;
+                const el = document.activeElement;
+                const tag = el && el.tagName;
+                if (tag === 'INPUT' || tag === 'TEXTAREA' || (el && el.isContentEditable)) return;
+                const k = (e.key || '').toLowerCase();
+                if (k === 't') { e.preventDefault(); claimActiveShared(); }
+                else if (k === 'd') { e.preventDefault(); doneActiveShared(); }
+                else if (k === 's') { e.preventDefault(); snoozeActiveReminders(); }
+            });
 
             observerRef = new MutationObserver(scheduleRefresh);
             observerRef.observe(document.body, { childList: true, subtree: true });

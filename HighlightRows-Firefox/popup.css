@@ -269,6 +269,10 @@ body[data-view="panel"] .stale-list { max-height: 300px; }
 .scope-opt svg { display: block; }
 .scope-opt:not(.active):hover { color: var(--text); }
 .scope-opt.active { background: var(--accent); color: #fff; }
+.scope-opt.locked { opacity: .4; cursor: not-allowed; }
+.scope-opt.locked.active { background: var(--muted); }
+@keyframes hr-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.25); } }
+#loginBtn.pulse { animation: hr-pulse 0.5s ease 3; color: var(--accent); }
 
 /* --- Рядок правила за тегом (один рядок) --- */
 .rule-row {
