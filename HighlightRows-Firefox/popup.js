@@ -999,6 +999,21 @@ function insertAtCursor(el, text) {
     el.focus();
     try { el.setSelectionRange(pos, pos); } catch (e) { /* ignore */ }
 }
+let snipSearch = ''; // поточний фільтр списку шаблонів
+const NO_CAT = 'Без категорії';
+function snipMatchesSearch(s, q) {
+    if (!q) return true;
+    q = q.toLowerCase();
+    return [s.title, s.shortcut, s.body, s.bodyRu, s.bodyEn, s.category]
+        .some((x) => (x || '').toLowerCase().includes(q));
+}
+function fillSnipCats(list) {
+    const dl = $('snipCatList');
+    if (!dl) return;
+    const cats = [...new Set(list.map((s) => (s.category || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    dl.innerHTML = '';
+    cats.forEach((c) => dl.appendChild(makeEl('option', { value: c })));
+}
 function renderSnippets() {
     const box = $('snippetsList');
     if (!box) return;
@@ -1008,12 +1023,30 @@ function renderSnippets() {
         return;
     }
     chrome.storage.local.get('snippets', (d) => {
-        const list = (d && d.snippets) || [];
+        const all = (d && d.snippets) || [];
+        fillSnipCats(all);
         box.innerHTML = '';
-        if (!list.length) { box.appendChild(makeEl('div', { className: 'list-empty', textContent: 'Поки немає шаблонів' })); return; }
-        list.forEach((s) => box.appendChild(snipViewRow(s)));
+        if (!all.length) { box.appendChild(makeEl('div', { className: 'list-empty', textContent: 'Поки немає шаблонів' })); return; }
+        const q = snipSearch.trim();
+        const list = all.filter((s) => snipMatchesSearch(s, q));
+        if (!list.length) { box.appendChild(makeEl('div', { className: 'list-empty', textContent: 'Нічого не знайдено' })); return; }
+        // Групування за категорією (без категорії — в кінці).
+        const groups = new Map();
+        list.forEach((s) => { const c = (s.category || '').trim() || NO_CAT; if (!groups.has(c)) groups.set(c, []); groups.get(c).push(s); });
+        const names = [...groups.keys()].sort((a, b) => (a === NO_CAT ? 1 : b === NO_CAT ? -1 : a.localeCompare(b)));
+        names.forEach((name) => {
+            const head = makeEl('div', { className: 'snip-group' });
+            head.appendChild(makeEl('span', { className: 'snip-group-name', textContent: name }));
+            head.appendChild(makeEl('span', { className: 'snip-group-n', textContent: String(groups.get(name).length) }));
+            const wrap = makeEl('div', { className: 'snip-grp-body' });
+            groups.get(name).forEach((s) => wrap.appendChild(snipViewRow(s)));
+            head.addEventListener('click', () => { wrap.hidden = !wrap.hidden; head.classList.toggle('collapsed', wrap.hidden); });
+            box.appendChild(head);
+            box.appendChild(wrap);
+        });
     });
 }
+if ($('snipSearch')) $('snipSearch').addEventListener('input', (e) => { snipSearch = e.target.value; renderSnippets(); });
 function snipDelete(id, onDone) {
     if (!id) { onDone && onDone(); return; }
     try { chrome.runtime.sendMessage({ sb: 'snipDel', id }, () => { void chrome.runtime.lastError; renderSnippets(); }); } catch (e) { /* ignore */ }
@@ -1049,8 +1082,12 @@ function snipEditRow(s) {
     title.value = s.title || '';
     const sc = makeEl('input', { type: 'text', className: 'snip-sc-input', placeholder: 'скор.', title: 'Скорочення: введіть у полі відповіді й натисніть Tab' });
     sc.value = s.shortcut || '';
+    const cat = makeEl('input', { type: 'text', className: 'snip-cat-input', placeholder: 'категорія', title: 'Категорія (для групування)' });
+    cat.setAttribute('list', 'snipCatList');
+    cat.value = s.category || '';
     head.appendChild(title);
     head.appendChild(sc);
+    head.appendChild(cat);
     // Мовні версії: UA (основна) / RU / EN. Порожній переклад → підставиться UA.
     const bodies = { uk: s.body || '', ru: s.bodyRu || '', en: s.bodyEn || '' };
     let curLang = 'uk';
@@ -1075,7 +1112,7 @@ function snipEditRow(s) {
     const del = makeEl('button', { type: 'button', className: 'small remove', textContent: '×', title: s.id ? 'Видалити' : 'Скасувати' });
     save.addEventListener('click', () => {
         bodies[curLang] = body.value;
-        const snippet = { id: row.dataset.id || undefined, title: title.value.trim(), body: bodies.uk, bodyRu: bodies.ru.trim(), bodyEn: bodies.en.trim(), shortcut: sc.value.trim() };
+        const snippet = { id: row.dataset.id || undefined, title: title.value.trim(), body: bodies.uk, bodyRu: bodies.ru.trim(), bodyEn: bodies.en.trim(), shortcut: sc.value.trim(), category: cat.value.trim() };
         if (!snippet.title && !snippet.body) return;
         const action = row.dataset.id ? 'snipUpdate' : 'snipAdd';
         $('status').textContent = 'Збереження…';
