@@ -94,6 +94,20 @@ function todayStr() {
 // Явно видалені (× по рядку з бази) — щоб синк видаляв ЛИШЕ їх, а не «всіх, кого
 // немає у формі» (інакше можна стерти чужі будильники, додані паралельно).
 let removedIds = new Set();
+// Чи є сесія — щоб «Загальний» (shared) був доступний лише залогіненим.
+let isLoggedIn = false;
+function applyScopeLock() {
+    document.querySelectorAll('.scope-opt[data-scope="shared"]').forEach((b) => {
+        b.classList.toggle('locked', !isLoggedIn);
+        b.title = isLoggedIn ? 'Загальний (бачать усі)' : 'Увійдіть через Google, щоб робити загальні';
+    });
+}
+function promptLogin() {
+    const st = $('status');
+    if (st) { st.textContent = 'Увійдіть через Google, щоб робити загальні'; setTimeout(() => { if (st.textContent.indexOf('Увійдіть') === 0) st.textContent = ''; }, 3000); }
+    const lb = $('loginBtn');
+    if (lb) { lb.classList.add('pulse'); setTimeout(() => lb.classList.remove('pulse'), 1600); }
+}
 // Незбережені правки в секції будильників — щоб live-оновлення не перетирало їх.
 let remindersDirty = false;
 function markRemindersDirty() { remindersDirty = true; }
@@ -119,10 +133,14 @@ function buildScopeSeg(row) {
     opts.forEach((o) => {
         const b = makeEl('button', { type: 'button', className: 'scope-opt', title: o.t, innerHTML: o.svg });
         b.dataset.scope = o.v;
-        b.addEventListener('click', () => { row.dataset.scope = o.v; sync(); markRemindersDirty(); });
+        b.addEventListener('click', () => {
+            if (o.v === 'shared' && !isLoggedIn) { promptLogin(); return; } // лише для залогінених
+            row.dataset.scope = o.v; sync(); markRemindersDirty();
+        });
         seg.appendChild(b);
     });
     sync();
+    applyScopeLock();
     return seg;
 }
 
@@ -496,6 +514,8 @@ function renderMyTickets(arr) {
 
 async function renderAccount() {
     const sess = (typeof SB !== 'undefined') ? await SB.getSession() : null;
+    isLoggedIn = !!sess;
+    applyScopeLock();
     const name = $('accountName');
     const loginBtn = $('loginBtn');
     const logoutBtn = $('logoutBtn');
@@ -600,24 +620,46 @@ function applyLogFilter() {
     else rows.sort((a, b) => t(b) - t(a)); // at_desc (новіші)
     renderLogs(rows);
 }
+// Статистика за сьогодні з завантажених логів.
+function renderLogsStats() {
+    const box = $('logsStats');
+    if (!box) return;
+    const today = todayStr();
+    const isToday = (iso) => { const d = new Date(iso); return !isNaN(d) && `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}` === today; };
+    let created = 0, done = 0, claimed = 0;
+    const per = {};
+    for (const r of logsCache) {
+        if (!isToday(r.at)) continue;
+        const who = ((r.actor_email || '').split('@')[0]) || '—';
+        per[who] = per[who] || { c: 0, d: 0 };
+        if (r.action === 'create') { created++; per[who].c++; }
+        else if (r.action === 'done') { done++; per[who].d++; }
+        else if (r.action === 'claim') { claimed++; }
+    }
+    const perStr = Object.keys(per).sort().map((w) => `${w}: ✎${per[w].c} ✓${per[w].d}`).join(' · ');
+    box.textContent = `Сьогодні — створено ${created} · взято ${claimed} · відписано ${done}` + (perStr ? '  |  ' + perStr : '');
+}
+
 function loadLogs() {
     const box = $('logsList');
     const st = $('logsStatus');
     if (!box) return;
     if (st) st.textContent = 'Завантаження…';
     try {
-        chrome.runtime.sendMessage({ sb: 'logs', limit: 100 }, (resp) => {
+        chrome.runtime.sendMessage({ sb: 'logs', limit: 500 }, (resp) => {
             if (chrome.runtime.lastError) { if (st) st.textContent = 'помилка'; return; }
             if (!resp || !resp.ok) {
                 if (st) st.textContent = '';
                 logsCache = [];
                 box.innerHTML = '';
+                if ($('logsStats')) $('logsStats').textContent = '';
                 const msg = (resp && resp.error === 'not-logged-in') ? 'Увійдіть через Google, щоб бачити логи' : 'Не вдалось завантажити';
                 box.appendChild(makeEl('div', { className: 'list-empty', textContent: msg }));
                 return;
             }
             if (st) st.textContent = '';
             logsCache = resp.rows || [];
+            renderLogsStats();
             applyLogFilter();
         });
     } catch (e) { if (st) st.textContent = 'помилка'; }
