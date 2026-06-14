@@ -10,7 +10,21 @@
 if (typeof importScripts === 'function') { try { importScripts('sb.js'); } catch (e) { /* ignore */ } }
 
 const notifUrls = {};   // id → url (клік по сповіщенню відкриває тікет)
-let redIds = [];        // id накопичених «redAlert» (для ліміту notifyMax)
+let redGroup = [];      // останні події для згрупованого сповіщення (режим «накопичувати»)
+let redGroupUrl = '';   // url останньої події групи (клік відкриває її)
+const RED_GROUP_ID = 'redAlertGroup';
+// Заголовок+текст за типом події (для режиму «заміняти»).
+const RED_TYPES = {
+    blocked: { title: '🔴 Заблокований запит', msg: (r) => r.name || '' },
+    tag: { title: '🏷️ Тег', msg: (r) => r.name || '' },
+    reply: { title: '✉️ Відповідь клієнта', msg: (r) => 'Нове повідомлення у тікеті #' + (r.ticket || '') },
+};
+// Короткий рядок події для згрупованого списку.
+function redEventLabel(r) {
+    if (r.kind === 'tag') return '🏷️ ' + (r.name || '');
+    if (r.kind === 'reply') return '✉️ #' + (r.ticket || '');
+    return '🔴 ' + (r.name || '');
+}
 
 function getSyncSettings() {
     return new Promise((res) => {
@@ -47,24 +61,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         getSyncSettings().then((s) => {
             const stack = (s.notifyMode || 'stack') !== 'replace';
             const max = Math.min(5, Math.max(1, Math.round(Number(s.notifyMax) || 3)));
-            const id = stack
-                ? ('redAlert:' + Date.now() + ':' + Math.random().toString(36).slice(2, 7))
-                : 'redAlert'; // сталий id → одне сповіщення оновлюється
-            const TYPES = {
-                blocked: { title: '🔴 Заблокований запит', msg: (r) => r.name || '' },
-                tag: { title: '🏷️ Тег', msg: (r) => r.name || '' },
-                reply: { title: '✉️ Відповідь клієнта', msg: (r) => 'Нове повідомлення у тікеті #' + (r.ticket || '') },
-            };
-            const t = TYPES[request.kind] || TYPES.blocked;
-            showNotification(id, t.title, t.msg(request), request.url || '');
             if (stack) {
-                redIds = redIds.filter((x) => x !== id);
-                redIds.push(id);
-                while (redIds.length > max) {
-                    const old = redIds.shift();
-                    try { chrome.notifications.clear(old); } catch (e) { /* ignore */ }
-                    delete notifUrls[old];
-                }
+                // Накопичувати: одне згруповане сповіщення зі списком останніх N подій.
+                redGroup.push(redEventLabel(request));
+                while (redGroup.length > max) redGroup.shift();
+                if (request.url) redGroupUrl = request.url;
+                const title = redGroup.length > 1 ? 'Нові події (' + redGroup.length + ')' : (RED_TYPES[request.kind] || RED_TYPES.blocked).title;
+                showNotification(RED_GROUP_ID, title, redGroup.join('\n'), redGroupUrl);
+            } else {
+                const t = RED_TYPES[request.kind] || RED_TYPES.blocked;
+                showNotification('redAlert', t.title, t.msg(request), request.url || '');
             }
         });
     } else if (request.action === 'reminderAlert') {
@@ -92,6 +98,13 @@ if (chrome.notifications && chrome.notifications.onClicked) {
         if (url) { try { chrome.tabs.create({ url }); } catch (e) { /* ignore */ } }
         try { chrome.notifications.clear(id); } catch (e) { /* ignore */ }
         delete notifUrls[id];
+        if (id === RED_GROUP_ID) { redGroup = []; redGroupUrl = ''; }
+    });
+}
+// Закрили згруповане сповіщення → почати лічильник наново.
+if (chrome.notifications && chrome.notifications.onClosed) {
+    chrome.notifications.onClosed.addListener((id) => {
+        if (id === RED_GROUP_ID) { redGroup = []; redGroupUrl = ''; }
     });
 }
 
