@@ -999,9 +999,17 @@ function popupPlaySound(which) {
 if ($('testReminderSound')) $('testReminderSound').addEventListener('click', () => popupPlaySound('reminder'));
 if ($('testAlertSound')) $('testAlertSound').addEventListener('click', () => popupPlaySound('alert'));
 if ($('testNotify')) $('testNotify').addEventListener('click', () => {
-    try { chrome.runtime.sendMessage({ action: 'reminderAlert', ticketId: 'ТЕСТ', note: 'перевірка сповіщення' }, () => void chrome.runtime.lastError); } catch (e) { /* ignore */ }
     const st = $('status');
-    if (st) { st.textContent = 'Надіслано тестове сповіщення'; setTimeout(() => { if (st.textContent === 'Надіслано тестове сповіщення') st.textContent = ''; }, 2500); }
+    if (st) st.textContent = 'Перевірка…';
+    try {
+        chrome.runtime.sendMessage({ action: 'testNotify' }, (resp) => {
+            void chrome.runtime.lastError;
+            if (!st) return;
+            if (resp && resp.ok) st.textContent = 'Сповіщення працюють';
+            else st.textContent = 'Не показалось — увімкніть сповіщення для браузера в ОС' + (resp && resp.error ? ' (' + resp.error + ')' : '');
+            setTimeout(() => { if (/працюють|показалось/.test(st.textContent)) st.textContent = ''; }, 5000);
+        });
+    } catch (e) { if (st) st.textContent = 'Помилка перевірки'; }
 });
 
 function wireSoundUpload(which, inputId, selectId) {

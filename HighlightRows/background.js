@@ -19,14 +19,24 @@ function getSyncSettings() {
     });
 }
 
-function showNotification(id, title, message, url) {
-    try { chrome.notifications.create(id, { type: 'basic', iconUrl: 'images/icon48.png', title, message }); }
-    catch (e) { return; }
+function showNotification(id, title, message, url, cb) {
+    try {
+        chrome.notifications.create(id, {
+            type: 'basic', iconUrl: chrome.runtime.getURL('images/icon48.png'), title, message,
+        }, () => { const err = chrome.runtime.lastError; if (cb) cb(err); });
+    } catch (e) { if (cb) cb(e); return; }
     if (url) notifUrls[id] = url;
 }
 
-chrome.runtime.onMessage.addListener((request) => {
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (!request) return;
+
+    if (request.action === 'testNotify') {
+        showNotification('hrTest:' + Date.now(), '⏰ Тест сповіщення',
+            'Якщо ви це бачите — сповіщення працюють.', '',
+            (err) => { try { sendResponse({ ok: !err, error: err ? (err.message || String(err)) : '' }); } catch (e) { /* ignore */ } });
+        return true; // відповідь асинхронна
+    }
 
     if (request.action === 'redAlert') {
         getSyncSettings().then((s) => {
