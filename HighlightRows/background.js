@@ -35,7 +35,13 @@ chrome.runtime.onMessage.addListener((request) => {
             const id = stack
                 ? ('redAlert:' + Date.now() + ':' + Math.random().toString(36).slice(2, 7))
                 : 'redAlert'; // сталий id → одне сповіщення оновлюється
-            showNotification(id, 'Увага!', `Рядок з «${request.name}» виділено червоним.`, request.url || '');
+            const TYPES = {
+                blocked: { title: '🔴 Заблокований запит', msg: (r) => r.name || '' },
+                tag: { title: '🏷️ Тег', msg: (r) => r.name || '' },
+                reply: { title: '✉️ Відповідь клієнта', msg: (r) => 'Нове повідомлення у тікеті #' + (r.ticket || '') },
+            };
+            const t = TYPES[request.kind] || TYPES.blocked;
+            showNotification(id, t.title, t.msg(request), request.url || '');
             if (stack) {
                 redIds = redIds.filter((x) => x !== id);
                 redIds.push(id);
@@ -51,8 +57,8 @@ chrome.runtime.onMessage.addListener((request) => {
         // Стабільний id на тікет — повторне нагадування замінює попереднє.
         showNotification(
             'reminderAlarm:' + (request.ticketId || ''),
-            'Нагадування по тікету',
-            `Тікет ${request.ticketId}${note}`,
+            '⏰ Нагадування по тікету',
+            `Тікет #${request.ticketId}${note}`,
             request.url || ''
         );
     } else if (request.action === 'setBadge') {
