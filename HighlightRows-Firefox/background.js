@@ -32,9 +32,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (!request) return;
 
     if (request.action === 'testNotify') {
-        showNotification('hrTest:' + Date.now(), '⏰ Тест сповіщення',
-            'Якщо ви це бачите — сповіщення працюють.', '',
-            (err) => { try { sendResponse({ ok: !err, error: err ? (err.message || String(err)) : '' }); } catch (e) { /* ignore */ } });
+        const finish = (err, level) => { try { sendResponse({ ok: !err, error: err ? (err.message || String(err)) : '', level: level || '' }); } catch (e) { /* ignore */ } };
+        const create = (level) => showNotification('hrTest:' + Date.now(), '⏰ Тест сповіщення',
+            'Якщо ви це бачите — сповіщення працюють.', '', (err) => finish(err, level));
+        try {
+            if (chrome.notifications && chrome.notifications.getPermissionLevel) {
+                chrome.notifications.getPermissionLevel((lvl) => create(lvl));
+            } else { create(''); }
+        } catch (e) { finish(e, ''); }
         return true; // відповідь асинхронна
     }
 

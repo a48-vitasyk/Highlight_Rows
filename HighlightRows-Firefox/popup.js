@@ -1003,11 +1003,16 @@ if ($('testNotify')) $('testNotify').addEventListener('click', () => {
     if (st) st.textContent = 'Перевірка…';
     try {
         chrome.runtime.sendMessage({ action: 'testNotify' }, (resp) => {
-            void chrome.runtime.lastError;
+            const le = chrome.runtime.lastError;
             if (!st) return;
-            if (resp && resp.ok) st.textContent = 'Сповіщення працюють';
-            else st.textContent = 'Не показалось — увімкніть сповіщення для браузера в ОС' + (resp && resp.error ? ' (' + resp.error + ')' : '');
-            setTimeout(() => { if (/працюють|показалось/.test(st.textContent)) st.textContent = ''; }, 5000);
+            if (!resp) { st.textContent = 'Немає відповіді від фону' + (le ? ' (' + le.message + ')' : '') + ' — перезавантажте розширення'; return; }
+            if (resp.level === 'denied') { st.textContent = 'Сповіщення ЗАБЛОКОВАНІ у браузері (denied) — увімкніть для розширення'; return; }
+            if (resp.ok) {
+                st.textContent = 'Створено (рівень: ' + (resp.level || '?') + '). Не видно банера → увімкніть сповіщення Chrome в ОС';
+                setTimeout(() => { if (st.textContent.indexOf('Створено') === 0) st.textContent = ''; }, 6000);
+            } else {
+                st.textContent = 'Помилка: ' + (resp.error || 'невідомо');
+            }
         });
     } catch (e) { if (st) st.textContent = 'Помилка перевірки'; }
 });
