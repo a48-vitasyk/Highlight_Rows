@@ -35,7 +35,8 @@ drop trigger if exists reminders_touch on public.reminders;
 create trigger reminders_touch before update on public.reminders
     for each row execute function public.touch_updated_at();
 
--- Дозволяти реєстрацію лише акаунтам @your-domain.example.
+-- Дозволяти реєстрацію лише акаунтам корпоративного домену.
+-- ⚠️ Замініть «your-domain.example» на ваш реальний домен перед застосуванням.
 create or replace function public.enforce_domain() returns trigger language plpgsql as $$
 begin
     if new.email !~* '@your-domain\.example$' then

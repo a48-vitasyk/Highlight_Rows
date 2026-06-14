@@ -4,6 +4,7 @@
 --  2) на snippets/snippet_categories політику FOR ALL ("...write") розділяємо на
 --     insert/update/delete, щоб не було двох permissive-політик для SELECT.
 -- Застосувати у Supabase → SQL Editor.
+-- ⚠️ ПЕРЕД застосуванням замініть «your-domain.example» на ваш реальний домен.
 
 -- ── reminders (4 окремі політики, лише обгортаємо у select) ──────────────
 drop policy if exists "read"   on public.reminders;
