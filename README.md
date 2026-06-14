@@ -89,9 +89,11 @@ Realtime і дзеркаляться в `storage.local`. Сповіщення `c
 
 ### Бекенд (Supabase)
 - **Postgres + RLS + Auth (Google OAuth) + Realtime.** Вхід лише через Google;
-  реєстрацію обмежено доменом команди тригером у БД. «Усі автентифіковані = команда».
-- Таблиці: `reminders`, `reminder_logs` (незмінний аудит через тригер),
-  `snippets`, `snippet_categories`.
+  реєстрацію обмежено доменом **@your-domain.example** тригером у БД, і той самий домен
+  перевіряється **в самих RLS-політиках** (другий рубіж) — доступ до даних має
+  лише команда.
+- Таблиці: `reminders`, `reminder_logs` (незмінний аудит; тригер-функція не
+  викликна напряму через API), `snippets`, `snippet_categories`.
 - Схема ведеться міграціями в `supabase/migrations/` — застосовуються **вручну**
   в Supabase → SQL Editor. Секрети (Google Client Secret, токени) — лише в дашборді
   Supabase, **ніколи в репозиторії**.
