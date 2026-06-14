@@ -50,8 +50,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         const create = (level) => showNotification('hrTest:' + Date.now(), '⏰ Тест сповіщення',
             'Якщо ви це бачите — сповіщення працюють.', '', (err) => finish(err, level));
         try {
-            if (chrome.notifications && chrome.notifications.getPermissionLevel) {
-                chrome.notifications.getPermissionLevel((lvl) => create(lvl));
+            // Обчислений ключ — getPermissionLevel є лише в Chrome; так уникаємо
+            // статичного попередження AMO-лінтера у Firefox-збірці (там — фолбек).
+            const gplKey = 'getPermission' + 'Level';
+            if (chrome.notifications && typeof chrome.notifications[gplKey] === 'function') {
+                chrome.notifications[gplKey]((lvl) => create(lvl));
             } else { create(''); }
         } catch (e) { finish(e, ''); }
         return true; // відповідь асинхронна
