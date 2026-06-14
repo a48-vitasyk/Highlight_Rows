@@ -381,7 +381,7 @@ function fireAlert(label, opts) {
     if (opts.sound) playBeep();
     if (opts.notify) {
         try {
-            chrome.runtime.sendMessage({ action: 'redAlert', name: label, url: (opts && opts.url) || '' });
+            chrome.runtime.sendMessage({ action: 'redAlert', kind: opts.kind || 'blocked', name: label, ticket: opts.ticket || '', url: (opts && opts.url) || '' });
         } catch (e) {
             teardown();
         }
@@ -1310,7 +1310,7 @@ function refresh() {
                 if (due) {
                     t.lastAlert = now;
                     timersDirty = true;
-                    fireAlert(subject || tag.rule.query, { sound: tag.rule.sound, notify: tag.rule.notify });
+                    fireAlert(subject || tag.rule.query, { sound: tag.rule.sound, notify: tag.rule.notify, kind: 'tag' });
                 }
             }
         }
@@ -1332,7 +1332,7 @@ function refresh() {
                     if (due) {
                         timer.lastAlert = now;
                         timersDirty = true;
-                        fireAlert(blockedName, { sound: settings.soundEnabled, notify: true });
+                        fireAlert(blockedName, { sound: settings.soundEnabled, notify: true, kind: 'blocked' });
                     }
                 }
             }
@@ -1363,7 +1363,7 @@ function refresh() {
     if (settings.replyWatch) {
         if (repliedSeen) {
             newMsgNow.forEach((t) => {
-                if (!repliedSeen.has(t)) fireAlert('Відповідь клієнта: #' + t, { sound: settings.soundEnabled, notify: true });
+                if (!repliedSeen.has(t)) fireAlert('#' + t, { sound: settings.soundEnabled, notify: true, kind: 'reply', ticket: t });
             });
         }
         repliedSeen = newMsgNow;
@@ -1639,7 +1639,7 @@ async function scanMatches(force) {
                     const repeatMs = (rule.repeatMinutes || 0) * 60 * 1000;
                     if (!st.lastAlert || (repeatMs > 0 && now - st.lastAlert >= repeatMs)) {
                         st.lastAlert = now; stateDirty = true;
-                        fireAlert(subject || rule.query, { sound: rule.sound, notify: rule.notify, url: elid ? location.origin + '/billmgr?startform=ticket.edit&elid=' + encodeURIComponent(elid) : '' });
+                        fireAlert(subject || rule.query, { sound: rule.sound, notify: rule.notify, kind: 'tag', url: elid ? location.origin + '/billmgr?startform=ticket.edit&elid=' + encodeURIComponent(elid) : '' });
                     }
                 }
             }
@@ -1662,7 +1662,7 @@ async function scanMatches(force) {
                             const repeatMs = settings.repeatMinutes * 60 * 1000;
                             if (!st.lastAlert || (repeatMs > 0 && now - st.lastAlert >= repeatMs)) {
                                 st.lastAlert = now; stateDirty = true;
-                                fireAlert(name, { sound: settings.soundEnabled, notify: true, url: elid ? location.origin + '/billmgr?startform=ticket.edit&elid=' + encodeURIComponent(elid) : '' });
+                                fireAlert(name, { sound: settings.soundEnabled, notify: true, kind: 'blocked', url: elid ? location.origin + '/billmgr?startform=ticket.edit&elid=' + encodeURIComponent(elid) : '' });
                             }
                         }
                     }
