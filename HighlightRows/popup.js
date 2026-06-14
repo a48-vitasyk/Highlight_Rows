@@ -85,6 +85,26 @@ if ($('themeBtn')) $('themeBtn').addEventListener('click', () => {
     });
 });
 
+// --- Шрифт інтерфейсу ----------------------------------------------------
+// hrFont у storage.local: 'inter' (дефолт) | 'plex' | 'manrope' | 'system'.
+const FONT_STACKS = {
+    inter: "'Inter', 'Segoe UI', system-ui, sans-serif",
+    plex: "'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif",
+    manrope: "'Manrope', 'Segoe UI', system-ui, sans-serif",
+    system: "system-ui, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif",
+};
+function applyFont(stored) {
+    const key = FONT_STACKS[stored] ? stored : 'inter';
+    document.documentElement.style.setProperty('--font', FONT_STACKS[key]);
+    const sel = $('uiFont');
+    if (sel) sel.value = key;
+}
+chrome.storage.local.get('hrFont', (d) => applyFont(d && d.hrFont));
+if ($('uiFont')) $('uiFont').addEventListener('change', (e) => {
+    const v = e.target.value;
+    chrome.storage.local.set({ hrFont: v }, () => applyFont(v));
+});
+
 function genId() {
     return 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 }
