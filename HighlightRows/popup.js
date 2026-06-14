@@ -998,6 +998,11 @@ function popupPlaySound(which) {
 }
 if ($('testReminderSound')) $('testReminderSound').addEventListener('click', () => popupPlaySound('reminder'));
 if ($('testAlertSound')) $('testAlertSound').addEventListener('click', () => popupPlaySound('alert'));
+if ($('testNotify')) $('testNotify').addEventListener('click', () => {
+    try { chrome.runtime.sendMessage({ action: 'reminderAlert', ticketId: 'ТЕСТ', note: 'перевірка сповіщення' }, () => void chrome.runtime.lastError); } catch (e) { /* ignore */ }
+    const st = $('status');
+    if (st) { st.textContent = 'Надіслано тестове сповіщення'; setTimeout(() => { if (st.textContent === 'Надіслано тестове сповіщення') st.textContent = ''; }, 2500); }
+});
 
 function wireSoundUpload(which, inputId, selectId) {
     const inp = $(inputId);
