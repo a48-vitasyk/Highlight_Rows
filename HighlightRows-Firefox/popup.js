@@ -738,7 +738,7 @@ function initTabs() {
     const activate = (name) => {
         tabs.forEach((t) => t.classList.toggle('active', t.dataset.tab === name));
         panels.forEach((p) => { p.hidden = p.dataset.panel !== name; });
-        if (name === 'logs') loadLogs();
+        if (name === 'settings') loadLogs(); // логи тепер унизу «Налаштувань»
     };
     tabs.forEach((t) => t.addEventListener('click', () => {
         activate(t.dataset.tab);

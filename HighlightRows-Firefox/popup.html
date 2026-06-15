@@ -18,7 +18,7 @@
 <div class="tabs" role="tablist">
     <button type="button" class="tab active" data-tab="home">Головна</button>
     <button type="button" class="tab" data-tab="tickets">Тікети</button>
-    <button type="button" class="tab" data-tab="logs">Логи</button>
+    <button type="button" class="tab" data-tab="snippets">Відмашки</button>
     <button type="button" class="tab" data-tab="settings">Налаштування</button>
 </div>
 
@@ -133,27 +133,31 @@
         <div class="hint">Подвійний клік — відкрити · × — прибрати.</div>
     </div>
 </div>
-<div class="tab-panel" data-panel="logs" hidden>
+<div class="tab-panel" data-panel="snippets" hidden>
     <div class="card">
         <div class="card-head">
-            <span class="card-icon"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg></span>
-            <h2 class="card-title">Логи</h2>
-            <span id="logsStatus" class="hint"></span>
-            <button type="button" class="small icon-btn" id="refreshLogs" title="Оновити"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></button>
+            <span class="card-icon"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg></span>
+            <h2 class="card-title">Шаблони відповідей</h2>
         </div>
-        <div id="logsStats" class="hint" style="margin-bottom:6px;font-weight:600"></div>
-        <div class="field row" style="margin-bottom:8px">
-            <input type="text" id="logsFilter" placeholder="Пошук: тікет / дія / хто" style="flex:1">
-            <select id="logsSort" title="Сортування">
-                <option value="at_desc">Новіші</option>
-                <option value="at_asc">Старіші</option>
-                <option value="ticket">Тікет</option>
-                <option value="action">Дія</option>
-                <option value="actor">Хто</option>
-            </select>
+        <input type="search" id="snipSearch" class="snip-search" placeholder="Пошук шаблону…">
+        <div id="snippetsList"></div>
+        <div class="snip-foot">
+            <button type="button" class="add" id="addSnippet">+ Додати шаблон</button>
+            <span id="snipActions" class="snip-actions"></span>
         </div>
-        <div id="logsList" class="stale-list"></div>
-        <div class="hint">Історія дій зі спільними будильниками: хто, що, коли. Лише для авторизованих.</div>
+        <div class="snip-vars" id="snipVars">
+            <button type="button" class="chip-var" data-token="{ticket}">{ticket}</button>
+            <button type="button" class="chip-var" data-token="{ip}">{ip}</button>
+            <button type="button" class="chip-var" data-token="{os}">{os}</button>
+            <button type="button" class="chip-var" data-token="{start}">{start}</button>
+            <button type="button" class="chip-var" data-token="{expire}">{expire}</button>
+            <button type="button" class="chip-var" data-token="{traffic}">{traffic}</button>
+            <button type="button" class="chip-var" data-token="{service}">{service}</button>
+            <button type="button" class="chip-var" data-token="{greeting}" title="Доброго ранку/дня/вечора — за часом доби та мовою тікета">{greeting}</button>
+            <button type="button" class="chip-var" data-token="{date}">{date}</button>
+            <button type="button" class="chip-var" data-token="{time}">{time}</button>
+        </div>
+        <div class="hint">Спільні шаблони. Автодоповнення під час набору (↑↓ · Enter/Tab · Esc), або скорочення/назва + <b>Tab</b>, або <b>Ctrl+K</b>. UA/RU/EN — за мовою тікета, {greeting} — за часом доби.</div>
     </div>
 </div>
 <div class="tab-panel" data-panel="settings" hidden>
@@ -280,31 +284,6 @@
             <button type="button" class="small" id="testNotify" title="Перевірити сповіщення">🔔 Тест</button>
         </div>
     </div>
-    <div class="card">
-        <div class="card-head">
-            <span class="card-icon"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg></span>
-            <h2 class="card-title">Шаблони відповідей</h2>
-        </div>
-        <input type="search" id="snipSearch" class="snip-search" placeholder="Пошук шаблону…">
-        <div id="snippetsList"></div>
-        <div class="snip-foot">
-            <button type="button" class="add" id="addSnippet">+ Додати шаблон</button>
-            <span id="snipActions" class="snip-actions"></span>
-        </div>
-        <div class="snip-vars" id="snipVars">
-            <button type="button" class="chip-var" data-token="{ticket}">{ticket}</button>
-            <button type="button" class="chip-var" data-token="{ip}">{ip}</button>
-            <button type="button" class="chip-var" data-token="{os}">{os}</button>
-            <button type="button" class="chip-var" data-token="{start}">{start}</button>
-            <button type="button" class="chip-var" data-token="{expire}">{expire}</button>
-            <button type="button" class="chip-var" data-token="{traffic}">{traffic}</button>
-            <button type="button" class="chip-var" data-token="{service}">{service}</button>
-            <button type="button" class="chip-var" data-token="{greeting}" title="Доброго ранку/дня/вечора — за часом доби та мовою тікета">{greeting}</button>
-            <button type="button" class="chip-var" data-token="{date}">{date}</button>
-            <button type="button" class="chip-var" data-token="{time}">{time}</button>
-        </div>
-        <div class="hint">Спільні шаблони. Автодоповнення під час набору (↑↓ · Enter/Tab · Esc), або скорочення/назва + <b>Tab</b>, або <b>Ctrl+K</b>. UA/RU/EN — за мовою тікета, {greeting} — за часом доби.</div>
-    </div>
     <div class="card card-disabled" data-card="outline" aria-disabled="true">
         <div class="card-head">
             <span class="card-icon"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></span>
@@ -341,6 +320,27 @@
                 <option value="system">Системний</option>
             </select>
         </div>
+    </div>
+    <div class="card">
+        <div class="card-head">
+            <span class="card-icon"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg></span>
+            <h2 class="card-title">Логи</h2>
+            <span id="logsStatus" class="hint"></span>
+            <button type="button" class="small icon-btn" id="refreshLogs" title="Оновити"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></button>
+        </div>
+        <div id="logsStats" class="hint" style="margin-bottom:6px;font-weight:600"></div>
+        <div class="field row" style="margin-bottom:8px">
+            <input type="text" id="logsFilter" placeholder="Пошук: тікет / дія / хто" style="flex:1">
+            <select id="logsSort" title="Сортування">
+                <option value="at_desc">Новіші</option>
+                <option value="at_asc">Старіші</option>
+                <option value="ticket">Тікет</option>
+                <option value="action">Дія</option>
+                <option value="actor">Хто</option>
+            </select>
+        </div>
+        <div id="logsList" class="stale-list"></div>
+        <div class="hint">Історія дій зі спільними будильниками: хто, що, коли. Лише для авторизованих.</div>
     </div>
 </div>
 
