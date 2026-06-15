@@ -807,6 +807,8 @@ function snippetVars() {
 }
 // Тіло вхідного (клієнтського) повідомлення — лише текст, без імені/дати.
 const INCOMING_MSG_SEL = '.isp-chat-bubble_type-incoming isp-chat-message-body';
+// Тіла повідомлень для кнопки перекладу — і клієнта, і сапорта (вихідні).
+const TRANSLATABLE_MSG_SEL = '.isp-chat-bubble_type-incoming isp-chat-message-body, .isp-chat-bubble_type-outcoming isp-chat-message-body';
 // SVG-іконка перекладу (глобус) у монохромному стилі панелі (як дзвіночок).
 const HR_TR_ICON = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>';
 // Мова тікета за текстом вхідних повідомлень клієнта (укр-специфічні літери →
@@ -1170,7 +1172,7 @@ function injectSnippetButton() {
 // Кнопка перекладу під кожним вхідним повідомленням клієнта (перекладає лише
 // текст повідомлення — без імені/дати; одна кнопка на повідомлення).
 function injectMsgTranslate() {
-    document.querySelectorAll(INCOMING_MSG_SEL).forEach((msgBody) => {
+    document.querySelectorAll(TRANSLATABLE_MSG_SEL).forEach((msgBody) => {
         if (msgBody.dataset.hrTr === '1') return;
         msgBody.dataset.hrTr = '1';
         const original = (msgBody.textContent || '').trim();
