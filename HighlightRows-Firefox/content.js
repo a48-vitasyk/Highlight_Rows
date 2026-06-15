@@ -1234,7 +1234,9 @@ let lastSuggestTicket = null;
 let suggestDismissed = null;
 function injectSnippetSuggest() {
     const ta = document.querySelector('textarea.ispui-input__textarea');
-    if (!ta || !ta.parentNode) return;
+    // Верхній бар поля відповіді (поряд із рідним «Шаблоны»).
+    const bar = ta && ta.closest('isp-chat-input') ? ta.closest('isp-chat-input').querySelector('.isp-buttons-block') : null;
+    if (!ta || !bar) return;
     if (!settings.snipSuggest) {
         const ex = document.getElementById('hr-suggest');
         if (ex) ex.remove();
@@ -1265,7 +1267,7 @@ function injectSnippetSuggest() {
     close.title = 'Сховати';
     close.addEventListener('click', (ev) => { ev.preventDefault(); row.remove(); suggestDismissed = tid; });
     row.appendChild(close);
-    ta.parentNode.insertBefore(row, ta);
+    bar.appendChild(row); // у верхній бар, праворуч від «Шаблоны»
 }
 
 function refresh() {

@@ -165,10 +165,10 @@
     .hr-msg-tr-text { background: rgba(78, 109, 160, .18); color: #e8eaed; }
 }
 
-/* Розумні підказки шаблонів */
+/* Розумні підказки шаблонів — у верхньому барі поля відповіді, біля «Шаблоны» */
 .hr-suggest {
-    display: flex; align-items: center; flex-wrap: wrap; gap: 5px; margin: 0 0 6px;
-    font: 12px system-ui, sans-serif;
+    display: inline-flex; align-items: center; flex-wrap: wrap; gap: 5px; margin-left: 10px;
+    font: 12px system-ui, sans-serif; vertical-align: middle;
 }
 .hr-suggest-label { color: #888; }
 .hr-suggest-chip {
