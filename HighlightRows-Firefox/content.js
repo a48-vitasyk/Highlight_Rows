@@ -1247,30 +1247,26 @@ function suggestSnippets(limit) {
         .slice(0, limit || 3)
         .map((x) => x.s);
 }
-let lastSuggestTicket = null;
 let suggestDismissed = null;
 function injectSnippetSuggest() {
     const ta = document.querySelector('textarea.ispui-input__textarea');
     // Верхній бар поля відповіді (поряд із рідним «Шаблоны»).
     const bar = ta && ta.closest('isp-chat-input') ? ta.closest('isp-chat-input').querySelector('.isp-buttons-block') : null;
     if (!ta || !bar) return;
-    if (!settings.snipSuggest) {
-        const ex = document.getElementById('hr-suggest');
-        if (ex) ex.remove();
-        lastSuggestTicket = null;
-        return;
-    }
+    const existing = document.getElementById('hr-suggest');
+    if (!settings.snipSuggest) { if (existing) existing.remove(); return; }
     if (!snippets.length) return; // шаблони ще не завантажились — спробуємо наступного refresh
     const tid = readTicketId() || '';
-    if (suggestDismissed === tid) return;
-    if (lastSuggestTicket === tid && document.getElementById('hr-suggest')) return;
-    lastSuggestTicket = tid;
-    const old = document.getElementById('hr-suggest');
-    if (old) old.remove();
+    if (suggestDismissed === tid) { if (existing) existing.remove(); return; }
+    // Самовідновлення: якщо рядок уже стоїть для цього тікета й під'єднаний — нічого.
+    // Інакше (панель перемалювала бар і прибрала його, або змінився тікет) — будуємо.
+    if (existing && existing.isConnected && existing.dataset.tid === tid && bar.contains(existing)) return;
+    if (existing) existing.remove();
     const sugg = suggestSnippets(3);
     if (!sugg.length) return;
     const row = makeElc('div', 'hr-suggest');
     row.id = 'hr-suggest';
+    row.dataset.tid = tid;
     row.appendChild(makeElc('span', 'hr-suggest-label', 'Підказки:'));
     sugg.forEach((s) => {
         const chip = makeElc('button', 'hr-suggest-chip', s.title || (s.body || '').slice(0, 24));
