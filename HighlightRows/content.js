@@ -20,7 +20,6 @@ const MATCH_POLL_DEDUP_MS = 28 * 60 * 1000;
 const MATCH_MAX_PAGES = 40;                     // запобіжник для пагінації
 
 // Трафік у тікеті
-const BYTES_PER_TB = 1099511627776;            // 1 ТБ (1024^4)
 const TRAFFIC_ITEM_CLASS = 'hr-traffic-item';
 // Локалізовані підписи панелі (значення за замовч. — ru; реальні беремо з API).
 const DEFAULT_LABELS = {
@@ -799,7 +798,7 @@ function snippetVars() {
     }
     if (trafficData) {
         if (trafficData.used != null && trafficData.paid != null && !trafficData.notFound && !trafficData.none) {
-            v.traffic = formatTB(trafficData.used) + ' / ' + formatTB(trafficData.paid) + ' TB';
+            v.traffic = formatTB(trafficData.used) + ' / ' + formatTB(trafficData.paid);
         }
         v.service = trafficData.id || '';
     }
@@ -1787,8 +1786,16 @@ function formatTB(bytes) {
     // Значення може бути порожнім або з пробілами-роздільниками — чистимо.
     const n = Number(String(bytes == null ? '' : bytes).replace(/[\s ]/g, ''));
     const raw = String(bytes == null ? '' : bytes).trim();
-    const v = (raw === '' || raw === '-') ? 0 : n;
-    return Number.isFinite(v) ? (v / BYTES_PER_TB).toFixed(3) : '?';
+    // Адаптивні одиниці: малі обсяги не мають показуватись як «0.000 TB».
+    if (raw === '' || raw === '-') return '—';
+    if (!Number.isFinite(n)) return '?';
+    const TB = 1024 ** 4, GB = 1024 ** 3, MB = 1024 ** 2, KB = 1024;
+    const fmt = (x, d) => x.toFixed(d).replace(/\.?0+$/, '');
+    if (n >= TB) return fmt(n / TB, 2) + ' ТБ';
+    if (n >= GB) return fmt(n / GB, 2) + ' ГБ';
+    if (n >= MB) return fmt(n / MB, 1) + ' МБ';
+    if (n >= KB) return fmt(n / KB, 0) + ' КБ';
+    return n + ' Б';
 }
 
 // Знаходить контейнер пунктів summary-блоку за його (локалізованим) заголовком.
@@ -1859,7 +1866,7 @@ function trafficValueText() {
     if (!trafficData) return '';
     if (trafficData.none) return 'немає прив\'язаної послуги';
     if (trafficData.notFound) return '—';
-    return `${formatTB(trafficData.used)} / ${formatTB(trafficData.paid)} TB`;
+    return `${formatTB(trafficData.used)} / ${formatTB(trafficData.paid)}`;
 }
 
 function injectTrafficDom() {
@@ -1998,13 +2005,12 @@ async function loadTraffic(force) {
 
             const inst = await fetchBillmgr('func=instances' + (item ? '&id=' + encodeURIComponent(item) : ''));
             const elems = asArray(inst.elem);
-            // Збіг за будь-яким ідентифікатором тікета (item може бути id / uuid /
-            // intname / itemtype); якщо у клієнта лише один сервер — беремо його.
+            // Збіг ЛИШЕ за унікальними ідентифікаторами (id послуги або uuid інстансу).
+            // intname/itemtype НЕ унікальні (спільні для багатьох серверів) — за ними
+            // підхоплювався не той сервер. Якщо у клієнта лише один сервер — беремо його.
             let match = item ? elems.find((e) =>
                 fieldVal(e.id) === item ||
-                fieldVal(e.instances_uuid) === item ||
-                fieldVal(e.intname) === item ||
-                fieldVal(e.itemtype) === item) : null;
+                fieldVal(e.instances_uuid) === item) : null;
             if (!match && elems.length === 1) match = elems[0];
             trafficData = match
                 ? {
