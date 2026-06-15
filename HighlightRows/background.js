@@ -174,7 +174,10 @@ chrome.runtime.onMessage.addListener((req, sender, sendResponse) => {
                 await SB.updateSnippet(req.snippet || {});
                 await SB.pullSnippets();
             } else if (req.sb === 'snipDel') {
-                await SB.deleteSnippet(req.id);
+                await SB.archiveSnippet(req.id);
+                await SB.pullSnippets();
+            } else if (req.sb === 'snipRestore') {
+                await SB.unarchiveSnippet(req.id);
                 await SB.pullSnippets();
             } else if (req.sb === 'catPull') {
                 if (!(await SB.loggedIn())) { sendResponse({ ok: false, error: 'not-logged-in' }); return; }

@@ -818,6 +818,11 @@ if ($('loginBtn')) $('loginBtn').addEventListener('click', async () => {
         status.textContent = 'Увійшли';
         await renderAccount();
         loadForm();
+        // Одразу підтягуємо спільні шаблони/категорії (login робить лише pull будильників),
+        // щоб новий користувач бачив усе спільне без перевідкриття попапа.
+        renderSnippets();
+        try { chrome.runtime.sendMessage({ sb: 'snipPull' }, () => { void chrome.runtime.lastError; renderSnippets(); }); } catch (e2) { /* ignore */ }
+        try { chrome.runtime.sendMessage({ sb: 'catPull' }, () => { void chrome.runtime.lastError; }); } catch (e2) { /* ignore */ }
     } catch (e) {
         status.textContent = 'Помилка входу: ' + (e && e.message ? e.message : e);
     }
@@ -906,6 +911,7 @@ function renderStaleStatus(s) {
     if (!el) return;
     if (!s) { el.textContent = ''; return; }
     if (s.note) { el.textContent = s.note; return; }
+    if (s.loading) { el.textContent = 'Завантажую чергу… ' + (s.total || 0) + ' тікетів'; return; }
     el.textContent = s.scanning
         ? ('Сканую ' + (s.scanned || 0) + '/' + (s.total || 0) + ' · пройшло ' + (s.passed || 0))
         : ('Скановано ' + (s.scanned || 0) + ' · без відп. ' + (s.passed || 0));
@@ -914,12 +920,15 @@ chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;
     if (changes.staleTickets) {
         renderStaleTickets(changes.staleTickets.newValue || []);
-        setRefreshing(false);
     }
     if (changes.matchTickets) {
         renderMatchTickets(changes.matchTickets.newValue || []);
     }
-    if (changes.staleScanStatus) renderStaleStatus(changes.staleScanStatus.newValue);
+    if (changes.staleScanStatus) {
+        const st = changes.staleScanStatus.newValue;
+        renderStaleStatus(st);
+        setRefreshing(!!(st && st.scanning)); // індикатор «Оновлюю…» живе, поки скан триває
+    }
     if (changes.matchScanStatus) renderMatchStatus(changes.matchScanStatus.newValue);
     if (changes.myTickets) renderMyTickets(changes.myTickets.newValue || []);
     if (changes.snippets) renderSnippets();
@@ -1143,12 +1152,14 @@ function renderSnippets() {
     }
     chrome.storage.local.get('snippets', (d) => {
         const all = (d && d.snippets) || [];
-        snipListCache = all;
+        const active = all.filter((s) => !s.archived);
+        const archived = all.filter((s) => s.archived);
+        snipListCache = active;
         box.innerHTML = '';
         if (!all.length) { box.appendChild(makeEl('div', { className: 'list-empty', textContent: 'Поки немає шаблонів' })); return; }
         const q = snipSearch.trim();
-        const list = all.filter((s) => snipMatchesSearch(s, q));
-        if (!list.length) { box.appendChild(makeEl('div', { className: 'list-empty', textContent: 'Нічого не знайдено' })); return; }
+        const list = active.filter((s) => snipMatchesSearch(s, q));
+        if (!list.length && !archived.length) { box.appendChild(makeEl('div', { className: 'list-empty', textContent: 'Нічого не знайдено' })); return; }
         // Групування за категорією (без категорії — в кінці).
         const groups = new Map();
         list.forEach((s) => { const c = (s.category || '').trim() || NO_CAT; if (!groups.has(c)) groups.set(c, []); groups.get(c).push(s); });
@@ -1163,6 +1174,18 @@ function renderSnippets() {
             box.appendChild(head);
             box.appendChild(wrap);
         });
+        // Архів (згорнутий за замовчуванням) — відновлення видалених шаблонів.
+        if (archived.length) {
+            const head = makeEl('div', { className: 'snip-group collapsed' });
+            head.appendChild(makeEl('span', { className: 'snip-group-name', textContent: 'Архів' }));
+            head.appendChild(makeEl('span', { className: 'snip-group-n', textContent: String(archived.length) }));
+            const wrap = makeEl('div', { className: 'snip-grp-body' });
+            wrap.hidden = true;
+            archived.forEach((s) => wrap.appendChild(snipArchRow(s)));
+            head.addEventListener('click', () => { wrap.hidden = !wrap.hidden; head.classList.toggle('collapsed', wrap.hidden); });
+            box.appendChild(head);
+            box.appendChild(wrap);
+        }
     });
 }
 if ($('snipSearch')) $('snipSearch').addEventListener('input', (e) => { snipSearch = e.target.value; renderSnippets(); });
@@ -1226,7 +1249,12 @@ document.addEventListener('click', (e) => {
 });
 function snipDelete(id, onDone) {
     if (!id) { onDone && onDone(); return; }
+    if (!confirm('Перемістити шаблон в архів?\nЙого можна відновити внизу списку, у розділі «Архів».')) { onDone && onDone(); return; }
     try { chrome.runtime.sendMessage({ sb: 'snipDel', id }, () => { void chrome.runtime.lastError; renderSnippets(); }); } catch (e) { /* ignore */ }
+}
+function snipRestore(id) {
+    if (!id) return;
+    try { chrome.runtime.sendMessage({ sb: 'snipRestore', id }, () => { void chrome.runtime.lastError; renderSnippets(); }); } catch (e) { /* ignore */ }
 }
 // Згорнутий рядок збереженого шаблону: назва + ✎ редагувати + × видалити.
 function snipViewRow(s) {
@@ -1240,13 +1268,25 @@ function snipViewRow(s) {
     label.title = s.body || '';
     const have = [(s.bodyRu || '').trim() && 'RU', (s.bodyEn || '').trim() && 'EN'].filter(Boolean);
     const edit = makeEl('button', { type: 'button', className: 'small', textContent: '✎', title: 'Редагувати' });
-    const del = makeEl('button', { type: 'button', className: 'small remove', textContent: '×', title: 'Видалити' });
+    const del = makeEl('button', { type: 'button', className: 'small remove', textContent: '×', title: 'В архів' });
     edit.addEventListener('click', () => row.replaceWith(snipEditRow(s)));
     del.addEventListener('click', () => snipDelete(row.dataset.id));
     row.appendChild(label);
     if (have.length) row.appendChild(makeEl('span', { className: 'snip-langs-have', textContent: have.join('·'), title: 'Є переклади: ' + have.join(', ') }));
     row.appendChild(edit);
     row.appendChild(del);
+    return row;
+}
+// Рядок архівованого шаблону: назва + ↩ відновити.
+function snipArchRow(s) {
+    const row = makeEl('div', { className: 'snip-row snip-view snip-arch' });
+    if (s.id) row.dataset.id = s.id;
+    const label = makeEl('span', { className: 'snip-label', textContent: s.title || (s.body || '').slice(0, 48) || '(без назви)' });
+    label.title = s.body || '';
+    const restore = makeEl('button', { type: 'button', className: 'small', textContent: '↩', title: 'Відновити' });
+    restore.addEventListener('click', () => snipRestore(row.dataset.id));
+    row.appendChild(label);
+    row.appendChild(restore);
     return row;
 }
 // Маркери форматування (стандартний Markdown — BILLmanager рендерить його в тікетах).

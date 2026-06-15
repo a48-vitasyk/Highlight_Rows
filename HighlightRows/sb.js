@@ -192,9 +192,11 @@ const SB = {
             method: 'PATCH', body: JSON.stringify({ title: s.title || '', body: s.body || '', body_ru: s.bodyRu || '', body_en: s.bodyEn || '', shortcut: s.shortcut || '', category: s.category || '', sort: s.sort || 0 }),
         });
     },
-    deleteSnippet(id) { return SB.rest('snippets?id=eq.' + encodeURIComponent(id), { method: 'DELETE' }); },
+    // Soft-delete: «видалення» = позначка archived (оборотно). Жорсткого DELETE нема.
+    archiveSnippet(id) { return SB.rest('snippets?id=eq.' + encodeURIComponent(id), { method: 'PATCH', body: JSON.stringify({ archived: true }) }); },
+    unarchiveSnippet(id) { return SB.rest('snippets?id=eq.' + encodeURIComponent(id), { method: 'PATCH', body: JSON.stringify({ archived: false }) }); },
     async mirrorSnippets(rows) {
-        const snippets = (rows || []).map((x) => ({ id: x.id, title: x.title || '', body: x.body || '', bodyRu: x.body_ru || '', bodyEn: x.body_en || '', shortcut: x.shortcut || '', category: x.category || '', creatorEmail: x.created_by_email || '' }));
+        const snippets = (rows || []).map((x) => ({ id: x.id, title: x.title || '', body: x.body || '', bodyRu: x.body_ru || '', bodyEn: x.body_en || '', shortcut: x.shortcut || '', category: x.category || '', creatorEmail: x.created_by_email || '', archived: !!x.archived }));
         await new Promise((res) => { try { chrome.storage.local.set({ snippets }, res); } catch (e) { res(); } });
     },
     async pullSnippets() {
