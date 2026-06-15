@@ -1790,7 +1790,7 @@ async function awAnchorOne(ticket, elid) {
         waitingSince: times.lastIncoming, ownerEmail: myEmail || '', lastAlert: 0, lastRecheck: Date.now(),
     };
     persistAwaiting();
-    sbSend({ sb: 'awUpsert', awaiting: { ticketId: ticket, clientMessageAt: times.lastIncoming, subject: '' } });
+    sbSend({ sb: 'awUpsert', awaiting: { ticketId: ticket, clientMessageAt: times.lastIncoming, subject: '', url: awaitingMap[ticket].url } });
 }
 
 async function awRecheckOne(t) {

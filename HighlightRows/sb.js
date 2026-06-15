@@ -188,7 +188,7 @@ const SB = {
             body: JSON.stringify({
                 ticket_id: a.ticketId,
                 client_message_at: new Date(a.clientMessageAt || Date.now()).toISOString(),
-                subject: a.subject || '', owner_email: email, owner_uid: uid,
+                subject: a.subject || '', url: a.url || '', owner_email: email, owner_uid: uid,
             }),
         });
     },
@@ -198,7 +198,7 @@ const SB = {
         const awaitingShared = (rows || []).map((x) => ({
             id: x.id, ticketId: x.ticket_id,
             clientMessageAt: x.client_message_at ? Date.parse(x.client_message_at) : 0,
-            subject: x.subject || '', ownerEmail: x.owner_email || '',
+            subject: x.subject || '', url: x.url || '', ownerEmail: x.owner_email || '',
         }));
         await new Promise((res) => { try { chrome.storage.local.set({ awaitingShared }, res); } catch (e) { res(); } });
     },

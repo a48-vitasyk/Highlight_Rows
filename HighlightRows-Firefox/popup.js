@@ -931,13 +931,46 @@ function renderMatchTickets(arr) {
     });
 }
 
-chrome.storage.local.get(['staleTickets', 'matchTickets', 'staleScanStatus', 'matchScanStatus', 'myTickets'], (d) => {
+// --- Блок «Клієнт чекає» (спільний пул, storage.local.awaitingShared) -----
+let awaitingCache = [];
+function fmtWaitMs(ms) {
+    const min = Math.floor(ms / 60000);
+    if (min < 60) return min + ' хв';
+    return Math.floor(min / 60) + 'г ' + (min % 60) + 'хв';
+}
+function renderAwaitingList(arr) {
+    awaitingCache = Array.isArray(arr) ? arr : [];
+    const box = $('awaitingList');
+    if (!box) return;
+    const now = Date.now();
+    const list = awaitingCache.slice().sort((a, b) => (a.clientMessageAt || 0) - (b.clientMessageAt || 0));
+    const st = $('awaitingStatus');
+    if (st) st.textContent = list.length ? ('чекає: ' + list.length) : '';
+    box.innerHTML = '';
+    if (!list.length) { box.appendChild(makeEl('div', { className: 'list-empty', textContent: 'Поки порожньо' })); return; }
+    list.forEach((a) => {
+        const wait = now - (a.clientMessageAt || now);
+        const who = a.ownerEmail ? a.ownerEmail.split('@')[0] : '';
+        const item = makeEl('div', { className: 'stale-item', title: (a.subject || '') + (who ? ' — взяв ' + who : '') });
+        item.appendChild(makeEl('span', { className: 'ti-num', textContent: '#' + a.ticketId }));
+        item.appendChild(makeEl('span', { className: 'ti-age ti-age--warn', textContent: fmtWaitMs(wait) }));
+        item.appendChild(makeEl('span', { className: 'ti-text', textContent: who ? ('взяв ' + who) : truncate(a.subject, 24) }));
+        makeClickable(item, a.url);
+        box.appendChild(item);
+    });
+}
+setInterval(() => renderAwaitingList(awaitingCache), 30000); // оновлювати час очікування, поки попап відкритий
+
+chrome.storage.local.get(['staleTickets', 'matchTickets', 'staleScanStatus', 'matchScanStatus', 'myTickets', 'awaitingShared'], (d) => {
     renderStaleTickets((d && d.staleTickets) || []);
     renderMatchTickets((d && d.matchTickets) || []);
     renderStaleStatus(d && d.staleScanStatus);
     renderMatchStatus(d && d.matchScanStatus);
     renderMyTickets((d && d.myTickets) || []);
+    renderAwaitingList((d && d.awaitingShared) || []);
 });
+// Свіжий стан спільного пулу при відкритті попапа (background оновить дзеркало → onChanged).
+try { chrome.runtime.sendMessage({ sb: 'awPull' }, () => { void chrome.runtime.lastError; }); } catch (e) { /* ignore */ }
 
 // Лічильник біля «Оновити» в «Особисті тікети»: скільки тікетів зараз у списку.
 function renderMatchStatus(s) {
@@ -967,6 +1000,9 @@ chrome.storage.onChanged.addListener((changes, area) => {
     }
     if (changes.matchTickets) {
         renderMatchTickets(changes.matchTickets.newValue || []);
+    }
+    if (changes.awaitingShared) {
+        renderAwaitingList(changes.awaitingShared.newValue || []);
     }
     if (changes.staleScanStatus) {
         const st = changes.staleScanStatus.newValue;
