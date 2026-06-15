@@ -1248,6 +1248,7 @@ function suggestSnippets(limit) {
         .map((x) => x.s);
 }
 let suggestDismissed = null;
+let suggestObserver = null;
 function injectSnippetSuggest() {
     const ta = document.querySelector('textarea.ispui-input__textarea');
     // Верхній бар поля відповіді (поряд із рідним «Шаблоны»).
@@ -1258,9 +1259,9 @@ function injectSnippetSuggest() {
     if (!snippets.length) return; // шаблони ще не завантажились — спробуємо наступного refresh
     const tid = readTicketId() || '';
     if (suggestDismissed === tid) { if (existing) existing.remove(); return; }
-    // Самовідновлення: якщо рядок уже стоїть для цього тікета й під'єднаний — нічого.
+    // Самовідновлення: якщо рядок уже стоїть у барі для цього тікета — нічого.
     // Інакше (панель перемалювала бар, або змінився тікет) — будуємо.
-    if (existing && existing.isConnected && existing.dataset.tid === tid) return;
+    if (existing && existing.isConnected && existing.dataset.tid === tid && bar.contains(existing)) return;
     if (existing) existing.remove();
     const sugg = suggestSnippets(3);
     if (!sugg.length) return;
@@ -1280,8 +1281,19 @@ function injectSnippetSuggest() {
     close.title = 'Сховати';
     close.addEventListener('click', (ev) => { ev.preventDefault(); row.remove(); suggestDismissed = tid; });
     row.appendChild(close);
-    // Сусіднім рядком ОДРАЗУ під баром (поза Angular-контейнером, щоб не стирався).
-    bar.parentNode.insertBefore(row, bar.nextSibling);
+    // У бар, ОДРАЗУ після «Шаблоны» (isp-saved-messages).
+    const anchor = bar.querySelector('isp-saved-messages');
+    if (anchor) anchor.insertAdjacentElement('afterend', row);
+    else bar.appendChild(row);
+    // Панель (Angular) може прибрати наш вузол — спостерігач миттєво повертає його.
+    if (!suggestObserver) {
+        suggestObserver = new MutationObserver(() => {
+            if (!alive || !settings.snipSuggest) return;
+            if (!document.getElementById('hr-suggest')) { try { injectSnippetSuggest(); } catch (e) { /* ignore */ } }
+        });
+        const host = bar.closest('isp-chat-input') || document.body;
+        try { suggestObserver.observe(host, { childList: true, subtree: true }); } catch (e) { /* ignore */ }
+    }
 }
 
 function refresh() {
