@@ -893,7 +893,8 @@ function renderMatchStatus(s) {
     if (!el) return;
     if (!s) { el.textContent = ''; return; }
     if (s.note) { el.textContent = s.note; return; }
-    el.textContent = s.scanning ? 'Сканую…' : ('тікетів: ' + (s.count || 0));
+    if (s.scanning) { el.textContent = 'Сканую…' + (s.page ? ' стор. ' + s.page : '') + (s.count ? ' (' + s.count + ')' : ''); return; }
+    el.textContent = 'тікетів: ' + (s.count || 0);
 }
 
 // Індикатор біля «Оновити»: скільки тікетів просканували / пройшли поріг.

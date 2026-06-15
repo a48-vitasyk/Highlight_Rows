@@ -1551,7 +1551,7 @@ function parseBlockTime(str) {
 
 // Тягне всі тікети черги, гортаючи сторінки через p_num (БЕЗ p_cnt — щоб не
 // скидати «рядків на сторінці»), і повертає користувача на його сторінку.
-async function fetchAllTickets() {
+async function fetchAllTickets(onPage) {
     let origPnum = '1';
     try {
         const probe = await fetchBillmgr('func=ticket');
@@ -1569,6 +1569,7 @@ async function fetchAllTickets() {
         const elems = asArray(doc.elem);
         all.push(...elems);
         lastPnum = pnum;
+        if (onPage) { try { onPage(all, pnum); } catch (e) { /* ignore */ } }
         if (pnum === 1) pageSize = elems.length;
         if (elems.length === 0 || (pageSize > 0 && elems.length < pageSize)) break;
         await sleep(STALE_FETCH_GAP_MS);
@@ -1593,6 +1594,35 @@ let lastMatchJson = '';
 
 function setMatchStatus(o) { try { chrome.storage.local.set({ matchScanStatus: o }); } catch (e) { /* ignore */ } }
 
+// Чистий збір збігів (тег/блок/будильник) із переліку тікетів — без алертів.
+// Використовується для проміжного рендера під час скану (щоб тікети з'являлися
+// поступово, а не тільки в кінці).
+function extractMatchList(tickets, reminderIds) {
+    const byId = {};
+    const ensure = (ticketId, elid, subject) => {
+        if (!byId[ticketId]) {
+            byId[ticketId] = {
+                ticketId, subject, kinds: [],
+                url: elid ? location.origin + '/billmgr?startform=ticket.edit&elid=' + encodeURIComponent(elid) : '',
+            };
+        }
+        return byId[ticketId];
+    };
+    for (const t of tickets) {
+        const ticketId = fieldVal(t.ticket);
+        if (!ticketId) continue;
+        const elid = fieldVal(t.id);
+        const subject = fieldVal(t.name);
+        if (tagRuleForSubject(subject)) ensure(ticketId, elid, subject).kinds.push('tag');
+        if (settings.enabled && settings.names.length) {
+            const blk = fieldVal(t.blocked_by);
+            if (blk && settings.names.find((n) => n && blk.includes(n))) ensure(ticketId, elid, subject).kinds.push('blocked');
+        }
+        if (reminderIds && reminderIds.has(ticketId)) ensure(ticketId, elid, subject).kinds.push('reminder');
+    }
+    return Object.values(byId).map((m) => ({ ...m, kinds: [...new Set(m.kinds)] }));
+}
+
 async function scanMatches(force) {
     if (!alive || !extensionAlive() || matchScanRunning) return;
     if (!onBillmgr()) { if (force) setMatchStatus({ scanning: false, note: 'відкрийте сторінку панелі (billmgr)' }); return; }
@@ -1608,12 +1638,17 @@ async function scanMatches(force) {
     let sessionLost = false;
     try {
         setMatchStatus({ scanning: true, count: 0 });
-        const tickets = await fetchAllTickets();
         const now = Date.now();
+        const reminderIds = new Set(computeActiveReminders(now).map((r) => r.ticketId));
+        // Проміжний рендер: після кожної сторінки показуємо знайдене + прогрес.
+        const tickets = await fetchAllTickets((soFar, pnum) => {
+            const partial = extractMatchList(soFar, reminderIds);
+            try { chrome.storage.local.set({ matchTickets: partial }); } catch (e) { /* ignore */ }
+            setMatchStatus({ scanning: true, count: partial.length, page: pnum });
+        });
         const byId = {};
         const activeKeys = new Set();
         let stateDirty = false;
-        const reminderIds = new Set(computeActiveReminders(now).map((r) => r.ticketId));
 
         const ensure = (ticketId, elid, subject) => {
             if (!byId[ticketId]) {
