@@ -136,17 +136,17 @@
 }
 .hr-fmt-btn {
     min-width: 26px; padding: 4px 8px; cursor: pointer;
-    background: #dfe2e7; border: 1px solid #c3c8d0; border-radius: 5px;
-    font: 12px system-ui, sans-serif; color: #2b3038; line-height: 1.4;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, .25);
+    /* колір як у білінгу: фон і текст беремо з тем-змінних панелі */
+    background: var(--isp-main-background-color, var(--ispui-input__background-color, #fff));
+    border: 1px solid var(--isp-separator-color, #d8dade); border-radius: 5px;
+    font: 12px system-ui, sans-serif; color: var(--isp-icon-main, #4a4a55); line-height: 1.4;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .12);
 }
-.hr-fmt-btn:hover { border-color: #1a76e2; color: #1a76e2; }
+.hr-fmt-btn:hover { border-color: var(--isp-main-color, #1a76e2); color: var(--isp-main-color, #1a76e2); }
 .hr-fmt-b { font-weight: 800; }
 .hr-fmt-i { font-style: italic; }
 .hr-fmt-s { text-decoration: line-through; }
-@media (prefers-color-scheme: dark) {
-    .hr-fmt-btn { background: #3c424d; border-color: #525a66; color: #f0f2f5; box-shadow: 0 2px 6px rgba(0, 0, 0, .5); }
-}
+.hr-fmt-lang { font-weight: 600; min-width: 34px; }
 
 /* Переклад вхідних повідомлень */
 .hr-msg-tr {

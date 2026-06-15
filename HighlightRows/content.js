@@ -1077,13 +1077,18 @@ function hrTranslate(text, target, cb) {
         });
     } catch (e) { cb(null); }
 }
-// Перекласти виділений текст у полі відповіді на мову клієнта (заміна на місці).
+// Цільова мова перекладу чернетки: 'auto' (мова клієнта) | uk | ru | en.
+let fmtLang = 'auto';
+const FMT_LANGS = ['auto', 'uk', 'ru', 'en'];
+const fmtLangLabel = () => (fmtLang === 'auto' ? 'Авто' : fmtLang.toUpperCase());
+// Перекласти виділений текст у полі відповіді (заміна на місці) на обрану мову.
 function hrTranslateSelection(ta) {
     const s = ta.selectionStart;
     const e = ta.selectionEnd;
     if (s == null || s === e) return;
     const sel = ta.value.slice(s, e);
-    hrTranslate(sel, detectTicketLang(), (out) => {
+    const target = fmtLang === 'auto' ? detectTicketLang() : fmtLang;
+    hrTranslate(sel, target, (out) => {
         if (out == null) return;
         ta.value = ta.value.slice(0, s) + out + ta.value.slice(e);
         try { ta.setSelectionRange(s, s + out.length); } catch (err) { /* ignore */ }
@@ -1121,7 +1126,19 @@ function ensureFmtBar() {
     fmtBar.appendChild(mk('</>', '', 'Код', (ta) => hrFmtWrap(ta, HR_FMT.code[0], HR_FMT.code[1])));
     fmtBar.appendChild(mk('•', '', 'Список', (ta) => hrFmtPrefix(ta, '- ')));
     fmtBar.appendChild(mk('›', '', 'Цитата', (ta) => hrFmtPrefix(ta, '> ')));
-    fmtBar.appendChild(mk('🌐→', 'hr-fmt-tr', 'Перекласти виділене → мова клієнта (Ctrl+A — все)', (ta) => hrTranslateSelection(ta)));
+    // Перемикач мови перекладу (цикл Авто→UA→RU→EN) — клік не губить виділення.
+    const langBtn = makeElc('button', 'hr-fmt-btn hr-fmt-lang', fmtLangLabel());
+    langBtn.type = 'button';
+    langBtn.title = 'Мова перекладу: ' + fmtLangLabel() + ' (клік — змінити)';
+    langBtn.addEventListener('mousedown', (e) => e.preventDefault());
+    langBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        fmtLang = FMT_LANGS[(FMT_LANGS.indexOf(fmtLang) + 1) % FMT_LANGS.length];
+        langBtn.textContent = fmtLangLabel();
+        langBtn.title = 'Мова перекладу: ' + fmtLangLabel() + ' (клік — змінити)';
+    });
+    fmtBar.appendChild(langBtn);
+    fmtBar.appendChild(mk('🌐→', 'hr-fmt-tr', 'Перекласти виділене на обрану мову (Ctrl+A — все)', (ta) => hrTranslateSelection(ta)));
     document.body.appendChild(fmtBar);
     window.addEventListener('scroll', () => { if (!fmtBar.hidden && fmtBarTa) positionFmtBar(fmtBarTa); }, true);
     window.addEventListener('resize', () => { if (!fmtBar.hidden && fmtBarTa) positionFmtBar(fmtBarTa); });
