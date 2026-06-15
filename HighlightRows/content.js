@@ -1948,6 +1948,14 @@ async function resolveElid(num) {
 function currentTicketKey() {
     return currentElid() || getTicketNumberFromDom();
 }
+// Вибрана послуга з поля «Услуга» (select name="item"). Текст: «#<id> ... (<ip>)».
+function readSelectedService() {
+    const el = document.querySelector('ispui-select-v2[name="item"] .isp-select__text');
+    const txt = el ? (el.textContent || '') : '';
+    const idm = txt.match(/#(\d+)/);
+    const ipm = txt.match(/\(\s*((?:\d{1,3}\.){3}\d{1,3})\s*\)/);
+    return { id: idm ? idm[1] : '', ip: ipm ? ipm[1] : '' };
+}
 
 // Іконка за статусом інстансу (instance_status).
 function statusIcon(s) {
@@ -1994,7 +2002,10 @@ async function loadTraffic(force) {
         } else {
             const ticket = await fetchBillmgr('func=ticket.edit&elid=' + encodeURIComponent(elid));
             updatePanelLabelsFrom(ticket); // локалізовані підписи поточною мовою
-            const item = fieldVal(ticket.item);
+            // Прив'язка до ВИБРАНОЇ послуги в полі «Услуга» (name="item"): у тексті
+            // — «#<id> ... (<ip>)». Це надійніше за ticket.item (він не завжди збігається).
+            const svc = readSelectedService();
+            const item = svc.id || fieldVal(ticket.item);
             // Контекст клієнта (як кнопка «По клиенту») — інакше func=instances
             // не поверне його сервер.
             const plid = fieldVal(ticket.plid) || fieldVal(ticket.id);
@@ -2011,6 +2022,8 @@ async function loadTraffic(force) {
             let match = item ? elems.find((e) =>
                 fieldVal(e.id) === item ||
                 fieldVal(e.instances_uuid) === item) : null;
+            // Резерв: збіг за IP вибраної послуги (якщо id не зійшовся).
+            if (!match && svc.ip) match = elems.find((e) => fieldVal(e.ip) === svc.ip);
             if (!match && elems.length === 1) match = elems[0];
             trafficData = match
                 ? {
