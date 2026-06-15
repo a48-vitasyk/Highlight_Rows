@@ -241,6 +241,31 @@
             <input type="file" id="alertSoundFile" accept="audio/*" hidden>
         </div>
         <div class="field row">
+            <label for="replySound">Відповідь</label>
+            <select id="replySound">
+                <option value="none">Без звуку</option>
+                <option value="beep">Beep</option>
+                <option value="ding">Ding</option>
+                <option value="double">Подвійний</option>
+                <option value="chime">Дзвіночок</option>
+                <option value="bell">Дзвін</option>
+                <option value="alarm">Будильник</option>
+                <option value="pop">Поп</option>
+                <option value="marimba">Марімба</option>
+                <option value="soft">Мʼякий</option>
+                <option value="digital">Цифровий</option>
+                <option value="triple">Потрійний</option>
+                <option value="rising">Висхідний</option>
+                <option value="falling">Спадний</option>
+                <option value="knock">Стук</option>
+                <option value="bubble">Бульбашка</option>
+                <option value="custom">Свій файл…</option>
+            </select>
+            <button type="button" class="small" id="testReplySound" title="Прослухати">▶</button>
+            <button type="button" class="small file-btn" id="replySoundUpload" title="Завантажити свій звук">Файл…</button>
+            <input type="file" id="replySoundFile" accept="audio/*" hidden>
+        </div>
+        <div class="field row">
             <label for="soundVolume">Гучність:</label>
             <input type="range" id="soundVolume" min="0" max="100" step="5" style="flex:1">
         </div>

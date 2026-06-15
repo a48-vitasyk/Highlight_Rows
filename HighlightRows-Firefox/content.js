@@ -65,6 +65,7 @@ const DEFAULT_SETTINGS = {
     // звук і сповіщення
     reminderSound: 'beep',  // beep | ding | double | custom (custom — data URL у storage.local)
     alertSound: 'beep',     // звук тегів/блокування
+    replySound: 'beep',     // звук сигналу відповіді клієнта (або 'none' — без звуку)
     soundVolume: 1,         // 0..1
     notifyMode: 'stack',    // replace | stack
     notifyMax: 3,           // 1..5 — макс. накопичених сповіщень
@@ -89,7 +90,8 @@ const DEFAULT_SETTINGS = {
 let settings = { ...DEFAULT_SETTINGS };
 let rowTimers = {};       // { [key]: { firstSeen, lastAlert } } — для blocked та tag-алертів
 let reminderState = {};   // { [reminderId]: { mutedDate: 'Y-M-D' } } — пише popup
-let repliedSeen = null;   // Set тікетів із новим повідомленням клієнта (стеження з DOM)
+let repliedSeen = null;   // Set тікетів із позначкою нового повідомлення (минулий прохід)
+let repliedVisible = null; // Set видимих тікетів минулого проходу (для виявлення появи)
 function rowHasNewMsg(row) {
     return !!row.querySelector('[class*="newmsg"], use[href*="newmsg"], use[*|href*="newmsg"]');
 }
@@ -194,6 +196,7 @@ function normalizeSettings(raw) {
     if (!(s.escalateMinutes > 0)) s.escalateMinutes = DEFAULT_SETTINGS.escalateMinutes;
     s.reminderSound = String(s.reminderSound || DEFAULT_SETTINGS.reminderSound);
     s.alertSound = String(s.alertSound || DEFAULT_SETTINGS.alertSound);
+    s.replySound = String(s.replySound || DEFAULT_SETTINGS.replySound);
     s.soundVolume = Number(s.soundVolume);
     if (!(s.soundVolume >= 0 && s.soundVolume <= 1)) s.soundVolume = DEFAULT_SETTINGS.soundVolume;
     s.notifyMode = s.notifyMode === 'replace' ? 'replace' : 'stack';
@@ -350,25 +353,27 @@ const BUILTIN_SOUNDS = {
     digital: 'sounds/digital.wav', triple: 'sounds/triple.wav', rising: 'sounds/rising.wav',
     falling: 'sounds/falling.wav', knock: 'sounds/knock.wav', bubble: 'sounds/bubble.wav',
 };
-let customSounds = { reminder: '', alert: '' }; // data URL зі storage.local
+let customSounds = { reminder: '', alert: '', reply: '' }; // data URL зі storage.local
 function loadCustomSounds() {
     try {
         chrome.storage.local.get('soundData', (d) => {
             const sd = (d && d.soundData) || {};
-            customSounds = { reminder: sd.reminder || '', alert: sd.alert || '' };
+            customSounds = { reminder: sd.reminder || '', alert: sd.alert || '', reply: sd.reply || '' };
             if (reminderAudio) { try { reminderAudio.pause(); } catch (e) { /* ignore */ } reminderAudio = null; }
         });
     } catch (e) { /* ignore */ }
 }
 function soundSrc(which) {
-    const key = which === 'reminder' ? settings.reminderSound : settings.alertSound;
+    const key = which === 'reminder' ? settings.reminderSound
+        : which === 'reply' ? settings.replySound
+            : settings.alertSound;
     if (key === 'custom') return customSounds[which] || chrome.runtime.getURL('beep.wav');
     return chrome.runtime.getURL(BUILTIN_SOUNDS[key] || 'beep.wav');
 }
 
-function playBeep() {
+function playBeep(which) {
     try {
-        const audio = new Audio(soundSrc('alert'));
+        const audio = new Audio(soundSrc(which || 'alert'));
         audio.volume = settings.soundVolume;
         audio.play().catch(() => {/* autoplay може бути заблоковано без жесту */});
     } catch (e) {
@@ -377,7 +382,7 @@ function playBeep() {
 }
 
 function fireAlert(label, opts) {
-    if (opts.sound) playBeep();
+    if (opts.sound) playBeep(opts.soundWhich);
     if (opts.notify) {
         try {
             chrome.runtime.sendMessage({ action: 'redAlert', kind: opts.kind || 'blocked', name: label, ticket: opts.ticket || '', url: (opts && opts.url) || '' });
@@ -1364,16 +1369,22 @@ function refresh() {
     }
     if (timersDirty) persistRowTimers();
 
-    // Стеження за відповіддю клієнта (DOM): сигнал, коли в черзі зʼявився новий
-    // маркер повідомлення. Перший прохід лише засіває (без сигналу). Вимкнено → скид.
+    // Стеження за відповіддю клієнта (DOM): сигналимо ЛИШЕ коли тікет, який МИНУЛОГО
+    // проходу був на екрані БЕЗ позначки, тепер її отримав (реальна поява повідомлення).
+    // Перемикання сторінок не сигналить — ті рядки не були видимі раніше.
     if (settings.replyWatch) {
-        if (repliedSeen) {
+        if (repliedVisible) {
+            const soundOn = settings.replySound !== 'none';
             newMsgNow.forEach((t) => {
-                if (!repliedSeen.has(t)) fireAlert('#' + t, { sound: settings.soundEnabled, notify: true, kind: 'reply', ticket: t });
+                if (repliedVisible.has(t) && !repliedSeen.has(t)) {
+                    fireAlert('#' + t, { sound: soundOn, notify: true, kind: 'reply', ticket: t, soundWhich: 'reply' });
+                }
             });
         }
+        repliedVisible = visible;
         repliedSeen = newMsgNow;
     } else {
+        repliedVisible = null;
         repliedSeen = null;
     }
 

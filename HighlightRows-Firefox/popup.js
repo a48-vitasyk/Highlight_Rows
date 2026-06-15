@@ -16,6 +16,7 @@ const DEFAULT_SETTINGS = {
     escalateMinutes: 10,
     reminderSound: 'beep',
     alertSound: 'beep',
+    replySound: 'beep',
     soundVolume: 1,
     notifyMode: 'stack',
     notifyMax: 3,
@@ -385,6 +386,7 @@ function fillForm(s, reminderState) {
     $('escalateMinutes').value = s.escalateMinutes || DEFAULT_SETTINGS.escalateMinutes;
     $('reminderSound').value = s.reminderSound || DEFAULT_SETTINGS.reminderSound;
     $('alertSound').value = s.alertSound || DEFAULT_SETTINGS.alertSound;
+    if ($('replySound')) $('replySound').value = s.replySound || DEFAULT_SETTINGS.replySound;
     $('soundVolume').value = Math.round((s.soundVolume != null ? s.soundVolume : 1) * 100);
     $('notifyMode').value = s.notifyMode === 'replace' ? 'replace' : 'stack';
     $('notifyMax').value = s.notifyMax || DEFAULT_SETTINGS.notifyMax;
@@ -447,6 +449,7 @@ function readForm() {
         escalateMinutes: Number($('escalateMinutes').value) > 0 ? Number($('escalateMinutes').value) : DEFAULT_SETTINGS.escalateMinutes,
         reminderSound: $('reminderSound').value || 'beep',
         alertSound: $('alertSound').value || 'beep',
+        replySound: $('replySound') ? ($('replySound').value || 'beep') : 'beep',
         soundVolume: Math.min(1, Math.max(0, (Number($('soundVolume').value) || 100) / 100)),
         notifyMode: $('notifyMode').value === 'replace' ? 'replace' : 'stack',
         notifyMax: Math.min(5, Math.max(1, Math.round(Number($('notifyMax').value) || DEFAULT_SETTINGS.notifyMax))),
@@ -1008,7 +1011,9 @@ const SOUND_BUILTIN = {
     falling: 'sounds/falling.wav', knock: 'sounds/knock.wav', bubble: 'sounds/bubble.wav',
 };
 function popupPlaySound(which) {
-    const sel = $(which === 'reminder' ? 'reminderSound' : 'alertSound').value;
+    const selId = which === 'reminder' ? 'reminderSound' : which === 'reply' ? 'replySound' : 'alertSound';
+    const sel = $(selId).value;
+    if (sel === 'none') return; // «Без звуку»
     const vol = Math.min(1, Math.max(0, (Number($('soundVolume').value) || 100) / 100));
     const play = (src) => { try { const a = new Audio(src); a.volume = vol; a.play().catch(() => {}); } catch (e) { /* ignore */ } };
     if (sel === 'custom') {
@@ -1019,6 +1024,7 @@ function popupPlaySound(which) {
 }
 if ($('testReminderSound')) $('testReminderSound').addEventListener('click', () => popupPlaySound('reminder'));
 if ($('testAlertSound')) $('testAlertSound').addEventListener('click', () => popupPlaySound('alert'));
+if ($('testReplySound')) $('testReplySound').addEventListener('click', () => popupPlaySound('reply'));
 if ($('testNotify')) $('testNotify').addEventListener('click', () => {
     const st = $('status');
     if (st) st.textContent = 'Перевірка…';
@@ -1062,8 +1068,10 @@ function wireSoundUpload(which, inputId, selectId) {
 }
 wireSoundUpload('reminder', 'reminderSoundFile', 'reminderSound');
 wireSoundUpload('alert', 'alertSoundFile', 'alertSound');
+wireSoundUpload('reply', 'replySoundFile', 'replySound');
 if ($('reminderSoundUpload')) $('reminderSoundUpload').addEventListener('click', () => $('reminderSoundFile').click());
 if ($('alertSoundUpload')) $('alertSoundUpload').addEventListener('click', () => $('alertSoundFile').click());
+if ($('replySoundUpload')) $('replySoundUpload').addEventListener('click', () => $('replySoundFile').click());
 
 if ($('notifyMode')) $('notifyMode').addEventListener('change', () => { $('notifyMax').disabled = $('notifyMode').value === 'replace'; });
 
