@@ -1259,8 +1259,8 @@ function injectSnippetSuggest() {
     const tid = readTicketId() || '';
     if (suggestDismissed === tid) { if (existing) existing.remove(); return; }
     // Самовідновлення: якщо рядок уже стоїть для цього тікета й під'єднаний — нічого.
-    // Інакше (панель перемалювала бар і прибрала його, або змінився тікет) — будуємо.
-    if (existing && existing.isConnected && existing.dataset.tid === tid && bar.contains(existing)) return;
+    // Інакше (панель перемалювала бар, або змінився тікет) — будуємо.
+    if (existing && existing.isConnected && existing.dataset.tid === tid) return;
     if (existing) existing.remove();
     const sugg = suggestSnippets(3);
     if (!sugg.length) return;
@@ -1280,7 +1280,8 @@ function injectSnippetSuggest() {
     close.title = 'Сховати';
     close.addEventListener('click', (ev) => { ev.preventDefault(); row.remove(); suggestDismissed = tid; });
     row.appendChild(close);
-    bar.appendChild(row); // у верхній бар, праворуч від «Шаблоны»
+    // Сусіднім рядком ОДРАЗУ під баром (поза Angular-контейнером, щоб не стирався).
+    bar.parentNode.insertBefore(row, bar.nextSibling);
 }
 
 function refresh() {
