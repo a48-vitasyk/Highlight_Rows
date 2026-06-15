@@ -150,10 +150,12 @@
 
 /* Переклад вхідних повідомлень */
 .hr-msg-tr {
-    margin-left: 6px; padding: 0 4px; cursor: pointer; vertical-align: middle;
-    border: none; background: transparent; font-size: 13px; line-height: 1; opacity: .55;
+    display: inline-flex; align-items: center; margin-top: 5px; padding: 2px;
+    cursor: pointer; border: none; background: transparent;
+    color: var(--isp-icon-main, #8a8a96); opacity: .75; line-height: 1;
 }
-.hr-msg-tr:hover { opacity: 1; }
+.hr-msg-tr:hover { opacity: 1; color: var(--isp-main-color, #1a76e2); }
+.hr-msg-tr svg { display: block; width: 15px; height: 15px; }
 .hr-msg-tr-text {
     margin: 4px 0 2px; padding: 6px 9px; border-left: 3px solid #1a76e2;
     background: rgba(26, 118, 226, .08); border-radius: 4px;

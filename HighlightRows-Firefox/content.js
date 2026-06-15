@@ -805,13 +805,15 @@ function snippetVars() {
     }
     return v;
 }
-// Селектор вхідних (клієнтських) повідомлень — не outcoming/system/ticketnote/inner.
-const INCOMING_BUBBLE_SEL = '.isp-chat-bubble:not(.isp-chat-bubble_type-outcoming):not(.isp-chat-bubble_type-system):not(.isp-chat-bubble_type-ticketnote):not(.isp-chat-bubble_type-inner)';
+// Тіло вхідного (клієнтського) повідомлення — лише текст, без імені/дати.
+const INCOMING_MSG_SEL = '.isp-chat-bubble_type-incoming isp-chat-message-body';
+// SVG-іконка перекладу (глобус) у монохромному стилі панелі (як дзвіночок).
+const HR_TR_ICON = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>';
 // Мова тікета за текстом вхідних повідомлень клієнта (укр-специфічні літери →
 // uk; рос-специфічні → ru; лише латиниця → en). Запасний варіант — uk.
 function detectTicketLang() {
     let text = '';
-    document.querySelectorAll(INCOMING_BUBBLE_SEL).forEach((b) => { text += ' ' + (b.textContent || ''); });
+    document.querySelectorAll(INCOMING_MSG_SEL).forEach((b) => { text += ' ' + (b.textContent || ''); });
     text = text.slice(-4000);
     if (/[іїєґ]/i.test(text)) return 'uk';
     if (/[ыэъё]/i.test(text)) return 'ru';
@@ -1165,29 +1167,32 @@ function injectSnippetButton() {
     ta.addEventListener('scroll', hideAc);
 }
 
-// Кнопка перекладу біля кожного вхідного повідомлення клієнта.
+// Кнопка перекладу під кожним вхідним повідомленням клієнта (перекладає лише
+// текст повідомлення — без імені/дати; одна кнопка на повідомлення).
 function injectMsgTranslate() {
-    document.querySelectorAll(INCOMING_BUBBLE_SEL).forEach((bubble) => {
-        if (bubble.dataset.hrTr === '1') return;
-        bubble.dataset.hrTr = '1';
-        const original = (bubble.textContent || '').trim();
+    document.querySelectorAll(INCOMING_MSG_SEL).forEach((msgBody) => {
+        if (msgBody.dataset.hrTr === '1') return;
+        msgBody.dataset.hrTr = '1';
+        const original = (msgBody.textContent || '').trim();
         let box = null;
-        const btn = makeElc('button', 'hr-msg-tr', '🌐');
+        const btn = document.createElement('button');
         btn.type = 'button';
+        btn.className = 'hr-msg-tr';
         btn.title = 'Перекласти повідомлення';
+        setSvg(btn, HR_TR_ICON);
         btn.addEventListener('click', (e) => {
             e.preventDefault();
             if (box) { box.remove(); box = null; return; }
             if (!original) return;
-            btn.textContent = '…';
+            btn.disabled = true; btn.style.opacity = '0.4';
             hrTranslate(original, settings.myLang, (out) => {
-                btn.textContent = '🌐';
+                btn.disabled = false; btn.style.opacity = '';
                 if (out == null) return;
                 box = makeElc('div', 'hr-msg-tr-text', out);
-                bubble.parentNode.insertBefore(box, bubble.nextSibling);
+                btn.parentNode.insertBefore(box, btn.nextSibling); // під кнопкою/повідомленням
             });
         });
-        bubble.appendChild(btn);
+        msgBody.parentNode.insertBefore(btn, msgBody.nextSibling); // одразу під текстом
         if (settings.autoTranslateIncoming && original) btn.click();
     });
 }
@@ -1195,7 +1200,7 @@ function injectMsgTranslate() {
 // --- Розумні підказки шаблонів за змістом тікета ---------------------------
 function ticketKeywords() {
     let text = '';
-    document.querySelectorAll(INCOMING_BUBBLE_SEL).forEach((b) => { text += ' ' + (b.textContent || ''); });
+    document.querySelectorAll(INCOMING_MSG_SEL).forEach((b) => { text += ' ' + (b.textContent || ''); });
     const title = document.querySelector('.isp-inline-group__title, h1');
     if (title) text += ' ' + (title.textContent || '');
     const words = (text.slice(0, 4000).match(/[a-zа-яіїєґ0-9]{4,}/gi) || []).map((w) => w.toLowerCase());
