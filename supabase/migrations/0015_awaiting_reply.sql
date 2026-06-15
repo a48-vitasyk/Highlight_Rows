@@ -15,8 +15,6 @@ create table if not exists public.awaiting_reply (
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now()
 );
--- URL тікета (content.js будує з location.origin) — щоб попап відкривав тікет із блоку.
-alter table public.awaiting_reply add column if not exists url text;
 
 alter table public.awaiting_reply enable row level security;
 
