@@ -172,6 +172,15 @@
         <div class="field">
             <label class="icon-label" title="Сигнал, коли в черзі зʼявляється нове повідомлення клієнта (поки відкрита вкладка черги)"><input type="checkbox" id="replyWatch"> Сигнал про відповідь клієнта (власні тікети)</label>
         </div>
+        <div class="field">
+            <label class="icon-label" title="Постійний наростаючий стан «клієнт чекає»: таймер у тікеті, підсвітка черги, лічильник на іконці, повтор сигналу й ескалація на команду"><input type="checkbox" id="replyWatchEscalate"> Наполягати, поки не відповіси (+ескалація)</label>
+        </div>
+        <div class="field row">
+            <label for="replyEscalateMinutes" title="Через скільки хв очікування підключати всю команду">Ескалація (хв):</label>
+            <input type="number" id="replyEscalateMinutes" min="1" step="1" style="width:60px">
+            <label for="replyRepeatMinutes" title="Як часто повторювати сигнал, поки не відповіси (0 = один раз)">Повтор (хв):</label>
+            <input type="number" id="replyRepeatMinutes" min="0" step="1" style="width:60px">
+        </div>
         <div class="field row">
             <input type="checkbox" id="resizeEnabled">
             <label for="resizePx">Ресайз поля вводу</label>
@@ -329,6 +338,7 @@
             <button type="button" class="small icon-btn" id="refreshLogs" title="Оновити"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></button>
         </div>
         <div id="logsStats" class="hint" style="margin-bottom:6px;font-weight:600"></div>
+        <div id="awaitingStats" class="hint" style="margin-bottom:6px;font-weight:600"></div>
         <div class="field row" style="margin-bottom:8px">
             <input type="text" id="logsFilter" placeholder="Пошук: тікет / дія / хто" style="flex:1">
             <select id="logsSort" title="Сортування">

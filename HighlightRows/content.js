@@ -70,6 +70,12 @@ const DEFAULT_SETTINGS = {
     notifyMode: 'stack',    // replace | stack
     notifyMax: 3,           // 1..5 — макс. накопичених сповіщень
     replyWatch: false,      // сигнал, коли в черзі зʼявляється нове повідомлення клієнта (DOM)
+    // «Клієнт чекає на відповідь» — постійний наростаючий стан + ескалація на команду
+    replyWatchEscalate: false,
+    replyEscalateMinutes: 5,   // через скільки хв очікування підключати всю команду
+    replyRepeatMinutes: 1,     // як часто повторювати сигнал, поки не відповіси (0 = раз)
+    replyWarnColor: '#ffd24a', // колір рядка/таймера на старті очікування
+    replyDangerColor: '#ff3b30', // колір при довгому очікуванні (після ескалації)
     // «без відповіді понад N год» — список у popup
     staleEnabled: false, // вимкнено за замовч.: скан відкриває тікети й гасить позначку нового повідомлення
     staleHours: 4,
@@ -92,6 +98,15 @@ let rowTimers = {};       // { [key]: { firstSeen, lastAlert } } — для bloc
 let reminderState = {};   // { [reminderId]: { mutedDate: 'Y-M-D' } } — пише popup
 let repliedSeen = null;   // Set тікетів із позначкою нового повідомлення (минулий прохід)
 let repliedVisible = null; // Set видимих тікетів минулого проходу (для виявлення появи)
+// «Клієнт чекає на відповідь»
+let awaitingMap = {};     // { [ticketId]: { elid, subject, url, waitingSince, ownerEmail, lastAlert, lastRecheck } } — мої виявлення
+let awaitingShared = [];  // дзеркало спільного пулу (storage.local.awaitingShared) — уся команда
+let awAnchorQueue = [];   // [{ ticket, elid }] — нові тікети на анкоринг (ticket.edit)
+let awDraining = false;   // чи виконується awDrain зараз
+let awNotifiedAt = {};    // { [ticketId]: ms } — троттл повтору сповіщень
+let awBubbleBaseline = null; // { ticketId, count } — для миттєвого очищення на вихідному баблі
+let replyAudio = null;    // окремий зацикл. звук відповіді (не плутати з reminderAudio)
+let awTimerInterval = null; // 1с-тік таймера в тікеті
 function rowHasNewMsg(row) {
     return !!row.querySelector('[class*="newmsg"], use[href*="newmsg"], use[*|href*="newmsg"]');
 }
@@ -140,10 +155,13 @@ function teardown() {
     if (intervalRef) { clearInterval(intervalRef); intervalRef = null; }
     if (sbPullIntervalRef) { clearInterval(sbPullIntervalRef); sbPullIntervalRef = null; }
     if (matchIntervalRef) { clearInterval(matchIntervalRef); matchIntervalRef = null; }
+    if (awTimerInterval) { clearInterval(awTimerInterval); awTimerInterval = null; }
     if (observerRef) { observerRef.disconnect(); observerRef = null; }
     clearTimeout(debounceTimer);
     stopReminderAudio();
     removeReminderBanner();
+    removeAwaitingBanner();
+    awRemoveTimer();
     removeUnlockListeners();
 }
 
@@ -202,6 +220,12 @@ function normalizeSettings(raw) {
     s.notifyMode = s.notifyMode === 'replace' ? 'replace' : 'stack';
     s.notifyMax = Math.min(5, Math.max(1, Math.round(Number(s.notifyMax) || DEFAULT_SETTINGS.notifyMax)));
     s.replyWatch = !!s.replyWatch;
+    s.replyWatchEscalate = !!s.replyWatchEscalate;
+    s.replyEscalateMinutes = Number(s.replyEscalateMinutes);
+    if (!(s.replyEscalateMinutes > 0)) s.replyEscalateMinutes = DEFAULT_SETTINGS.replyEscalateMinutes;
+    s.replyRepeatMinutes = Math.max(0, Number(s.replyRepeatMinutes) || 0);
+    s.replyWarnColor = String(s.replyWarnColor || DEFAULT_SETTINGS.replyWarnColor);
+    s.replyDangerColor = String(s.replyDangerColor || DEFAULT_SETTINGS.replyDangerColor);
     s.reminders = (Array.isArray(s.reminders) ? s.reminders : [])
         .map((r) => ({
             id: r.id || genId(),
@@ -1323,17 +1347,22 @@ function refresh() {
     const matchedTimerKeys = new Set();
     const visible = new Set();
     const newMsgNow = new Set();
+    const ticketElid = {};
     let timersDirty = false;
 
     // Час-залежні будильники рахуються незалежно від наявності рядка.
     const activeReminders = computeActiveReminders(now);
     const activeTicketIds = new Set(activeReminders.map((r) => r.ticketId));
+    // «Клієнт чекає»: лукап старту очікування за тікетом (мої + спільні).
+    const awWatch = !!settings.replyWatchEscalate;
+    const awSince = awWatch ? awWaitingByTicket() : null;
 
     document.querySelectorAll(ROW_SELECTOR).forEach((row) => {
         const subject = getCellText(row, SUBJECT_SELECTOR);
         const ticket = getCellText(row, TICKET_SELECTOR);
         if (ticket) visible.add(ticket); // для API-скану: цей тікет зараз видно
-        if (settings.replyWatch && ticket && rowHasNewMsg(row)) newMsgNow.add(ticket);
+        if (ticket && row.dataset && row.dataset.tableRowElid) ticketElid[ticket] = row.dataset.tableRowElid;
+        if ((settings.replyWatch || awWatch) && ticket && rowHasNewMsg(row)) newMsgNow.add(ticket);
 
         // 1) Правило за тегом (найнижчий пріоритет).
         const tag = tagRuleForRow(subject);
@@ -1377,7 +1406,14 @@ function refresh() {
             }
         }
 
-        // 3) Будильник-нагадування (найвищий пріоритет).
+        // 3) Клієнт чекає на відповідь (нижче за будильник).
+        if (awWatch && ticket && awSince[ticket] !== undefined && !activeTicketIds.has(ticket)) {
+            const wait = now - awSince[ticket];
+            const escMs = (settings.replyEscalateMinutes || 5) * 60000;
+            styleRow(row, awRampColor(wait), wait >= escMs, false, applied);
+        }
+
+        // 4) Будильник-нагадування (найвищий пріоритет).
         if (ticket && activeTicketIds.has(ticket)) {
             styleRow(row, settings.reminderColor, false, true, applied);
         }
@@ -1401,7 +1437,9 @@ function refresh() {
     // проходу був на екрані БЕЗ позначки, тепер її отримав (реальна поява повідомлення).
     // Перемикання сторінок не сигналить — ті рядки не були видимі раніше.
     if (settings.replyWatch) {
-        if (repliedVisible) {
+        if (repliedVisible && !settings.replyWatchEscalate) {
+            // Одноразовий сигнал. Коли ввімкнено наростаючий режим — його не чіпаємо
+            // (тиск дає awTick), щоб не дублювати.
             const soundOn = settings.replySound !== 'none';
             newMsgNow.forEach((t) => {
                 if (repliedVisible.has(t) && !repliedSeen.has(t)) {
@@ -1425,6 +1463,9 @@ function refresh() {
         stopReminderAudio();
         removeReminderBanner();
     }
+
+    // «Клієнт чекає на відповідь»: збір нових, очищення, сигнали, бейдж, таймер.
+    awTick(now, newMsgNow, visible, ticketElid);
 
     // Трафік клієнта в тікеті.
     maybeTraffic();
@@ -1627,6 +1668,224 @@ async function fetchAllTickets(onPage) {
     }
     return all;
 }
+
+// --- «Клієнт чекає на відповідь»: трекер + ескалація ---------------------
+const AW_RECHECK_MS = 60 * 1000;        // як часто пере-перевіряти, чи відписали
+const AW_FETCH_DEDUP_MS = 1200;         // мін. пауза між ticket.edit по всіх вкладках
+
+function persistAwaiting() { try { chrome.storage.local.set({ awaitingMap }); } catch (e) { /* ignore */ } }
+
+// Останні часи вхідного/вихідного повідомлень з ticket.edit.
+function awMsgTimes(det) {
+    let lastIncoming = null, lastOutgoing = null;
+    const msgs = asArray(det && det.mlist).flatMap((m) => asArray(m.message));
+    for (const msg of msgs) {
+        if (!msg) continue;
+        const t = parseServerDate(fieldVal(msg.date_post));
+        if (t === null) continue;
+        if (msg.$type === 'incoming') { if (lastIncoming === null || t > lastIncoming) lastIncoming = t; }
+        else if (msg.$type === 'outcoming') { if (lastOutgoing === null || t > lastOutgoing) lastOutgoing = t; }
+    }
+    return { lastIncoming, lastOutgoing };
+}
+
+// Старт очікування за тікетом: спільні + мої (мої свіжіші мають пріоритет).
+function awWaitingByTicket() {
+    const m = {};
+    for (const a of awaitingShared) if (a && a.ticketId) m[a.ticketId] = a.clientMessageAt || 0;
+    for (const t of Object.keys(awaitingMap)) m[t] = awaitingMap[t].waitingSince;
+    return m;
+}
+
+function awHexToRgb(s) {
+    const m = /^#?([0-9a-f]{6})$/i.exec(String(s).trim());
+    if (!m) return null;
+    const i = parseInt(m[1], 16);
+    return { r: (i >> 16) & 255, g: (i >> 8) & 255, b: i & 255 };
+}
+function awRampColor(waitMs) {
+    const escMs = (settings.replyEscalateMinutes || 5) * 60000;
+    const f = Math.max(0, Math.min(1, escMs > 0 ? waitMs / escMs : 1));
+    const a = awHexToRgb(settings.replyWarnColor), b = awHexToRgb(settings.replyDangerColor);
+    if (!a || !b) return settings.replyDangerColor;
+    const c = (k) => Math.round(a[k] + (b[k] - a[k]) * f);
+    return '#' + [c('r'), c('g'), c('b')].map((x) => x.toString(16).padStart(2, '0')).join('');
+}
+
+// Які очікування зараз мають дзвонити: мої — завжди; чужі — лише після ескалації.
+function computeActiveAwaiting(now) {
+    const escMs = (settings.replyEscalateMinutes || 5) * 60000;
+    const byT = {};
+    for (const a of awaitingShared) if (a && a.ticketId) byT[a.ticketId] = { ticketId: a.ticketId, waitingSince: a.clientMessageAt || now, ownerEmail: a.ownerEmail || '' };
+    for (const t of Object.keys(awaitingMap)) byT[t] = { ticketId: t, waitingSince: awaitingMap[t].waitingSince, ownerEmail: awaitingMap[t].ownerEmail || '' };
+    const out = [];
+    for (const t of Object.keys(byT)) {
+        const e = byT[t];
+        const escalated = now >= e.waitingSince + escMs;
+        if (e.ownerEmail && myEmail && e.ownerEmail !== myEmail && !escalated) continue; // чужий, ще не ескальовано
+        out.push(e);
+    }
+    return out;
+}
+
+function awNotify(a, now) {
+    const repeatMs = (settings.replyRepeatMinutes || 0) * 60000;
+    const last = awNotifiedAt[a.ticketId] || 0;
+    const due = !last || (repeatMs > 0 && now - last >= repeatMs);
+    if (!due) return;
+    awNotifiedAt[a.ticketId] = now;
+    const url = (awaitingMap[a.ticketId] && awaitingMap[a.ticketId].url) || '';
+    fireAlert('#' + a.ticketId, { sound: settings.replySound !== 'none', notify: true, kind: 'reply', ticket: a.ticketId, soundWhich: 'reply', url });
+}
+
+function awBadge(count, longestMin) {
+    try { chrome.runtime.sendMessage({ action: 'setBadge', awaiting: count, longestMin }); } catch (e) { /* ignore */ }
+}
+
+function ensureAwaitingBanner(active, now) {
+    if (!document.body) return;
+    let banner = document.getElementById('hr-awaiting-banner');
+    if (!banner) {
+        banner = document.createElement('div');
+        banner.id = 'hr-awaiting-banner';
+        banner.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:12px;z-index:2147483646;background:#b3261e;color:#fff;padding:8px 14px;border-radius:8px;font:600 13px/1.3 system-ui,sans-serif;box-shadow:0 4px 14px rgba(0,0,0,.3);max-width:92vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+        document.body.appendChild(banner);
+    }
+    const label = active.slice().sort((x, y) => x.waitingSince - y.waitingSince)
+        .map((a) => '#' + a.ticketId + ' (' + Math.floor((now - a.waitingSince) / 60000) + ' хв)')
+        .join(' · ');
+    const full = '✉️ Клієнт чекає — відпишіть: ' + label;
+    if (banner.textContent !== full) banner.textContent = full;
+}
+function removeAwaitingBanner() { const b = document.getElementById('hr-awaiting-banner'); if (b) b.remove(); }
+
+// Миттєве очищення: у відкритому тікеті зʼявився новий вихідний бабл (відписали).
+function awInstantClearOpen() {
+    const t = readTicketId();
+    if (!t) { awBubbleBaseline = null; return; }
+    const count = document.querySelectorAll('.isp-chat-bubble_type-outcoming').length;
+    if (!awBubbleBaseline || awBubbleBaseline.ticketId !== t) { awBubbleBaseline = { ticketId: t, count }; return; }
+    if (count > awBubbleBaseline.count) {
+        awBubbleBaseline.count = count;
+        if (awaitingMap[t] || awaitingShared.some((a) => a.ticketId === t)) awResolve(t);
+    }
+}
+
+function awResolve(ticketId) {
+    if (awaitingMap[ticketId]) { delete awaitingMap[ticketId]; persistAwaiting(); }
+    delete awNotifiedAt[ticketId];
+    sbSend({ sb: 'awResolve', ticketId });
+}
+
+async function awAnchorOne(ticket, elid) {
+    if (!elid) return;
+    let det;
+    try { det = await fetchBillmgr('func=ticket.edit&elid=' + encodeURIComponent(elid)); } catch (e) { return; }
+    const times = awMsgTimes(det);
+    if (times.lastIncoming === null) return;
+    if (times.lastOutgoing !== null && times.lastOutgoing >= times.lastIncoming) return; // вже відписано/прочитано
+    awaitingMap[ticket] = {
+        elid, ticket, subject: '',
+        url: location.origin + '/billmgr?startform=ticket.edit&elid=' + encodeURIComponent(elid),
+        waitingSince: times.lastIncoming, ownerEmail: myEmail || '', lastAlert: 0, lastRecheck: Date.now(),
+    };
+    persistAwaiting();
+    sbSend({ sb: 'awUpsert', awaiting: { ticketId: ticket, clientMessageAt: times.lastIncoming, subject: '' } });
+}
+
+async function awRecheckOne(t) {
+    const e = awaitingMap[t];
+    if (!e || !e.elid) return;
+    let det;
+    try { det = await fetchBillmgr('func=ticket.edit&elid=' + encodeURIComponent(e.elid)); } catch (err) { return; }
+    const times = awMsgTimes(det);
+    e.lastRecheck = Date.now();
+    if (times.lastOutgoing !== null && times.lastOutgoing >= e.waitingSince) { awResolve(t); return; }
+    if (times.lastIncoming !== null && times.lastIncoming > e.waitingSince) e.waitingSince = times.lastIncoming;
+    persistAwaiting();
+}
+
+async function awDrain() {
+    if (awDraining || !settings.replyWatchEscalate) return;
+    if (!onBillmgr() || !tabVisible() || sessionInCooldown()) return;
+    const last = await loadFromStorage('local', 'awaitingFetchAt', 0);
+    if (Date.now() - (last || 0) < AW_FETCH_DEDUP_MS) return;
+    awDraining = true;
+    try {
+        while (awAnchorQueue.length && alive && extensionAlive() && tabVisible()) {
+            const item = awAnchorQueue.shift();
+            if (!item || !item.ticket || awaitingMap[item.ticket]) continue;
+            try { chrome.storage.local.set({ awaitingFetchAt: Date.now() }); } catch (e) { /* ignore */ }
+            await awAnchorOne(item.ticket, item.elid);
+            await sleep(STALE_FETCH_GAP_MS);
+        }
+        const due = Object.keys(awaitingMap).filter((t) => Date.now() - (awaitingMap[t].lastRecheck || 0) >= AW_RECHECK_MS);
+        for (const t of due) {
+            if (!alive || !extensionAlive() || !tabVisible()) break;
+            try { chrome.storage.local.set({ awaitingFetchAt: Date.now() }); } catch (e) { /* ignore */ }
+            await awRecheckOne(t);
+            await sleep(STALE_FETCH_GAP_MS);
+        }
+    } catch (e) { /* ignore */ } finally { awDraining = false; }
+}
+
+// Викликається з refresh() щопроходу.
+function awTick(now, newMsgNow, visible, ticketElid) {
+    if (!settings.replyWatchEscalate) {
+        if (Object.keys(awaitingMap).length) { awaitingMap = {}; persistAwaiting(); }
+        awAnchorQueue = [];
+        removeAwaitingBanner();
+        awBadge(0, 0);
+        return;
+    }
+    const sharedSet = new Set(awaitingShared.map((a) => a && a.ticketId));
+    // нові тікети з позначкою → у чергу анкорингу (якщо ще не відстежуємо)
+    newMsgNow.forEach((t) => {
+        if (awaitingMap[t] || sharedSet.has(t)) return;
+        if (awAnchorQueue.some((q) => q.ticket === t)) return;
+        awAnchorQueue.push({ ticket: t, elid: ticketElid[t] || '' });
+    });
+    // зник маркер у видимого мого тікета → пере-перевірити якнайшвидше
+    for (const t of Object.keys(awaitingMap)) {
+        if (visible.has(t) && !newMsgNow.has(t)) awaitingMap[t].lastRecheck = 0;
+    }
+    awInstantClearOpen();
+    awDrain();
+    // сигнали
+    const active = computeActiveAwaiting(now);
+    if (active.length) { ensureAwaitingBanner(active, now); active.forEach((a) => awNotify(a, now)); }
+    else { removeAwaitingBanner(); }
+    // бейдж — командний лічильник + найдовше очікування
+    const all = awWaitingByTicket();
+    const keys = Object.keys(all);
+    let longest = 0;
+    for (const k of keys) longest = Math.max(longest, now - (all[k] || now));
+    awBadge(keys.length, Math.floor(longest / 60000));
+}
+
+// Таймер у відкритому тікеті (1с-тік, окремо від 15с refresh).
+function awTimerTick() {
+    if (!alive || !settings.replyWatchEscalate) { awRemoveTimer(); return; }
+    const t = readTicketId();
+    const since = t ? awWaitingByTicket()[t] : undefined;
+    if (!t || since === undefined) { awRemoveTimer(); return; }
+    const ta = document.querySelector('textarea.ispui-input__textarea');
+    if (!ta) { awRemoveTimer(); return; }
+    let el = document.getElementById('hr-await-timer');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'hr-await-timer';
+        el.style.cssText = 'margin:4px 0;padding:3px 10px;border-radius:6px;font:700 12px/1.4 system-ui,sans-serif;display:inline-block;color:#fff';
+        const host = ta.closest('.isp-chat-input') || ta.parentElement;
+        if (host && host.parentElement) host.parentElement.insertBefore(el, host);
+        else if (ta.parentElement) ta.parentElement.insertBefore(el, ta);
+    }
+    const waitMs = Date.now() - since;
+    const mm = Math.floor(waitMs / 60000), ss = Math.floor((waitMs % 60000) / 1000);
+    el.textContent = '✉️ Клієнт чекає ' + mm + ':' + String(ss).padStart(2, '0') + ' — відпишіть';
+    el.style.backgroundColor = awRampColor(waitMs);
+}
+function awRemoveTimer() { const el = document.getElementById('hr-await-timer'); if (el) el.remove(); }
 
 function tagRuleForSubject(subject) {
     const lower = String(subject || '').toLowerCase();
@@ -2130,7 +2389,9 @@ function init() {
         loadFromStorage('local', 'reminderState', {}),
         loadFromStorage('local', 'panelLabels', null),
         loadFromStorage('local', 'matchAlertState', {}),
-    ]).then(([loadedSettings, loadedTimers, loadedReminderState, loadedLabels, loadedMatchState]) => {
+        loadFromStorage('local', 'awaitingMap', {}),
+        loadFromStorage('local', 'awaitingShared', []),
+    ]).then(([loadedSettings, loadedTimers, loadedReminderState, loadedLabels, loadedMatchState, loadedAwaiting, loadedAwShared]) => {
         if (!extensionAlive()) { teardown(); return; }
 
         settings = loadedSettings;
@@ -2138,6 +2399,8 @@ function init() {
         reminderState = loadedReminderState && typeof loadedReminderState === 'object' ? loadedReminderState : {};
         if (loadedLabels && typeof loadedLabels === 'object') panelLabels = { ...DEFAULT_LABELS, ...loadedLabels };
         matchAlertState = loadedMatchState && typeof loadedMatchState === 'object' ? loadedMatchState : {};
+        awaitingMap = loadedAwaiting && typeof loadedAwaiting === 'object' ? loadedAwaiting : {};
+        awaitingShared = Array.isArray(loadedAwShared) ? loadedAwShared : [];
         applyPanelTweaks();
         loadMyEmail();
         loadCustomSounds();
@@ -2177,6 +2440,9 @@ function init() {
                     loadCustomSounds();
                 } else if (area === 'local' && changes.snippets) {
                     loadSnippets();
+                } else if (area === 'local' && changes.awaitingShared) {
+                    awaitingShared = changes.awaitingShared.newValue || [];
+                    refresh();
                 }
             });
 
@@ -2220,14 +2486,15 @@ function init() {
             observerRef.observe(document.body, { childList: true, subtree: true });
 
             intervalRef = setInterval(refresh, REFRESH_INTERVAL_MS);
+            awTimerInterval = setInterval(awTimerTick, 1000); // таймер «клієнт чекає» у тікеті
 
             // «Без відповіді» та збіги по всій черзі («Особисті тікети») —
             // лише вручну, за кнопкою «Оновити» (без авто/періодичного обходу черги).
 
             // Спільні будильники: періодично підтягувати зі спільної бази
             // (фактичний fetch робить background; тут лише тригеримо з активної вкладки).
-            setTimeout(() => { if (tabVisible()) sbSend({ sb: 'pull' }); }, 4000);
-            sbPullIntervalRef = setInterval(() => { if (tabVisible()) sbSend({ sb: 'pull' }); }, MATCH_POLL_INTERVAL_MS);
+            setTimeout(() => { if (tabVisible()) { sbSend({ sb: 'pull' }); sbSend({ sb: 'awPull' }); } }, 4000);
+            sbPullIntervalRef = setInterval(() => { if (tabVisible()) { sbSend({ sb: 'pull' }); sbSend({ sb: 'awPull' }); } }, MATCH_POLL_INTERVAL_MS);
 
             // Коли вкладка стає активною — довантажити що треба (кожен виклик
             // поважає власний дедуп/кеш, тож без сплеску).

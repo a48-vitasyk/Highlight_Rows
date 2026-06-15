@@ -86,11 +86,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             request.url || ''
         );
     } else if (request.action === 'setBadge') {
-        const n = Number(request.count) || 0;
-        try {
-            chrome.action.setBadgeText({ text: n > 0 ? String(n) : '' });
-            chrome.action.setBadgeBackgroundColor({ color: '#d33b2f' });
-        } catch (e) { /* ignore */ }
+        if (request.count !== undefined) badgeMatch = Number(request.count) || 0;
+        if (request.awaiting !== undefined) badgeAwaiting = Number(request.awaiting) || 0;
+        if (request.longestMin !== undefined) badgeLongest = Number(request.longestMin) || 0;
+        renderBadge();
     }
 });
 
@@ -109,6 +108,25 @@ if (chrome.notifications && chrome.notifications.onClosed) {
     chrome.notifications.onClosed.addListener((id) => {
         if (id === RED_GROUP_ID) { redGroup = []; redGroupUrl = ''; }
     });
+}
+
+// --- Бейдж на іконці: «клієнт чекає» (пріоритет) або лічильник збігів ----
+let badgeMatch = 0, badgeAwaiting = 0, badgeLongest = 0;
+function renderBadge() {
+    try {
+        if (badgeAwaiting > 0) {
+            chrome.action.setBadgeText({ text: String(badgeAwaiting) });
+            chrome.action.setBadgeBackgroundColor({ color: '#ff3b30' });
+            chrome.action.setTitle({ title: 'Клієнтів чекає: ' + badgeAwaiting + (badgeLongest > 0 ? ' · найдовше ' + badgeLongest + ' хв' : '') });
+        } else if (badgeMatch > 0) {
+            chrome.action.setBadgeText({ text: String(badgeMatch) });
+            chrome.action.setBadgeBackgroundColor({ color: '#d33b2f' });
+            chrome.action.setTitle({ title: '' });
+        } else {
+            chrome.action.setBadgeText({ text: '' });
+            chrome.action.setTitle({ title: '' });
+        }
+    } catch (e) { /* ignore */ }
 }
 
 // Синхронізація спільних будильників (виклики від content.js / popup).
@@ -190,6 +208,22 @@ chrome.runtime.onMessage.addListener((req, sender, sendResponse) => {
             } else if (req.sb === 'catDel') {
                 await SB.deleteCategory(req.name || '');
                 await SB.pullCategories();
+            } else if (req.sb === 'awPull') {
+                if (!(await SB.loggedIn())) { sendResponse({ ok: false, error: 'not-logged-in' }); return; }
+                const rows = await SB.pullAwaiting();
+                sendResponse({ ok: true, rows: rows || [] });
+                return;
+            } else if (req.sb === 'awUpsert') {
+                await SB.upsertAwaiting(req.awaiting || {});
+                await SB.pullAwaiting();
+            } else if (req.sb === 'awResolve') {
+                await SB.resolveAwaiting(req.ticketId);
+                await SB.pullAwaiting();
+            } else if (req.sb === 'awLogs') {
+                if (!(await SB.loggedIn())) { sendResponse({ ok: false, error: 'not-logged-in' }); return; }
+                const rows = await SB.listAwaitingLogs(req.limit);
+                sendResponse({ ok: true, rows: rows || [] });
+                return;
             }
             sendResponse({ ok: true });
         } catch (e) {
@@ -234,7 +268,10 @@ let rtJoinRef = 0;
 
 function rtSchedulePull() {
     clearTimeout(rtPullTimer);
-    rtPullTimer = setTimeout(() => { try { SB.pull(); } catch (e) { /* ignore */ } }, 800);
+    rtPullTimer = setTimeout(() => {
+        try { SB.pull(); } catch (e) { /* ignore */ }
+        try { SB.pullAwaiting(); } catch (e) { /* ignore */ }
+    }, 800);
 }
 
 let rtBackoff = 5000; // back-off перепідключення: 5с → ×2 → до 5 хв (без шторму)
@@ -271,7 +308,10 @@ async function rtConnect() {
             config: {
                 broadcast: { ack: false, self: false },
                 presence: { enabled: false },
-                postgres_changes: [{ event: '*', schema: 'public', table: 'reminders' }],
+                postgres_changes: [
+                    { event: '*', schema: 'public', table: 'reminders' },
+                    { event: '*', schema: 'public', table: 'awaiting_reply' },
+                ],
                 private: false,
             },
             access_token: sess.access_token,
@@ -307,7 +347,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
 if (chrome.alarms && chrome.alarms.onAlarm) {
     chrome.alarms.onAlarm.addListener((a) => {
         if (!a) return;
-        if (a.name === 'sbpull' && typeof SB !== 'undefined') { try { SB.pull(); SB.pullSnippets(); SB.pullCategories(); } catch (e) { /* ignore */ } }
+        if (a.name === 'sbpull' && typeof SB !== 'undefined') { try { SB.pull(); SB.pullSnippets(); SB.pullCategories(); SB.pullAwaiting(); } catch (e) { /* ignore */ } }
     });
 }
 
@@ -315,7 +355,7 @@ if (chrome.alarms && chrome.alarms.onAlarm) {
 function sbBoot() {
     if (typeof SB === 'undefined') return;
     try { chrome.alarms.create('sbpull', { periodInMinutes: 15 }); } catch (e) { /* ignore */ }
-    SB.loggedIn().then((yes) => { if (yes) { rtConnect(); try { SB.pullSnippets(); SB.pullCategories(); } catch (e) { /* ignore */ } } }).catch(() => {});
+    SB.loggedIn().then((yes) => { if (yes) { rtConnect(); try { SB.pullSnippets(); SB.pullCategories(); SB.pullAwaiting(); } catch (e) { /* ignore */ } } }).catch(() => {});
 }
 if (chrome.runtime.onStartup) chrome.runtime.onStartup.addListener(sbBoot);
 if (chrome.runtime.onInstalled) chrome.runtime.onInstalled.addListener(sbBoot);

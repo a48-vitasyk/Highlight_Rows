@@ -21,6 +21,11 @@ const DEFAULT_SETTINGS = {
     notifyMode: 'stack',
     notifyMax: 3,
     replyWatch: false,
+    replyWatchEscalate: false,
+    replyEscalateMinutes: 5,
+    replyRepeatMinutes: 1,
+    replyWarnColor: '#ffd24a',
+    replyDangerColor: '#ff3b30',
     staleEnabled: false,
     staleHours: 4,
     trafficEnabled: false,
@@ -392,6 +397,9 @@ function fillForm(s, reminderState) {
     $('notifyMax').value = s.notifyMax || DEFAULT_SETTINGS.notifyMax;
     $('notifyMax').disabled = $('notifyMode').value === 'replace';
     $('replyWatch').checked = s.replyWatch;
+    if ($('replyWatchEscalate')) $('replyWatchEscalate').checked = s.replyWatchEscalate;
+    if ($('replyEscalateMinutes')) $('replyEscalateMinutes').value = s.replyEscalateMinutes || DEFAULT_SETTINGS.replyEscalateMinutes;
+    if ($('replyRepeatMinutes')) $('replyRepeatMinutes').value = (s.replyRepeatMinutes != null ? s.replyRepeatMinutes : DEFAULT_SETTINGS.replyRepeatMinutes);
 
     $('tagRules').innerHTML = '';
     (s.tagRules || []).forEach(addTagRuleRow);
@@ -454,6 +462,9 @@ function readForm() {
         notifyMode: $('notifyMode').value === 'replace' ? 'replace' : 'stack',
         notifyMax: Math.min(5, Math.max(1, Math.round(Number($('notifyMax').value) || DEFAULT_SETTINGS.notifyMax))),
         replyWatch: $('replyWatch').checked,
+        replyWatchEscalate: $('replyWatchEscalate') ? $('replyWatchEscalate').checked : false,
+        replyEscalateMinutes: Number($('replyEscalateMinutes') && $('replyEscalateMinutes').value) > 0 ? Number($('replyEscalateMinutes').value) : DEFAULT_SETTINGS.replyEscalateMinutes,
+        replyRepeatMinutes: $('replyRepeatMinutes') ? Math.max(0, Number($('replyRepeatMinutes').value) || 0) : DEFAULT_SETTINGS.replyRepeatMinutes,
         reminders,
     };
 }
@@ -727,7 +738,40 @@ function loadLogs() {
         });
     } catch (e) { if (st) st.textContent = 'помилка'; }
 }
-if ($('refreshLogs')) $('refreshLogs').addEventListener('click', loadLogs);
+
+// Статистика часу відповіді на клієнта (awaiting_logs): к-сть + сер. час, по людях.
+function renderAwaitingStats(rows) {
+    const box = $('awaitingStats');
+    if (!box) return;
+    const today = todayStr();
+    const isToday = (iso) => { const d = new Date(iso); return !isNaN(d) && `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}` === today; };
+    const per = {};
+    let total = 0, sum = 0;
+    for (const r of (rows || [])) {
+        if (!r || !isToday(r.at)) continue;
+        const who = ((r.responder_email || '').split('@')[0]) || '—';
+        const ms = Number(r.waited_ms) || 0;
+        per[who] = per[who] || { n: 0, ms: 0 };
+        per[who].n++; per[who].ms += ms;
+        total++; sum += ms;
+    }
+    if (!total) { box.textContent = ''; return; }
+    const fmt = (ms) => (ms / 60000).toFixed(1) + ' хв';
+    const perStr = Object.keys(per).sort().map((w) => `${w}: ${per[w].n} (${fmt(per[w].ms / per[w].n)})`).join(' · ');
+    box.textContent = `Відповіді сьогодні — ${total}, сер. ${fmt(sum / total)}` + (perStr ? '  |  ' + perStr : '');
+}
+function loadAwaitingStats() {
+    const box = $('awaitingStats');
+    if (!box) return;
+    try {
+        chrome.runtime.sendMessage({ sb: 'awLogs', limit: 500 }, (resp) => {
+            if (chrome.runtime.lastError) return;
+            if (!resp || !resp.ok) { box.textContent = ''; return; }
+            renderAwaitingStats(resp.rows || []);
+        });
+    } catch (e) { /* ignore */ }
+}
+if ($('refreshLogs')) $('refreshLogs').addEventListener('click', () => { loadLogs(); loadAwaitingStats(); });
 if ($('logsFilter')) $('logsFilter').addEventListener('input', applyLogFilter);
 if ($('logsSort')) $('logsSort').addEventListener('change', applyLogFilter);
 
@@ -738,7 +782,7 @@ function initTabs() {
     const activate = (name) => {
         tabs.forEach((t) => t.classList.toggle('active', t.dataset.tab === name));
         panels.forEach((p) => { p.hidden = p.dataset.panel !== name; });
-        if (name === 'settings') loadLogs(); // логи тепер унизу «Налаштувань»
+        if (name === 'settings') { loadLogs(); loadAwaitingStats(); } // логи й статистика — унизу «Налаштувань»
     };
     tabs.forEach((t) => t.addEventListener('click', () => {
         activate(t.dataset.tab);

@@ -177,6 +177,38 @@ const SB = {
         return rows;
     },
 
+    // --- «Клієнт чекає на відповідь» (спільний пул) ---
+    listAwaiting() { return SB.rest('awaiting_reply?select=*&order=client_message_at.asc'); },
+    async upsertAwaiting(a) {
+        const sess = await SB.getSession();
+        const email = (sess && sess.user && sess.user.email) || null;
+        const uid = (sess && sess.user && sess.user.id) || null;
+        return SB.rest('awaiting_reply', {
+            method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
+            body: JSON.stringify({
+                ticket_id: a.ticketId,
+                client_message_at: new Date(a.clientMessageAt || Date.now()).toISOString(),
+                subject: a.subject || '', owner_email: email, owner_uid: uid,
+            }),
+        });
+    },
+    resolveAwaiting(ticketId) { return SB.rest('awaiting_reply?ticket_id=eq.' + encodeURIComponent(ticketId), { method: 'DELETE' }); },
+    listAwaitingLogs(limit) { return SB.rest('awaiting_logs?select=*&order=at.desc&limit=' + (Number(limit) > 0 ? Number(limit) : 500)); },
+    async mirrorAwaiting(rows) {
+        const awaitingShared = (rows || []).map((x) => ({
+            id: x.id, ticketId: x.ticket_id,
+            clientMessageAt: x.client_message_at ? Date.parse(x.client_message_at) : 0,
+            subject: x.subject || '', ownerEmail: x.owner_email || '',
+        }));
+        await new Promise((res) => { try { chrome.storage.local.set({ awaitingShared }, res); } catch (e) { res(); } });
+    },
+    async pullAwaiting() {
+        if (!SB.configured() || !(await SB.loggedIn())) return null;
+        const rows = await SB.listAwaiting();
+        await SB.mirrorAwaiting(rows);
+        return rows;
+    },
+
     // --- Шаблони відповідей (спільні) ---
     listSnippets() { return SB.rest('snippets?select=*&order=sort.asc,updated_at.desc'); },
     async insertSnippet(s) {
