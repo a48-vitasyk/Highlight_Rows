@@ -76,6 +76,8 @@ const DEFAULT_SETTINGS = {
     replyRepeatMinutes: 1,     // як часто повторювати сигнал, поки не відповіси (0 = раз)
     replyWarnColor: '#ffd24a', // колір рядка/таймера на старті очікування
     replyDangerColor: '#ff3b30', // колір при довгому очікуванні (після ескалації)
+    quickReplies: true,        // панель швидких дій у таймері «клієнт чекає»
+    updateEveryMinutes: 20,    // нагадати надіслати апдейт після N хв очікування (0 = вимкнено)
     // «без відповіді понад N год» — список у popup
     staleEnabled: false, // вимкнено за замовч.: скан відкриває тікети й гасить позначку нового повідомлення
     staleHours: 4,
@@ -226,6 +228,8 @@ function normalizeSettings(raw) {
     s.replyRepeatMinutes = Math.max(0, Number(s.replyRepeatMinutes) || 0);
     s.replyWarnColor = String(s.replyWarnColor || DEFAULT_SETTINGS.replyWarnColor);
     s.replyDangerColor = String(s.replyDangerColor || DEFAULT_SETTINGS.replyDangerColor);
+    s.quickReplies = s.quickReplies !== false;
+    s.updateEveryMinutes = Math.max(0, Number(s.updateEveryMinutes) || 0);
     s.reminders = (Array.isArray(s.reminders) ? s.reminders : [])
         .map((r) => ({
             id: r.id || genId(),
@@ -1863,7 +1867,78 @@ function awTick(now, newMsgNow, visible, ticketElid) {
     awBadge(keys.length, Math.floor(longest / 60000));
 }
 
-// Таймер у відкритому тікеті (1с-тік, окремо від 15с refresh).
+// --- Швидкі дії проти невдоволення клієнта (холдинг/апдейт/нагад) --------
+function plusMinutesHHMM(min) {
+    const d = new Date(Date.now() + min * 60000);
+    return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+// Вбудовані дефолти, якщо нема шаблону з відповідним скороченням (hold/upd).
+const AW_DEFAULT_TEXT = {
+    hold: {
+        uk: '{greeting}! Дякуємо за звернення — вже розбираємось і повернемось найближчим часом.',
+        ru: '{greeting}! Спасибо за обращение — уже разбираемся и вернёмся в ближайшее время.',
+        en: '{greeting}! Thanks for reaching out — we are already looking into it and will get back to you shortly.',
+    },
+    upd: {
+        uk: '{greeting}! Ваше питання ще в роботі — тримаємо вас у курсі, дякуємо за терпіння.',
+        ru: '{greeting}! Ваш вопрос ещё в работе — держим вас в курсе, спасибо за терпение.',
+        en: '{greeting}! Your request is still in progress — we will keep you posted, thanks for your patience.',
+    },
+};
+function awInsertReserved(kind) {
+    const ta = document.querySelector('textarea.ispui-input__textarea');
+    if (!ta) return;
+    const snip = findSnippetByToken(kind);
+    let text;
+    if (snip) text = fillSnippet(snip);
+    else {
+        const map = AW_DEFAULT_TEXT[kind] || {};
+        text = fillSnippet(map[detectTicketLang()] || map.uk || '');
+    }
+    if (text) insertIntoReply(ta, text);
+}
+function awFlash(btn, txt) {
+    if (!btn.dataset.orig) btn.dataset.orig = btn.textContent;
+    btn.textContent = txt;
+    clearTimeout(btn._t);
+    btn._t = setTimeout(() => { btn.textContent = btn.dataset.orig; }, 1600);
+}
+function awPromise(min, btn) {
+    const tid = readTicketId();
+    if (!tid) { awFlash(btn, '✕'); return; }
+    const time = plusMinutesHHMM(min);
+    try {
+        chrome.runtime.sendMessage({ sb: 'add', ticketId: tid, time }, (resp) => {
+            if (chrome.runtime.lastError) { awFlash(btn, '✕'); return; }
+            if (resp && resp.duplicate) awFlash(btn, '✓ вже');
+            else if (resp && resp.ok) awFlash(btn, '✓ ' + time);
+            else awFlash(btn, '✕');
+        });
+    } catch (e) { awFlash(btn, '✕'); }
+}
+function awBuildActions() {
+    const row = document.createElement('span');
+    row.style.cssText = 'display:inline-flex;gap:6px;flex-wrap:wrap';
+    const mk = (id, label, title, onClick) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        if (id) b.id = id;
+        b.textContent = label;
+        b.title = title || '';
+        b.style.cssText = 'cursor:pointer;border:1px solid #c4c8d0;background:#eef0f3;color:#2b3038;border-radius:6px;padding:3px 8px;font:600 11px/1 system-ui,sans-serif';
+        b.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); onClick(b); });
+        row.appendChild(b);
+        return b;
+    };
+    mk('hr-act-hold', 'Вже дивимось', 'Вставити «ми вже дивимось» у поле відповіді (шаблон зі скороченням hold або типовий)', () => awInsertReserved('hold'));
+    mk('hr-act-upd', 'Апдейт', 'Вставити проміжний апдейт (шаблон зі скороченням upd або типовий)', () => awInsertReserved('upd'));
+    mk('', '⏰+30', 'Нагадати про тікет через 30 хв', (b) => awPromise(30, b));
+    mk('', '⏰+1г', 'Нагадати про тікет через 1 год', (b) => awPromise(60, b));
+    mk('', '⏰+2г', 'Нагадати про тікет через 2 год', (b) => awPromise(120, b));
+    return row;
+}
+
+// Таймер у відкритому тікеті (1с-тік, окремо від 15с refresh) + панель дій.
 function awTimerTick() {
     if (!alive || !settings.replyWatchEscalate) { awRemoveTimer(); return; }
     const t = readTicketId();
@@ -1875,15 +1950,27 @@ function awTimerTick() {
     if (!el) {
         el = document.createElement('div');
         el.id = 'hr-await-timer';
-        el.style.cssText = 'margin:4px 0;padding:3px 10px;border-radius:6px;font:700 12px/1.4 system-ui,sans-serif;display:inline-block;color:#fff';
+        el.style.cssText = 'margin:4px 0;display:flex;align-items:center;gap:8px;flex-wrap:wrap';
+        const pill = document.createElement('span');
+        pill.id = 'hr-await-timer-text';
+        pill.style.cssText = 'padding:3px 10px;border-radius:6px;font:700 12px/1.4 system-ui,sans-serif;color:#fff';
+        el.appendChild(pill);
+        if (settings.quickReplies) el.appendChild(awBuildActions());
         const host = ta.closest('.isp-chat-input') || ta.parentElement;
         if (host && host.parentElement) host.parentElement.insertBefore(el, host);
         else if (ta.parentElement) ta.parentElement.insertBefore(el, ta);
     }
     const waitMs = Date.now() - since;
     const mm = Math.floor(waitMs / 60000), ss = Math.floor((waitMs % 60000) / 1000);
-    el.textContent = '✉️ Клієнт чекає ' + mm + ':' + String(ss).padStart(2, '0') + ' — відпишіть';
-    el.style.backgroundColor = awRampColor(waitMs);
+    const everyMs = (settings.updateEveryMinutes || 0) * 60000;
+    const needUpdate = everyMs > 0 && waitMs >= everyMs;
+    const pill = el.querySelector('#hr-await-timer-text');
+    if (pill) {
+        pill.textContent = '✉️ Клієнт чекає ' + mm + ':' + String(ss).padStart(2, '0') + (needUpdate ? ' — час надіслати апдейт' : ' — відпишіть');
+        pill.style.backgroundColor = awRampColor(waitMs);
+    }
+    const upd = el.querySelector('#hr-act-upd');
+    if (upd) upd.style.boxShadow = needUpdate ? '0 0 0 2px #ff3b30' : 'none';
 }
 function awRemoveTimer() { const el = document.getElementById('hr-await-timer'); if (el) el.remove(); }
 

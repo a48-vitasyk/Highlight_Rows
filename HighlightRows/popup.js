@@ -26,6 +26,8 @@ const DEFAULT_SETTINGS = {
     replyRepeatMinutes: 1,
     replyWarnColor: '#ffd24a',
     replyDangerColor: '#ff3b30',
+    quickReplies: true,
+    updateEveryMinutes: 20,
     staleEnabled: false,
     staleHours: 4,
     trafficEnabled: false,
@@ -400,6 +402,8 @@ function fillForm(s, reminderState) {
     if ($('replyWatchEscalate')) $('replyWatchEscalate').checked = s.replyWatchEscalate;
     if ($('replyEscalateMinutes')) $('replyEscalateMinutes').value = s.replyEscalateMinutes || DEFAULT_SETTINGS.replyEscalateMinutes;
     if ($('replyRepeatMinutes')) $('replyRepeatMinutes').value = (s.replyRepeatMinutes != null ? s.replyRepeatMinutes : DEFAULT_SETTINGS.replyRepeatMinutes);
+    if ($('quickReplies')) $('quickReplies').checked = s.quickReplies !== false;
+    if ($('updateEveryMinutes')) $('updateEveryMinutes').value = (s.updateEveryMinutes != null ? s.updateEveryMinutes : DEFAULT_SETTINGS.updateEveryMinutes);
 
     $('tagRules').innerHTML = '';
     (s.tagRules || []).forEach(addTagRuleRow);
@@ -465,6 +469,8 @@ function readForm() {
         replyWatchEscalate: $('replyWatchEscalate') ? $('replyWatchEscalate').checked : false,
         replyEscalateMinutes: Number($('replyEscalateMinutes') && $('replyEscalateMinutes').value) > 0 ? Number($('replyEscalateMinutes').value) : DEFAULT_SETTINGS.replyEscalateMinutes,
         replyRepeatMinutes: $('replyRepeatMinutes') ? Math.max(0, Number($('replyRepeatMinutes').value) || 0) : DEFAULT_SETTINGS.replyRepeatMinutes,
+        quickReplies: $('quickReplies') ? $('quickReplies').checked : true,
+        updateEveryMinutes: $('updateEveryMinutes') ? Math.max(0, Number($('updateEveryMinutes').value) || 0) : DEFAULT_SETTINGS.updateEveryMinutes,
         reminders,
     };
 }
