@@ -1358,6 +1358,7 @@ function refresh() {
     const newMsgNow = new Set();
     const blockedNow = new Set(); // тікети, які зараз видно в черзі ЗАБЛОКОВАНИМИ на нас
     const ticketElid = {};
+    const ticketSubject = {}; // тема тікета з рядка черги — для блоку «Клієнт чекає»
     let timersDirty = false;
 
     // Час-залежні будильники рахуються незалежно від наявності рядка.
@@ -1371,6 +1372,7 @@ function refresh() {
         const subject = getCellText(row, SUBJECT_SELECTOR);
         const ticket = getCellText(row, TICKET_SELECTOR);
         if (ticket) visible.add(ticket); // для API-скану: цей тікет зараз видно
+        if (ticket) ticketSubject[ticket] = subject;
         if (ticket && row.dataset && row.dataset.tableRowElid) ticketElid[ticket] = row.dataset.tableRowElid;
         if ((settings.replyWatch || awWatch) && ticket && rowHasNewMsg(row)) newMsgNow.add(ticket);
 
@@ -1497,7 +1499,7 @@ function refresh() {
     }
 
     // «Клієнт чекає на відповідь»: збір нових, очищення, сигнали, бейдж, таймер.
-    awTick(now, newMsgNow, visible, ticketElid);
+    awTick(now, newMsgNow, visible, ticketElid, ticketSubject);
 
     // Трафік клієнта в тікеті.
     maybeTraffic();
@@ -1893,20 +1895,21 @@ async function awRecheckShared(a) {
     if (times.lastOutgoing !== null && times.lastOutgoing >= (a.clientMessageAt || 0)) awResolve(a.ticketId);
 }
 
-async function awAnchorOne(ticket, elid) {
+async function awAnchorOne(ticket, elid, subject) {
     if (!elid) return;
     let det;
     try { det = await fetchBillmgr('func=ticket.edit&elid=' + encodeURIComponent(elid)); } catch (e) { return; }
     const times = awMsgTimes(det);
     if (times.lastIncoming === null) return;
     if (times.lastOutgoing !== null && times.lastOutgoing >= times.lastIncoming) return; // вже відписано/прочитано
+    const subj = (subject || '').trim();
     awaitingMap[ticket] = {
-        elid, ticket, subject: '',
+        elid, ticket, subject: subj,
         url: location.origin + '/billmgr?startform=ticket.edit&elid=' + encodeURIComponent(elid),
         waitingSince: times.lastIncoming, ownerEmail: myEmail || '', lastAlert: 0, lastRecheck: Date.now(),
     };
     persistAwaiting();
-    sbSend({ sb: 'awUpsert', awaiting: { ticketId: ticket, clientMessageAt: times.lastIncoming, subject: '', url: awaitingMap[ticket].url } });
+    sbSend({ sb: 'awUpsert', awaiting: { ticketId: ticket, clientMessageAt: times.lastIncoming, subject: subj, url: awaitingMap[ticket].url } });
 }
 
 async function awRecheckOne(t) {
@@ -1932,7 +1935,7 @@ async function awDrain() {
             const item = awAnchorQueue.shift();
             if (!item || !item.ticket || awaitingMap[item.ticket]) continue;
             try { chrome.storage.local.set({ awaitingFetchAt: Date.now() }); } catch (e) { /* ignore */ }
-            await awAnchorOne(item.ticket, item.elid);
+            await awAnchorOne(item.ticket, item.elid, item.subject);
             await sleep(STALE_FETCH_GAP_MS);
         }
         const due = Object.keys(awaitingMap).filter((t) => Date.now() - (awaitingMap[t].lastRecheck || 0) >= AW_RECHECK_MS);
@@ -1958,7 +1961,7 @@ async function awDrain() {
 }
 
 // Викликається з refresh() щопроходу.
-function awTick(now, newMsgNow, visible, ticketElid) {
+function awTick(now, newMsgNow, visible, ticketElid, ticketSubject) {
     if (!settings.replyWatchEscalate) {
         if (Object.keys(awaitingMap).length) { awaitingMap = {}; persistAwaiting(); }
         awAnchorQueue = [];
@@ -1971,7 +1974,7 @@ function awTick(now, newMsgNow, visible, ticketElid) {
     newMsgNow.forEach((t) => {
         if (awaitingMap[t] || sharedSet.has(t)) return;
         if (awAnchorQueue.some((q) => q.ticket === t)) return;
-        awAnchorQueue.push({ ticket: t, elid: ticketElid[t] || '' });
+        awAnchorQueue.push({ ticket: t, elid: ticketElid[t] || '', subject: (ticketSubject && ticketSubject[t]) || '' });
     });
     // зник маркер у видимого мого тікета → пере-перевірити якнайшвидше
     for (const t of Object.keys(awaitingMap)) {

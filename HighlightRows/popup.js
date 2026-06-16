@@ -957,10 +957,11 @@ function renderAwaitingList(arr) {
     list.forEach((a) => {
         const wait = now - (a.clientMessageAt || now);
         const who = a.ownerEmail ? a.ownerEmail.split('@')[0] : '';
-        const item = makeEl('div', { className: 'stale-item', title: (a.subject || '') + (who ? ' — взяв ' + who : '') });
+        const subj = (a.subject || '').trim();
+        const item = makeEl('div', { className: 'stale-item', title: (subj || ('#' + a.ticketId)) + (who ? ' — стежить ' + who : '') });
         item.appendChild(makeEl('span', { className: 'ti-num', textContent: '#' + a.ticketId }));
         item.appendChild(makeEl('span', { className: 'ti-age ti-age--warn', textContent: fmtWaitMs(wait) }));
-        item.appendChild(makeEl('span', { className: 'ti-text', textContent: who ? ('взяв ' + who) : truncate(a.subject, 24) }));
+        item.appendChild(makeEl('span', { className: 'ti-text', textContent: truncate(subj, 32) }));
         item.appendChild(listActBtn('×', 'Прибрати зі списку (тікет уже опрацьовано)', () => awaitingRemove(a.ticketId)));
         makeClickable(item, a.url);
         box.appendChild(item);
