@@ -128,6 +128,7 @@ function todayStr() {
 let removedIds = new Set();
 // Чи є сесія — щоб «Загальний» (shared) був доступний лише залогіненим.
 let isLoggedIn = false;
+let myEmailPopup = ''; // email поточного акаунта — для кнопки «Взяти собі»
 function applyScopeLock() {
     document.querySelectorAll('.scope-opt[data-scope="shared"]').forEach((b) => {
         b.classList.toggle('locked', !isLoggedIn);
@@ -314,11 +315,37 @@ function addReminderRow(reminder, muted) {
     // Рядок 1: тікет, час, група дій (сегмент типу + заглушити + видалити).
     // Дії — один блок (.rem-actions), тож переносяться РАЗОМ, а поля тікета/часу
     // стискаються першими. .rm-note має flex-basis:100% → рядок 2; автор — рядок 3.
-    const actions = makeEl('div', { className: 'rem-actions' }, [scopeSeg, mute, remove]);
+    // «Взяти собі» (claim): лише для спільних, збережених у базі, ще не відписаних
+    // і ще не моїх. Дзвонитиме лише мені, інших звільнить (рядок лишається спільним).
+    const canClaim = scope === 'shared' && isUuid(id) && !r.doneAt && (!r.ownerEmail || r.ownerEmail !== myEmailPopup);
+    const claimBtn = canClaim
+        ? makeEl('button', { type: 'button', className: 'small', textContent: 'Взяти собі', title: 'Дзвонитиме лише вам; інших звільнить' })
+        : null;
+    const actionKids = claimBtn ? [claimBtn, scopeSeg, mute, remove] : [scopeSeg, mute, remove];
+    const actions = makeEl('div', { className: 'rem-actions' }, actionKids);
     row.appendChild(ticket);
     row.appendChild(time);
     row.appendChild(actions);
     row.appendChild(note);
+    if (claimBtn) {
+        claimBtn.addEventListener('click', async () => {
+            if (!isUuid(row.dataset.id) || typeof SB === 'undefined') return;
+            const st = $('status');
+            claimBtn.disabled = true;
+            st.textContent = 'Беру…';
+            try {
+                await SB.claimReminder(row.dataset.id);
+                try { await SB.pull(); } catch (e) { /* дзеркало оновиться згодом */ }
+                st.textContent = 'Взято — дзвонитиме лише вам';
+                if (!remindersDirty) loadForm(); else claimBtn.remove();
+            } catch (e) {
+                console.error('[HR] claim failed:', e);
+                st.textContent = 'Не вдалося взяти: ' + ((e && e.message) || e);
+                claimBtn.disabled = false;
+            }
+            setTimeout(() => { st.textContent = ''; }, 5000);
+        });
+    }
     if (scope === 'shared' && (r.creatorEmail || r.ownerEmail || r.doneAt)) {
         const auth = makeEl('div', { className: 'rem-author', innerHTML: IC.user12 });
         let txt = ' ' + (r.creatorEmail || '');
@@ -601,6 +628,7 @@ async function renderAccount() {
     const logoutBtn = $('logoutBtn');
     if (sess) {
         const email = (sess.user && sess.user.email) || '';
+        myEmailPopup = email;
         if (name) {
             name.textContent = email ? email.split('@')[0] : 'акаунт'; // частина до @
             name.title = email || 'Залогінено';
@@ -609,6 +637,7 @@ async function renderAccount() {
         if (loginBtn) loginBtn.style.display = 'none';
         if (logoutBtn) { logoutBtn.title = email ? ('Вийти — ' + email) : 'Вийти'; logoutBtn.style.display = ''; }
     } else {
+        myEmailPopup = '';
         if (name) { name.style.display = 'none'; name.textContent = ''; }
         if (loginBtn) loginBtn.style.display = '';
         if (logoutBtn) logoutBtn.style.display = 'none';
