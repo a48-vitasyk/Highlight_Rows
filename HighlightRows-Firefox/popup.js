@@ -1481,6 +1481,7 @@ function snipEditRow(s) {
             bodies[curLang] = body.value;
             curLang = code;
             body.value = bodies[code];
+            autoGrowSnipBody(body);
             langs.querySelectorAll('.snip-lang').forEach((x) => x.classList.toggle('active', x === b));
             body.placeholder = code === 'uk' ? 'Текст шаблону…' : 'Переклад (' + lbl + '), порожньо → береться UA';
             body.focus();
@@ -1503,7 +1504,7 @@ function snipEditRow(s) {
                         return;
                     }
                     bodies[target] = resp.text;
-                    if (curLang === target) body.value = resp.text;
+                    if (curLang === target) { body.value = resp.text; autoGrowSnipBody(body); }
                     $('status').textContent = 'Перекладено';
                     setTimeout(() => { if ($('status').textContent === 'Перекладено') $('status').textContent = ''; }, 1500);
                 });
@@ -1514,13 +1515,14 @@ function snipEditRow(s) {
     langs.appendChild(cat); // категорія — на одному рівні з вибором мови (праворуч)
     body.value = bodies.uk;
     body.style.paddingBottom = '34px'; // місце під спливаючу панель форматування
+    setTimeout(() => autoGrowSnipBody(body), 0); // початкова висота під наявний текст (після монтування в DOM)
     body.addEventListener('focus', () => { lastSnipBody = body; });
     // Панель зʼявляється лише коли виділено текст.
     body.addEventListener('select', () => updateSnipFmtBar(body));
     body.addEventListener('keyup', () => updateSnipFmtBar(body));
     body.addEventListener('mouseup', () => updateSnipFmtBar(body));
     body.addEventListener('blur', () => setTimeout(() => { if (snipFmtTa === body) hideSnipFmtBar(); }, 200));
-    body.addEventListener('input', () => { bodies[curLang] = body.value; });
+    body.addEventListener('input', () => { bodies[curLang] = body.value; autoGrowSnipBody(body); });
     body.addEventListener('keydown', (e) => {
         if ((e.ctrlKey || e.metaKey) && !e.altKey) {
             const k = (e.key || '').toLowerCase();
@@ -1565,6 +1567,12 @@ function snipEditRow(s) {
     curEditor = { row, snippet: s };
     return row;
 }
+// Авто-розширення textarea шаблону по висоті тексту (без ручного тягнення).
+function autoGrowSnipBody(el) {
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = el.scrollHeight + 'px';
+}
 if ($('addSnippet')) $('addSnippet').addEventListener('click', () => {
     const box = $('snippetsList');
     if (!box) return;
@@ -1584,6 +1592,7 @@ document.querySelectorAll('#snipVars .chip-var').forEach((chip) => {
             return;
         }
         insertAtCursor(el, chip.dataset.token);
+        autoGrowSnipBody(el);
     });
 });
 // Початковий підтяг спільних шаблонів і категорій (оновити дзеркало) + рендер.

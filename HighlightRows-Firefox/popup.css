@@ -239,7 +239,7 @@ button.file-btn { white-space: nowrap; }
     box-shadow: 0 2px 6px rgba(0, 0, 0, .28);
 }
 .snip-fmt-btn:hover { border-color: var(--accent); color: var(--accent); }
-.snip-body { flex-basis: 100%; min-height: 46px; resize: vertical; font: inherit; }
+.snip-body { flex-basis: 100%; min-height: 46px; resize: none; overflow: hidden; box-sizing: border-box; font: inherit; }
 .snip-view { flex-wrap: nowrap; align-items: center; }
 .snip-sc { flex: none; font: 11px/1 ui-monospace, monospace; background: var(--accent); color: #fff; border-radius: 4px; padding: 2px 5px; }
 .snip-langs { display: flex; align-items: center; gap: 5px; flex-basis: 100%; margin-bottom: 4px; }
