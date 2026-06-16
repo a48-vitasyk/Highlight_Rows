@@ -1811,14 +1811,26 @@ function ensureAwaitingBanner(active, now) {
         chip.appendChild(x);
         banner.appendChild(chip);
     });
+    // Закрити весь банер одним кліком — відкласти всі поточні тікети на 10 хв.
+    const closeAll = document.createElement('button');
+    closeAll.type = 'button';
+    closeAll.textContent = '✕ Сховати';
+    closeAll.title = 'Закрити весь банер на 10 хв';
+    closeAll.style.cssText = 'flex:none;border:none;background:#fff;color:#b3261e;font:700 12px system-ui,sans-serif;padding:3px 9px;border-radius:6px;cursor:pointer;white-space:nowrap;margin-left:4px';
+    const allIds = sorted.map((a) => a.ticketId);
+    closeAll.addEventListener('click', (e) => { e.preventDefault(); awSnoozeMany(allIds); });
+    banner.appendChild(closeAll);
 }
 function removeAwaitingBanner() { const b = document.getElementById('hr-awaiting-banner'); if (b) b.remove(); }
 
 // «×» на чипі: приглушити банер і сигнал саме для цього тікета на 10 хв.
-function awSnoozeTicket(ticketId) {
+function awSnoozeTicket(ticketId) { awSnoozeMany([ticketId]); }
+
+// Відкласти кілька тікетів (або весь банер) на 10 хв.
+function awSnoozeMany(ids) {
     const now = Date.now();
     for (const t of Object.keys(awSnooze)) if (!awSnooze[t] || awSnooze[t] <= now) delete awSnooze[t]; // прибрати протерміновані
-    awSnooze[ticketId] = now + AW_SNOOZE_MS;
+    (ids || []).forEach((t) => { awSnooze[t] = now + AW_SNOOZE_MS; });
     try { chrome.storage.local.set({ awSnooze }); } catch (e) { /* ignore */ }
     refresh();
 }
