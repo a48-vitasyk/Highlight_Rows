@@ -2467,18 +2467,20 @@ async function resolveElid(num) {
 function currentTicketKey() {
     return currentElid() || getTicketNumberFromDom();
 }
-// Вибрана послуга з поля «Услуга» (select name="item"). Текст: «#<id> ... (<ip>)».
-// Назва послуги — середина тексту (без «#id» та «(ip)»).
+// Вибрана послуга з поля «Услуга». Текст анкора: «#<id> <Назва> (<host>, <ip>)».
+// Беремо текст із .ispui-select-anchor__text (новий DOM) або .isp-select__text (старий),
+// що починається з «#<цифри>» — це і є селект послуги.
 function readSelectedService() {
-    const el = document.querySelector('ispui-select-v2[name="item"] .isp-select__text');
-    const txt = el ? (el.textContent || '').replace(/\s+/g, ' ').trim() : '';
+    let txt = '';
+    const cands = document.querySelectorAll('.ispui-select-anchor__text, ispui-select-v2[name="item"] .isp-select__text, .isp-select__text');
+    for (const el of cands) {
+        const t = (el.textContent || '').replace(/\s+/g, ' ').trim();
+        if (/#\d+/.test(t)) { txt = t; break; }
+    }
     const idm = txt.match(/#(\d+)/);
-    const ipm = txt.match(/\(\s*((?:\d{1,3}\.){3}\d{1,3})\s*\)/);
-    let name = txt;
-    if (idm) name = name.replace(idm[0], '');
-    if (ipm) name = name.replace(ipm[0], '');
-    name = name.replace(/^[\s\-—:·|]+|[\s\-—:·|]+$/g, '').trim();
-    return { id: idm ? idm[1] : '', ip: ipm ? ipm[1] : '', name };
+    const ipm = txt.match(/((?:\d{1,3}\.){3}\d{1,3})/); // ip будь-де (всередині дужки після хоста)
+    const nm = txt.match(/#\d+\s+([^(]+?)\s*(?:\(|$)/); // назва між «#id» і «(»
+    return { id: idm ? idm[1] : '', ip: ipm ? ipm[1] : '', name: nm ? nm[1].trim() : '' };
 }
 
 // Іконка за статусом інстансу (instance_status).
