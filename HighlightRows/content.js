@@ -106,7 +106,7 @@ let awaitingShared = [];  // дзеркало спільного пулу (stora
 let awAnchorQueue = [];   // [{ ticket, elid }] — нові тікети на анкоринг (ticket.edit)
 let awDraining = false;   // чи виконується awDrain зараз
 let awNotifiedAt = {};    // { [ticketId]: ms } — троттл повтору сповіщень
-let awSnoozeUntil = 0;    // банер «Клієнт чекає» приглушено (банер+сигнал) до цього ms
+let awSnooze = {};        // { [ticketId]: untilMs } — банер+сигнал по тікету приглушено до цього ms
 let awBubbleBaseline = null; // { ticketId, count } — для миттєвого очищення на вихідному баблі
 let replyAudio = null;    // окремий зацикл. звук відповіді (не плутати з reminderAudio)
 let awTimerInterval = null; // 1с-тік таймера в тікеті
@@ -1748,47 +1748,52 @@ function awBadge(count, longestMin) {
     try { chrome.runtime.sendMessage({ action: 'setBadge', awaiting: count, longestMin }); } catch (e) { /* ignore */ }
 }
 
+// Банер «Клієнт чекає»: один чип на тікет, у кожного власна кнопка «×»
+// (відкласти саме цей тікет на 10 хв). Перебудовуємо лише коли змінився набір/час.
 function ensureAwaitingBanner(active, now) {
     if (!document.body) return;
     let banner = document.getElementById('hr-awaiting-banner');
     if (!banner) {
         banner = document.createElement('div');
         banner.id = 'hr-awaiting-banner';
-        banner.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:12px;z-index:2147483646;display:flex;align-items:center;gap:10px;background:#b3261e;color:#fff;padding:8px 14px;border-radius:8px;font:600 13px/1.3 system-ui,sans-serif;box-shadow:0 4px 14px rgba(0,0,0,.3);max-width:92vw';
-        const txt = document.createElement('span');
-        txt.className = 'hr-aw-text';
-        txt.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
-        banner.appendChild(txt);
-        const snz = document.createElement('button');
-        snz.type = 'button';
-        snz.textContent = 'Відкласти 10 хв';
-        snz.title = 'Приглушити банер і сигнал на 10 хв';
-        snz.style.cssText = 'flex:none;border:none;background:#fff;color:#b3261e;font:600 12px system-ui,sans-serif;padding:4px 10px;border-radius:6px;cursor:pointer;white-space:nowrap';
-        snz.addEventListener('click', (e) => { e.preventDefault(); awSnoozeBanner(); });
-        banner.appendChild(snz);
+        banner.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:12px;z-index:2147483646;display:flex;align-items:center;flex-wrap:wrap;gap:6px;background:#b3261e;color:#fff;padding:8px 14px;border-radius:8px;font:600 13px/1.3 system-ui,sans-serif;box-shadow:0 4px 14px rgba(0,0,0,.3);max-width:92vw';
+        document.body.appendChild(banner);
+    }
+    const sorted = active.slice().sort((x, y) => x.waitingSince - y.waitingSince);
+    const sig = sorted.map((a) => a.ticketId + ':' + Math.floor((now - a.waitingSince) / 60000)).join('|');
+    if (banner.dataset.sig === sig) return; // нічого не змінилось — не смикаємо DOM
+    banner.dataset.sig = sig;
+    banner.textContent = '';
+    const lead = document.createElement('span');
+    lead.textContent = '✉️ Клієнт чекає — відпишіть:';
+    lead.style.cssText = 'white-space:nowrap';
+    banner.appendChild(lead);
+    sorted.forEach((a) => {
+        const chip = document.createElement('span');
+        chip.style.cssText = 'display:inline-flex;align-items:center;gap:3px;background:rgba(255,255,255,.18);border-radius:6px;padding:2px 3px 2px 8px;white-space:nowrap';
+        const label = document.createElement('span');
+        label.textContent = '#' + a.ticketId + ' (' + Math.floor((now - a.waitingSince) / 60000) + ' хв)';
+        chip.appendChild(label);
         const x = document.createElement('button');
         x.type = 'button';
         x.textContent = '×';
-        x.title = 'Закрити (відкласти на 10 хв)';
-        x.style.cssText = 'flex:none;border:none;background:transparent;color:#fff;font:700 17px/1 system-ui,sans-serif;cursor:pointer;padding:0 2px';
-        x.addEventListener('click', (e) => { e.preventDefault(); awSnoozeBanner(); });
-        banner.appendChild(x);
-        document.body.appendChild(banner);
-    }
-    const label = active.slice().sort((x, y) => x.waitingSince - y.waitingSince)
-        .map((a) => '#' + a.ticketId + ' (' + Math.floor((now - a.waitingSince) / 60000) + ' хв)')
-        .join(' · ');
-    const full = '✉️ Клієнт чекає — відпишіть: ' + label;
-    const txt = banner.querySelector('.hr-aw-text');
-    if (txt && txt.textContent !== full) txt.textContent = full;
+        x.title = 'Відкласти #' + a.ticketId + ' на 10 хв';
+        x.style.cssText = 'border:none;background:transparent;color:#fff;font:700 15px/1 system-ui,sans-serif;cursor:pointer;padding:0 3px';
+        const tid = a.ticketId;
+        x.addEventListener('click', (e) => { e.preventDefault(); awSnoozeTicket(tid); });
+        chip.appendChild(x);
+        banner.appendChild(chip);
+    });
 }
 function removeAwaitingBanner() { const b = document.getElementById('hr-awaiting-banner'); if (b) b.remove(); }
 
-// «Відкласти/Закрити» банер «Клієнт чекає»: ховаємо банер і глушимо сигнал на 10 хв.
-function awSnoozeBanner() {
-    awSnoozeUntil = Date.now() + AW_SNOOZE_MS;
-    try { chrome.storage.local.set({ awSnoozeUntil }); } catch (e) { /* ignore */ }
-    removeAwaitingBanner();
+// «×» на чипі: приглушити банер і сигнал саме для цього тікета на 10 хв.
+function awSnoozeTicket(ticketId) {
+    const now = Date.now();
+    for (const t of Object.keys(awSnooze)) if (!awSnooze[t] || awSnooze[t] <= now) delete awSnooze[t]; // прибрати протерміновані
+    awSnooze[ticketId] = now + AW_SNOOZE_MS;
+    try { chrome.storage.local.set({ awSnooze }); } catch (e) { /* ignore */ }
+    refresh();
 }
 
 // Миттєве очищення: у відкритому тікеті зʼявився новий вихідний бабл (відписали).
@@ -1806,6 +1811,7 @@ function awInstantClearOpen() {
 function awResolve(ticketId) {
     if (awaitingMap[ticketId]) { delete awaitingMap[ticketId]; persistAwaiting(); }
     delete awNotifiedAt[ticketId];
+    if (awSnooze[ticketId]) { delete awSnooze[ticketId]; try { chrome.storage.local.set({ awSnooze }); } catch (e) { /* ignore */ } }
     sbSend({ sb: 'awResolve', ticketId });
 }
 
@@ -1883,10 +1889,9 @@ function awTick(now, newMsgNow, visible, ticketElid) {
     }
     awInstantClearOpen();
     awDrain();
-    // сигнали (з урахуванням «Відкласти 10 хв» — приглушує банер і повтор сигналу)
-    const active = computeActiveAwaiting(now);
-    const snoozed = awSnoozeUntil && now < awSnoozeUntil;
-    if (active.length && !snoozed) { ensureAwaitingBanner(active, now); active.forEach((a) => awNotify(a, now)); }
+    // сигнали (з урахуванням «× Відкласти 10 хв» по кожному тікету)
+    const active = computeActiveAwaiting(now).filter((a) => !(awSnooze[a.ticketId] && now < awSnooze[a.ticketId]));
+    if (active.length) { ensureAwaitingBanner(active, now); active.forEach((a) => awNotify(a, now)); }
     else { removeAwaitingBanner(); }
     // бейдж — командний лічильник + найдовше очікування
     const all = awWaitingByTicket();
@@ -2507,7 +2512,7 @@ function init() {
         loadFromStorage('local', 'matchAlertState', {}),
         loadFromStorage('local', 'awaitingMap', {}),
         loadFromStorage('local', 'awaitingShared', []),
-        loadFromStorage('local', 'awSnoozeUntil', 0),
+        loadFromStorage('local', 'awSnooze', {}),
     ]).then(([loadedSettings, loadedTimers, loadedReminderState, loadedLabels, loadedMatchState, loadedAwaiting, loadedAwShared, loadedAwSnooze]) => {
         if (!extensionAlive()) { teardown(); return; }
 
@@ -2518,7 +2523,7 @@ function init() {
         matchAlertState = loadedMatchState && typeof loadedMatchState === 'object' ? loadedMatchState : {};
         awaitingMap = loadedAwaiting && typeof loadedAwaiting === 'object' ? loadedAwaiting : {};
         awaitingShared = Array.isArray(loadedAwShared) ? loadedAwShared : [];
-        awSnoozeUntil = Number(loadedAwSnooze) || 0;
+        awSnooze = loadedAwSnooze && typeof loadedAwSnooze === 'object' ? loadedAwSnooze : {};
         applyPanelTweaks();
         loadMyEmail();
         loadCustomSounds();
@@ -2561,8 +2566,8 @@ function init() {
                 } else if (area === 'local' && changes.awaitingShared) {
                     awaitingShared = changes.awaitingShared.newValue || [];
                     refresh();
-                } else if (area === 'local' && changes.awSnoozeUntil) {
-                    awSnoozeUntil = Number(changes.awSnoozeUntil.newValue) || 0;
+                } else if (area === 'local' && changes.awSnooze) {
+                    awSnooze = changes.awSnooze.newValue || {};
                     refresh();
                 }
             });
