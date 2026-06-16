@@ -984,6 +984,17 @@ function awaitingPull(showStatus) {
 setInterval(() => { renderAwaitingList(awaitingCache); awaitingPull(false); }, 30000);
 const _refreshAwaitingBtn = $('refreshAwaiting');
 if (_refreshAwaitingBtn) _refreshAwaitingBtn.addEventListener('click', () => awaitingPull(true));
+// «Очистити все» — прибрати всі тікети зі спільного пулу одним кліком (з підтвердженням).
+function awaitingClearAll() {
+    if (!awaitingCache.length) return;
+    if (!confirm('Прибрати всі тікети (' + awaitingCache.length + ') з «Клієнт чекає»?')) return;
+    const ids = awaitingCache.map((a) => a.ticketId);
+    awaitingCache = [];
+    renderAwaitingList(awaitingCache); // миттєво; сервер підтвердить через onChanged
+    ids.forEach((ticketId) => { try { chrome.runtime.sendMessage({ sb: 'awResolve', ticketId }, () => { void chrome.runtime.lastError; }); } catch (e) { /* ignore */ } });
+}
+const _clearAwaitingBtn = $('clearAwaiting');
+if (_clearAwaitingBtn) _clearAwaitingBtn.addEventListener('click', awaitingClearAll);
 
 chrome.storage.local.get(['staleTickets', 'matchTickets', 'staleScanStatus', 'matchScanStatus', 'myTickets', 'awaitingShared'], (d) => {
     renderStaleTickets((d && d.staleTickets) || []);
