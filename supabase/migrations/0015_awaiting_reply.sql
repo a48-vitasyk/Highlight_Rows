@@ -65,7 +65,7 @@ create trigger awaiting_resolve_log after delete on public.awaiting_reply
     for each row execute function public.log_awaiting_resolve();
 
 -- Тригерну функцію не можна викликати напряму через API.
-revoke execute on function public.log_awaiting_resolve() from anon, authenticated;
+revoke execute on function public.log_awaiting_resolve() from public, anon, authenticated;
 
 -- Realtime — щоб команда бачила зміни миттєво.
 do $$ begin
