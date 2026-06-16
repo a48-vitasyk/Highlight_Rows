@@ -965,7 +965,17 @@ function renderAwaitingList(arr) {
         box.appendChild(item);
     });
 }
-setInterval(() => renderAwaitingList(awaitingCache), 30000); // оновлювати час очікування, поки попап відкритий
+// Підтягнути свіжий спільний пул із Supabase (background оновить дзеркало → onChanged).
+function awaitingPull(showStatus) {
+    if (showStatus) { const st = $('awaitingStatus'); if (st) st.textContent = 'Оновлюю…'; }
+    try { chrome.runtime.sendMessage({ sb: 'awPull' }, () => { void chrome.runtime.lastError; renderAwaitingList(awaitingCache); }); }
+    catch (e) { renderAwaitingList(awaitingCache); }
+}
+// Поки попап відкритий: оновлюємо час очікування + періодично тягнемо свіже з сервера
+// (підстраховка живих оновлень, які приходять через Realtime → onChanged).
+setInterval(() => { renderAwaitingList(awaitingCache); awaitingPull(false); }, 30000);
+const _refreshAwaitingBtn = $('refreshAwaiting');
+if (_refreshAwaitingBtn) _refreshAwaitingBtn.addEventListener('click', () => awaitingPull(true));
 
 chrome.storage.local.get(['staleTickets', 'matchTickets', 'staleScanStatus', 'matchScanStatus', 'myTickets', 'awaitingShared'], (d) => {
     renderStaleTickets((d && d.staleTickets) || []);
