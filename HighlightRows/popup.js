@@ -242,6 +242,7 @@ const IC = {
     bookmark: svgIcon('<path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>', 14),
     save: svgIcon('<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>', 15),
     close: svgIcon('<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>', 15),
+    trash: svgIcon('<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>', 14),
 };
 
 // Кнопка-тоглер: іконка показує стан (swap SVG), без заливки.
@@ -1429,7 +1430,7 @@ function snipViewRow(s) {
     label.title = s.body || '';
     const have = [(s.bodyRu || '').trim() && 'RU', (s.bodyEn || '').trim() && 'EN'].filter(Boolean);
     const edit = makeEl('button', { type: 'button', className: 'small', textContent: '✎', title: 'Редагувати' });
-    const del = makeEl('button', { type: 'button', className: 'small remove', textContent: '×', title: 'В архів' });
+    const del = makeEl('button', { type: 'button', className: 'small remove', innerHTML: IC.trash, title: 'В архів' });
     edit.addEventListener('click', () => row.replaceWith(snipEditRow(s)));
     del.addEventListener('click', () => snipDelete(row.dataset.id));
     row.appendChild(label);
@@ -1446,7 +1447,7 @@ function snipArchRow(s) {
     label.title = s.body || '';
     const restore = makeEl('button', { type: 'button', className: 'small', textContent: '↩', title: 'Відновити з архіву' });
     restore.addEventListener('click', () => snipRestore(row.dataset.id));
-    const del = makeEl('button', { type: 'button', className: 'small remove', textContent: '🗑', title: 'Видалити назавжди' });
+    const del = makeEl('button', { type: 'button', className: 'small remove', innerHTML: IC.trash, title: 'Видалити назавжди' });
     del.addEventListener('click', () => snipPurge(row.dataset.id));
     row.appendChild(label);
     row.appendChild(restore);
@@ -1619,11 +1620,10 @@ function snipEditRow(s) {
     row.appendChild(head);
     row.appendChild(langs);
     row.appendChild(body);
-    // Кнопки — у самому рядку редагування, праворуч під полем (інтуїтивно при редагуванні).
-    const acts = makeEl('div', {});
-    acts.style.cssText = 'display:flex;gap:8px;justify-content:flex-end;margin-top:8px';
-    acts.appendChild(close);
+    // Кнопки-іконки праворуч під полем: клас .snip-actions дає margin-left:auto + стилі як раніше.
+    const acts = makeEl('div', { className: 'snip-actions' });
     acts.appendChild(save);
+    acts.appendChild(close);
     row.appendChild(acts);
     curEditor = { row, snippet: s };
     return row;
