@@ -196,6 +196,12 @@
         <div class="field">
             <label class="icon-label" title="Кнопки у тікеті: «Вже дивимось», «Апдейт» (вставляють шаблон зі скороченням hold/upd або типовий текст) і ⏰+30/+1г/+2г (нагад на тікет)"><input type="checkbox" id="quickReplies"> Швидкі дії у тікеті (холдинг / апдейт / нагад)</label>
         </div>
+        <div class="field row" id="quickLangRow" style="gap:5px;align-items:center">
+            <span class="hint" style="margin-right:auto">Тексти швидких відповідей (за мовою тікета):</span>
+            <button type="button" class="snip-lang active" data-qlang="uk">UA</button>
+            <button type="button" class="snip-lang" data-qlang="ru">RU</button>
+            <button type="button" class="snip-lang" data-qlang="en">EN</button>
+        </div>
         <div class="field">
             <label for="quickHoldText" title="Текст кнопки «Вже дивимось». Порожньо → типовий за мовою тікета. Підстановки: {greeting} {ticket} {service} тощо.">Текст «Вже дивимось»:</label>
             <textarea id="quickHoldText" rows="2" placeholder="Порожньо → типовий текст за мовою тікета" style="width:100%;box-sizing:border-box;resize:vertical"></textarea>

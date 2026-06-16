@@ -77,8 +77,8 @@ const DEFAULT_SETTINGS = {
     replyWarnColor: '#ffd24a', // колір рядка/таймера на старті очікування
     replyDangerColor: '#ff3b30', // колір при довгому очікуванні (після ескалації)
     quickReplies: true,        // панель швидких дій у таймері «клієнт чекає»
-    quickHoldText: '',         // текст кнопки «Вже дивимось» (порожньо → вбудований дефолт за мовою)
-    quickUpdText: '',          // текст кнопки «Апдейт» (порожньо → вбудований дефолт за мовою)
+    quickHoldText: { uk: '', ru: '', en: '' }, // «Вже дивимось» за мовою (порожньо → вбудований дефолт)
+    quickUpdText: { uk: '', ru: '', en: '' },  // «Апдейт» за мовою (порожньо → вбудований дефолт)
     updateEveryMinutes: 20,    // нагадати надіслати апдейт після N хв очікування (0 = вимкнено)
     // «без відповіді понад N год» — список у popup
     staleEnabled: false, // вимкнено за замовч.: скан відкриває тікети й гасить позначку нового повідомлення
@@ -235,8 +235,11 @@ function normalizeSettings(raw) {
     s.replyWarnColor = String(s.replyWarnColor || DEFAULT_SETTINGS.replyWarnColor);
     s.replyDangerColor = String(s.replyDangerColor || DEFAULT_SETTINGS.replyDangerColor);
     s.quickReplies = s.quickReplies !== false;
-    s.quickHoldText = String(s.quickHoldText || '');
-    s.quickUpdText = String(s.quickUpdText || '');
+    const nq = (v) => (v && typeof v === 'object')
+        ? { uk: String(v.uk || ''), ru: String(v.ru || ''), en: String(v.en || '') }
+        : { uk: String(v || ''), ru: '', en: '' }; // легасі: рядок → у поле uk
+    s.quickHoldText = nq(s.quickHoldText);
+    s.quickUpdText = nq(s.quickUpdText);
     s.updateEveryMinutes = Math.max(0, Number(s.updateEveryMinutes) || 0);
     s.reminders = (Array.isArray(s.reminders) ? s.reminders : [])
         .map((r) => ({
@@ -2006,14 +2009,14 @@ function plusMinutesHHMM(min) {
 // Вбудовані дефолти, якщо нема шаблону з відповідним скороченням (hold/upd).
 const AW_DEFAULT_TEXT = {
     hold: {
-        uk: '{greeting}! Дякуємо за звернення — вже розбираємось і повернемось найближчим часом.',
-        ru: '{greeting}! Спасибо за обращение — уже разбираемся и вернёмся в ближайшее время.',
-        en: '{greeting}! Thanks for reaching out — we are already looking into it and will get back to you shortly.',
+        uk: '{greeting}! Дякуємо за звернення — ми вже взяли ваш запит у роботу й повернемось із відповіддю найближчим часом.',
+        ru: '{greeting}! Спасибо за обращение — мы уже взяли ваш запрос в работу и вернёмся с ответом в ближайшее время.',
+        en: '{greeting}! Thanks for reaching out — we\'ve started looking into your request and will get back to you shortly.',
     },
     upd: {
-        uk: '{greeting}! Ваше питання ще в роботі — тримаємо вас у курсі, дякуємо за терпіння.',
-        ru: '{greeting}! Ваш вопрос ещё в работе — держим вас в курсе, спасибо за терпение.',
-        en: '{greeting}! Your request is still in progress — we will keep you posted, thanks for your patience.',
+        uk: '{greeting}! Невелике оновлення: ваш запит ще в роботі, ми продовжуємо розбиратися. Дякуємо за терпіння — повідомимо, щойно буде результат.',
+        ru: '{greeting}! Небольшое обновление: ваш запрос ещё в работе, мы продолжаем разбираться. Спасибо за терпение — сообщим, как только будет результат.',
+        en: '{greeting}! A quick update: your request is still in progress and we\'re actively working on it. Thanks for your patience — we\'ll let you know as soon as we have news.',
     },
 };
 function awInsertReserved(kind) {
@@ -2023,10 +2026,14 @@ function awInsertReserved(kind) {
     let text;
     if (snip) text = fillSnippet(snip);
     else {
-        // Власний текст із налаштувань (редагується), інакше вбудований дефолт за мовою.
-        const custom = (kind === 'hold' ? settings.quickHoldText : kind === 'upd' ? settings.quickUpdText : '') || '';
-        if (custom.trim()) text = fillSnippet(custom);
-        else { const map = AW_DEFAULT_TEXT[kind] || {}; text = fillSnippet(map[detectTicketLang()] || map.uk || ''); }
+        const lang = detectTicketLang();
+        // Власний текст із налаштувань (за мовою тікета), інакше вбудований дефолт.
+        const obj = kind === 'hold' ? settings.quickHoldText : kind === 'upd' ? settings.quickUpdText : null;
+        let custom = '';
+        if (obj && typeof obj === 'object') custom = obj[lang] || obj.uk || '';
+        else if (typeof obj === 'string') custom = obj;
+        if (custom && custom.trim()) text = fillSnippet(custom);
+        else { const map = AW_DEFAULT_TEXT[kind] || {}; text = fillSnippet(map[lang] || map.uk || ''); }
     }
     if (text) insertIntoReply(ta, text);
 }

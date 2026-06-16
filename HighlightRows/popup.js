@@ -27,8 +27,8 @@ const DEFAULT_SETTINGS = {
     replyWarnColor: '#ffd24a',
     replyDangerColor: '#ff3b30',
     quickReplies: true,
-    quickHoldText: '',
-    quickUpdText: '',
+    quickHoldText: { uk: '', ru: '', en: '' },
+    quickUpdText: { uk: '', ru: '', en: '' },
     updateEveryMinutes: 20,
     staleEnabled: false,
     staleHours: 4,
@@ -130,6 +130,23 @@ function todayStr() {
 let removedIds = new Set();
 // Чи є сесія — щоб «Загальний» (shared) був доступний лише залогіненим.
 let isLoggedIn = false;
+
+// --- Швидкі відповіді: мовні версії (UA/RU/EN) ---------------------------
+let quickLang = 'uk';
+const quickTexts = { hold: { uk: '', ru: '', en: '' }, upd: { uk: '', ru: '', en: '' } };
+function quickNormObj(v) {
+    return (v && typeof v === 'object')
+        ? { uk: String(v.uk || ''), ru: String(v.ru || ''), en: String(v.en || '') }
+        : { uk: String(v || ''), ru: '', en: '' }; // легасі: рядок → у поле uk
+}
+function quickRender() {
+    if ($('quickHoldText')) $('quickHoldText').value = quickTexts.hold[quickLang] || '';
+    if ($('quickUpdText')) $('quickUpdText').value = quickTexts.upd[quickLang] || '';
+    document.querySelectorAll('#quickLangRow [data-qlang]').forEach((b) => b.classList.toggle('active', b.dataset.qlang === quickLang));
+}
+document.querySelectorAll('#quickLangRow [data-qlang]').forEach((b) => b.addEventListener('click', () => { quickLang = b.dataset.qlang; quickRender(); }));
+if ($('quickHoldText')) $('quickHoldText').addEventListener('input', () => { quickTexts.hold[quickLang] = $('quickHoldText').value; });
+if ($('quickUpdText')) $('quickUpdText').addEventListener('input', () => { quickTexts.upd[quickLang] = $('quickUpdText').value; });
 function applyScopeLock() {
     document.querySelectorAll('.scope-opt[data-scope="shared"]').forEach((b) => {
         b.classList.toggle('locked', !isLoggedIn);
@@ -405,8 +422,9 @@ function fillForm(s, reminderState) {
     if ($('replyEscalateMinutes')) $('replyEscalateMinutes').value = s.replyEscalateMinutes || DEFAULT_SETTINGS.replyEscalateMinutes;
     if ($('replyRepeatMinutes')) $('replyRepeatMinutes').value = (s.replyRepeatMinutes != null ? s.replyRepeatMinutes : DEFAULT_SETTINGS.replyRepeatMinutes);
     if ($('quickReplies')) $('quickReplies').checked = s.quickReplies !== false;
-    if ($('quickHoldText')) $('quickHoldText').value = s.quickHoldText || '';
-    if ($('quickUpdText')) $('quickUpdText').value = s.quickUpdText || '';
+    quickTexts.hold = quickNormObj(s.quickHoldText);
+    quickTexts.upd = quickNormObj(s.quickUpdText);
+    quickRender();
     if ($('updateEveryMinutes')) $('updateEveryMinutes').value = (s.updateEveryMinutes != null ? s.updateEveryMinutes : DEFAULT_SETTINGS.updateEveryMinutes);
 
     $('tagRules').innerHTML = '';
@@ -474,8 +492,8 @@ function readForm() {
         replyEscalateMinutes: Number($('replyEscalateMinutes') && $('replyEscalateMinutes').value) > 0 ? Number($('replyEscalateMinutes').value) : DEFAULT_SETTINGS.replyEscalateMinutes,
         replyRepeatMinutes: $('replyRepeatMinutes') ? Math.max(0, Number($('replyRepeatMinutes').value) || 0) : DEFAULT_SETTINGS.replyRepeatMinutes,
         quickReplies: $('quickReplies') ? $('quickReplies').checked : true,
-        quickHoldText: $('quickHoldText') ? $('quickHoldText').value : '',
-        quickUpdText: $('quickUpdText') ? $('quickUpdText').value : '',
+        quickHoldText: { ...quickTexts.hold },
+        quickUpdText: { ...quickTexts.upd },
         updateEveryMinutes: $('updateEveryMinutes') ? Math.max(0, Number($('updateEveryMinutes').value) || 0) : DEFAULT_SETTINGS.updateEveryMinutes,
         reminders,
     };
