@@ -1012,12 +1012,22 @@ setInterval(() => { renderAwaitingList(awaitingCache); awaitingPull(false); }, 3
 function awaitingRefresh() {
     const st = $('awaitingStatus'); if (st) st.textContent = 'Перевіряю…';
     try { chrome.runtime.sendMessage({ sb: 'awPull' }, () => { void chrome.runtime.lastError; }); } catch (e) { /* ignore */ }
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-        const tab = tabs && tabs[0];
-        if (!tab) { if (st) st.textContent = ''; return; }
-        chrome.tabs.sendMessage(tab.id, { action: 'awRecheckNow' }, () => {
-            if (chrome.runtime.lastError) { if (st) st.textContent = 'відкрийте вкладку панелі Zomro'; return; }
-            if (st) setTimeout(() => { if (st.textContent === 'Перевіряю…') st.textContent = ''; }, 5000);
+    // Розсилаємо на ВСІ вкладки: спрацює на будь-якій вкладці панелі Zomro (навіть
+    // фоновій / коли відкрита бічна панель), а не лише на активній.
+    chrome.tabs.query({}, (tabs) => {
+        const ids = (tabs || []).map((t) => t.id).filter((x) => x != null);
+        let pending = ids.length, anyOk = false;
+        if (!pending) { if (st) st.textContent = 'відкрийте вкладку панелі Zomro'; return; }
+        ids.forEach((id) => {
+            try {
+                chrome.tabs.sendMessage(id, { action: 'awRecheckNow' }, () => {
+                    if (!chrome.runtime.lastError) anyOk = true; // content-скрипт панелі отримав
+                    if (--pending === 0 && st) {
+                        if (anyOk) { st.textContent = 'Перевіряю…'; setTimeout(() => { if (st.textContent === 'Перевіряю…') st.textContent = ''; }, 5000); }
+                        else st.textContent = 'відкрийте вкладку панелі Zomro';
+                    }
+                });
+            } catch (e) { if (--pending === 0 && st) st.textContent = anyOk ? '' : 'відкрийте вкладку панелі Zomro'; }
         });
     });
 }

@@ -45,28 +45,6 @@
     <div id="awaitingList" class="stale-list"></div>
 </div>
 
-<div class="card" data-card="blocked">
-    <div class="card-head">
-        <span class="card-icon"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="11" width="15" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span>
-        <h2 class="card-title">Заблокований запит</h2>
-        <label class="switch" title="Увімкнути"><input type="checkbox" id="enabled"><span class="track"></span></label>
-    </div>
-    <div class="card-body">
-    <div class="field row">
-        <label for="names">Ім'я:</label>
-        <input type="text" id="names" class="grow" placeholder="Ім'я для підсвітки">
-        <input type="color" id="color" title="Колір підсвітки">
-    </div>
-    <div class="field row">
-        <label for="thresholdMinutes">Поріг:</label>
-        <input type="number" id="thresholdMinutes" min="0" step="0.1">
-        <label for="repeatMinutes">Повтор:</label>
-        <input type="number" id="repeatMinutes" min="0" step="0.1">
-        <button type="button" id="soundEnabled" class="itoggle" title="Звук сигналу"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg></button>
-    </div>
-    </div>
-</div>
-
 <div class="card" data-card="tags">
     <div class="card-head">
         <span class="card-icon"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41 13.42 20.59a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></span>
@@ -172,6 +150,27 @@
     </div>
 </div>
 <div class="tab-panel" data-panel="settings" hidden>
+    <div class="card" data-card="blocked">
+        <div class="card-head">
+            <span class="card-icon"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="11" width="15" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span>
+            <h2 class="card-title">Заблокований запит</h2>
+            <label class="switch" title="Увімкнути"><input type="checkbox" id="enabled"><span class="track"></span></label>
+        </div>
+        <div class="card-body">
+        <div class="field row">
+            <label for="names">Ім'я:</label>
+            <input type="text" id="names" class="grow" placeholder="Ім'я для підсвітки">
+            <input type="color" id="color" title="Колір підсвітки">
+        </div>
+        <div class="field row">
+            <label for="thresholdMinutes">Поріг:</label>
+            <input type="number" id="thresholdMinutes" min="0" step="0.1">
+            <label for="repeatMinutes">Повтор:</label>
+            <input type="number" id="repeatMinutes" min="0" step="0.1">
+            <button type="button" id="soundEnabled" class="itoggle" title="Звук сигналу"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg></button>
+        </div>
+        </div>
+    </div>
     <div class="card">
         <div class="card-head">
             <span class="card-icon"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg></span>

@@ -1933,14 +1933,15 @@ async function awRecheckOne(t) {
 
 async function awDrain(force) {
     if (awDraining || !settings.replyWatchEscalate) return;
-    if (!onBillmgr() || !tabVisible() || sessionInCooldown()) return;
+    if (!onBillmgr() || sessionInCooldown()) return;
+    if (!force && !tabVisible()) return; // примусовий (кнопка «Оновити») працює й на фоновій вкладці
     if (!force) {
         const last = await loadFromStorage('local', 'awaitingFetchAt', 0);
         if (Date.now() - (last || 0) < AW_FETCH_DEDUP_MS) return;
     }
     awDraining = true;
     try {
-        while (awAnchorQueue.length && alive && extensionAlive() && tabVisible()) {
+        while (awAnchorQueue.length && alive && extensionAlive() && (force || tabVisible())) {
             const item = awAnchorQueue.shift();
             if (!item || !item.ticket || awaitingMap[item.ticket]) continue;
             try { chrome.storage.local.set({ awaitingFetchAt: Date.now() }); } catch (e) { /* ignore */ }
@@ -1949,7 +1950,7 @@ async function awDrain(force) {
         }
         const due = Object.keys(awaitingMap).filter((t) => Date.now() - (awaitingMap[t].lastRecheck || 0) >= AW_RECHECK_MS);
         for (const t of due) {
-            if (!alive || !extensionAlive() || !tabVisible()) break;
+            if (!alive || !extensionAlive() || (!force && !tabVisible())) break;
             try { chrome.storage.local.set({ awaitingFetchAt: Date.now() }); } catch (e) { /* ignore */ }
             await awRecheckOne(t);
             await sleep(STALE_FETCH_GAP_MS);
@@ -1960,7 +1961,7 @@ async function awDrain(force) {
             && !awaitingMap[a.ticketId]
             && Date.now() - (awSharedRecheck[a.ticketId] || 0) >= AW_SHARED_RECHECK_MS);
         for (const a of sharedDue) {
-            if (!alive || !extensionAlive() || !tabVisible()) break;
+            if (!alive || !extensionAlive() || (!force && !tabVisible())) break;
             awSharedRecheck[a.ticketId] = Date.now();
             try { chrome.storage.local.set({ awaitingFetchAt: Date.now() }); } catch (e) { /* ignore */ }
             await awRecheckShared(a);
