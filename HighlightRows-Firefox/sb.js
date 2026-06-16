@@ -268,21 +268,14 @@ const SB = {
         if (!SB.configured() || !(await SB.loggedIn())) return null;
         const existing = (await SB.listReminders()) || [];
         const existingIds = new Set(existing.map((x) => x.id));
-        let failed = 0;
         for (const r of formReminders) {
-            // Кожен рядок окремо: відмова одного (напр. RLS 403 на чужому
-            // спільному) не повинна валити синк решти.
-            try {
-                if (r.id && existingIds.has(r.id)) await SB.updateReminder(r);
-                else await SB.insertReminder(r);
-            } catch (e) { failed++; try { console.warn('[HR] reminder sync skip', r.id, (e && e.message) || e); } catch (_) {} }
+            if (r.id && existingIds.has(r.id)) await SB.updateReminder(r);
+            else await SB.insertReminder(r);
         }
         for (const id of (removedIds || [])) {
             if (id && existingIds.has(id)) { try { await SB.deleteReminder(id); } catch (e) { /* ignore */ } }
         }
-        await SB.pull();
-        if (failed) throw new Error(failed + ' не синхронізовано (чужий спільний? — беріть через «Взяти собі»)');
-        return null;
+        return SB.pull();
     },
 
     // Одноразова міграція локальних будильників у спільну базу (прапорець sbMigrated).

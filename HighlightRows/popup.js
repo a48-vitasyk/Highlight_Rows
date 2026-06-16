@@ -128,7 +128,6 @@ function todayStr() {
 let removedIds = new Set();
 // Чи є сесія — щоб «Загальний» (shared) був доступний лише залогіненим.
 let isLoggedIn = false;
-let myEmailPopup = ''; // email поточного акаунта — для кнопки «Взяти собі»
 function applyScopeLock() {
     document.querySelectorAll('.scope-opt[data-scope="shared"]').forEach((b) => {
         b.classList.toggle('locked', !isLoggedIn);
@@ -156,7 +155,7 @@ function isUuid(s) {
 const SVG_LOCK = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="11" width="15" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>';
 const SVG_USERS = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>';
 
-function buildScopeSeg(row, locked) {
+function buildScopeSeg(row) {
     const seg = makeEl('div', { className: 'scope-seg' });
     const opts = [
         { v: 'personal', svg: SVG_LOCK, t: 'Особистий (лише ви)' },
@@ -164,22 +163,16 @@ function buildScopeSeg(row, locked) {
     ];
     const sync = () => [...seg.children].forEach((c) => c.classList.toggle('active', c.dataset.scope === row.dataset.scope));
     opts.forEach((o) => {
-        const b = makeEl('button', { type: 'button', className: 'scope-opt', title: locked ? 'Чужий спільний будильник — щоб узяти, тисніть «Взяти собі»' : o.t, innerHTML: o.svg });
+        const b = makeEl('button', { type: 'button', className: 'scope-opt', title: o.t, innerHTML: o.svg });
         b.dataset.scope = o.v;
         b.addEventListener('click', () => {
-            if (locked) { // чужий спільний: міняти scope не можна (RLS відмовить) — лише claim
-                const st = $('status');
-                if (st) { st.textContent = 'Це чужий спільний — щоб узяти, тисніть «Взяти собі»'; setTimeout(() => { if (/чужий спільний/.test(st.textContent)) st.textContent = ''; }, 3500); }
-                return;
-            }
             if (o.v === 'shared' && !isLoggedIn) { promptLogin(); return; } // лише для залогінених
             row.dataset.scope = o.v; sync(); markRemindersDirty();
         });
-        if (locked) b.classList.add('locked');
         seg.appendChild(b);
     });
     sync();
-    if (!locked) applyScopeLock();
+    applyScopeLock();
     return seg;
 }
 
@@ -316,45 +309,16 @@ function addReminderRow(reminder, muted) {
     const row = makeEl('div', { className: 'rem-row' });
     row.dataset.id = id;
     row.dataset.scope = scope;
-    // Чужий спільний будильник (створив не ви) — scope міняти не можна (RLS 403).
-    // Брати його треба через «Взяти собі» (claim), не перемиканням на «особистий».
-    const foreignShared = scope === 'shared' && isUuid(id) && !!myEmailPopup && !!r.creatorEmail && r.creatorEmail !== myEmailPopup;
-    const scopeSeg = buildScopeSeg(row, foreignShared);
+    const scopeSeg = buildScopeSeg(row);
 
     // Рядок 1: тікет, час, група дій (сегмент типу + заглушити + видалити).
     // Дії — один блок (.rem-actions), тож переносяться РАЗОМ, а поля тікета/часу
     // стискаються першими. .rm-note має flex-basis:100% → рядок 2; автор — рядок 3.
-    // «Взяти собі» (claim): лише для спільних, збережених у базі, ще не відписаних
-    // і ще не моїх. Дзвонитиме лише мені, інших звільнить (рядок лишається спільним).
-    const canClaim = scope === 'shared' && isUuid(id) && !r.doneAt && (!r.ownerEmail || r.ownerEmail !== myEmailPopup);
-    const claimBtn = canClaim
-        ? makeEl('button', { type: 'button', className: 'small', textContent: 'Взяти собі', title: 'Дзвонитиме лише вам; інших звільнить' })
-        : null;
-    const actionKids = claimBtn ? [claimBtn, scopeSeg, mute, remove] : [scopeSeg, mute, remove];
-    const actions = makeEl('div', { className: 'rem-actions' }, actionKids);
+    const actions = makeEl('div', { className: 'rem-actions' }, [scopeSeg, mute, remove]);
     row.appendChild(ticket);
     row.appendChild(time);
     row.appendChild(actions);
     row.appendChild(note);
-    if (claimBtn) {
-        claimBtn.addEventListener('click', async () => {
-            if (!isUuid(row.dataset.id) || typeof SB === 'undefined') return;
-            const st = $('status');
-            claimBtn.disabled = true;
-            st.textContent = 'Беру…';
-            try {
-                await SB.claimReminder(row.dataset.id);
-                try { await SB.pull(); } catch (e) { /* дзеркало оновиться згодом */ }
-                st.textContent = 'Взято — дзвонитиме лише вам';
-                if (!remindersDirty) loadForm(); else claimBtn.remove();
-            } catch (e) {
-                console.error('[HR] claim failed:', e);
-                st.textContent = 'Не вдалося взяти: ' + ((e && e.message) || e);
-                claimBtn.disabled = false;
-            }
-            setTimeout(() => { st.textContent = ''; }, 5000);
-        });
-    }
     if (scope === 'shared' && (r.creatorEmail || r.ownerEmail || r.doneAt)) {
         const auth = makeEl('div', { className: 'rem-author', innerHTML: IC.user12 });
         let txt = ' ' + (r.creatorEmail || '');
@@ -637,7 +601,6 @@ async function renderAccount() {
     const logoutBtn = $('logoutBtn');
     if (sess) {
         const email = (sess.user && sess.user.email) || '';
-        myEmailPopup = email;
         if (name) {
             name.textContent = email ? email.split('@')[0] : 'акаунт'; // частина до @
             name.title = email || 'Залогінено';
@@ -646,7 +609,6 @@ async function renderAccount() {
         if (loginBtn) loginBtn.style.display = 'none';
         if (logoutBtn) { logoutBtn.title = email ? ('Вийти — ' + email) : 'Вийти'; logoutBtn.style.display = ''; }
     } else {
-        myEmailPopup = '';
         if (name) { name.style.display = 'none'; name.textContent = ''; }
         if (loginBtn) loginBtn.style.display = '';
         if (logoutBtn) logoutBtn.style.display = 'none';
@@ -1147,7 +1109,11 @@ $('save').addEventListener('click', async () => {
                 loadForm(); // перемалювати рядки з реальними id (uuid) з бази — щоб mute/scope працювали одразу
             } catch (e) {
                 console.error('[HR] syncReminders failed:', e);
-                status.textContent = 'Збережено локально; синк не вдався: ' + ((e && e.message) || e);
+                const msg = String((e && e.message) || e);
+                // 403 = RLS відмовив (напр. спроба зробити чужий спільний «особистим»):
+                // у базі він лишився загальним — пишемо реальний стан, а не «синк не вдався».
+                if (/\b403\b/.test(msg)) status.textContent = 'Залишився загальним — змінити чужий спільний може лише автор';
+                else status.textContent = 'Збережено локально; синк не вдався: ' + msg;
                 syncFailed = true;
             }
         } else {
