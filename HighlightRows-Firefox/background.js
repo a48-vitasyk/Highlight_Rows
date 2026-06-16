@@ -197,6 +197,9 @@ chrome.runtime.onMessage.addListener((req, sender, sendResponse) => {
             } else if (req.sb === 'snipRestore') {
                 await SB.unarchiveSnippet(req.id);
                 await SB.pullSnippets();
+            } else if (req.sb === 'snipPurge') {
+                await SB.purgeSnippet(req.id);
+                await SB.pullSnippets();
             } else if (req.sb === 'catPull') {
                 if (!(await SB.loggedIn())) { sendResponse({ ok: false, error: 'not-logged-in' }); return; }
                 const rows = await SB.pullCategories();

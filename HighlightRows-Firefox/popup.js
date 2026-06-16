@@ -1412,6 +1412,11 @@ function snipRestore(id) {
     if (!id) return;
     try { chrome.runtime.sendMessage({ sb: 'snipRestore', id }, () => { void chrome.runtime.lastError; renderSnippets(); }); } catch (e) { /* ignore */ }
 }
+function snipPurge(id) {
+    if (!id) return;
+    if (!confirm('Видалити шаблон НАЗАВЖДИ?\nЦю дію не можна скасувати.')) return;
+    try { chrome.runtime.sendMessage({ sb: 'snipPurge', id }, () => { void chrome.runtime.lastError; renderSnippets(); }); } catch (e) { /* ignore */ }
+}
 // Згорнутий рядок збереженого шаблону: назва + ✎ редагувати + × видалити.
 function snipViewRow(s) {
     const row = makeEl('div', { className: 'snip-row snip-view' });
@@ -1439,10 +1444,13 @@ function snipArchRow(s) {
     if (s.id) row.dataset.id = s.id;
     const label = makeEl('span', { className: 'snip-label', textContent: s.title || (s.body || '').slice(0, 48) || '(без назви)' });
     label.title = s.body || '';
-    const restore = makeEl('button', { type: 'button', className: 'small', textContent: '↩', title: 'Відновити' });
+    const restore = makeEl('button', { type: 'button', className: 'small', textContent: '↩', title: 'Відновити з архіву' });
     restore.addEventListener('click', () => snipRestore(row.dataset.id));
+    const del = makeEl('button', { type: 'button', className: 'small remove', textContent: '🗑', title: 'Видалити назавжди' });
+    del.addEventListener('click', () => snipPurge(row.dataset.id));
     row.appendChild(label);
     row.appendChild(restore);
+    row.appendChild(del);
     return row;
 }
 // Маркери форматування (стандартний Markdown — BILLmanager рендерить його в тікетах).
@@ -1584,8 +1592,8 @@ function snipEditRow(s) {
         }
         if (e.key === 'Escape') hideSnipFmtBar();
     });
-    const save = makeEl('button', { type: 'button', className: 'small snip-save', title: 'Зберегти', innerHTML: IC.save });
-    const del = makeEl('button', { type: 'button', className: 'small remove', title: s.id ? 'Видалити' : 'Скасувати', innerHTML: IC.close });
+    const save = makeEl('button', { type: 'button', className: 'small snip-save', title: 'Зберегти', textContent: 'Зберегти' });
+    const close = makeEl('button', { type: 'button', className: 'small', title: 'Закрити без збереження', textContent: 'Закрити' });
     save.addEventListener('click', () => {
         bodies[curLang] = body.value;
         const snippet = { id: row.dataset.id || undefined, title: title.value.trim(), body: bodies.uk, bodyRu: bodies.ru.trim(), bodyEn: bodies.en.trim(), shortcut: sc.value.trim(), category: cat.getValue() };
@@ -1607,16 +1615,16 @@ function snipEditRow(s) {
             });
         } catch (e) { /* ignore */ }
     });
-    del.addEventListener('click', () => {
-        if (row.dataset.id) snipDelete(row.dataset.id); // наявний — видалити в базі
-        else closeEditor();                             // новий — просто прибрати
-    });
+    close.addEventListener('click', () => closeEditor()); // нове — прибрати рядок; наявне — повернути перегляд
     row.appendChild(head);
     row.appendChild(langs);
     row.appendChild(body);
-    // Кнопки зберегти/закрити — у спільному футері (праворуч), лише поки редагуємо.
-    const acts = $('snipActions');
-    if (acts) { acts.innerHTML = ''; acts.appendChild(save); acts.appendChild(del); }
+    // Кнопки — у самому рядку редагування, праворуч під полем (інтуїтивно при редагуванні).
+    const acts = makeEl('div', {});
+    acts.style.cssText = 'display:flex;gap:8px;justify-content:flex-end;margin-top:8px';
+    acts.appendChild(close);
+    acts.appendChild(save);
+    row.appendChild(acts);
     curEditor = { row, snippet: s };
     return row;
 }

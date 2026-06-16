@@ -227,6 +227,7 @@ const SB = {
     // Soft-delete: «видалення» = позначка archived (оборотно). Жорсткого DELETE нема.
     archiveSnippet(id) { return SB.rest('snippets?id=eq.' + encodeURIComponent(id), { method: 'PATCH', body: JSON.stringify({ archived: true }) }); },
     unarchiveSnippet(id) { return SB.rest('snippets?id=eq.' + encodeURIComponent(id), { method: 'PATCH', body: JSON.stringify({ archived: false }) }); },
+    purgeSnippet(id) { return SB.rest('snippets?id=eq.' + encodeURIComponent(id), { method: 'DELETE' }); },
     async mirrorSnippets(rows) {
         const snippets = (rows || []).map((x) => ({ id: x.id, title: x.title || '', body: x.body || '', bodyRu: x.body_ru || '', bodyEn: x.body_en || '', shortcut: x.shortcut || '', category: x.category || '', creatorEmail: x.created_by_email || '', archived: !!x.archived }));
         await new Promise((res) => { try { chrome.storage.local.set({ snippets }, res); } catch (e) { res(); } });
