@@ -1099,6 +1099,7 @@ $('save').addEventListener('click', async () => {
             try { chrome.storage.local.set({ staleTickets: [], staleScanStatus: null }); } catch (e) { /* ignore */ }
         }
         const status = $('status');
+        let syncFailed = false;
         if (loggedIn) {
             status.textContent = 'Збереження…';
             // Будильники — у спільну базу (решта налаштувань лишається локальною).
@@ -1106,12 +1107,16 @@ $('save').addEventListener('click', async () => {
                 await SB.syncReminders(settings.reminders, [...removedIds]);
                 status.textContent = 'Збережено (спільне)';
                 loadForm(); // перемалювати рядки з реальними id (uuid) з бази — щоб mute/scope працювали одразу
-            } catch (e) { status.textContent = 'Збережено локально; синк не вдався'; }
+            } catch (e) {
+                console.error('[HR] syncReminders failed:', e);
+                status.textContent = 'Збережено локально; синк не вдався: ' + ((e && e.message) || e);
+                syncFailed = true;
+            }
         } else {
             status.textContent = 'Збережено';
         }
         savingNow = false;
-        setTimeout(() => { status.textContent = ''; }, 1800);
+        setTimeout(() => { status.textContent = ''; }, syncFailed ? 9000 : 1800);
     });
 });
 
