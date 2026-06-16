@@ -2555,7 +2555,7 @@ async function loadTraffic(force) {
                 ? {
                     key,
                     id: fieldVal(match.id),
-                    name: svc.name || fieldVal(match.name) || fieldVal(match.pricelist) || fieldVal(match.intname) || '',
+                    name: fieldVal(match.pricelist) || fieldVal(match.name) || svc.name || '',
                     used: fieldVal(match.used_traffic),
                     paid: fieldVal(match.paid_traffic),
                     service: buildService(match),
