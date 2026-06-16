@@ -77,6 +77,8 @@ const DEFAULT_SETTINGS = {
     replyWarnColor: '#ffd24a', // колір рядка/таймера на старті очікування
     replyDangerColor: '#ff3b30', // колір при довгому очікуванні (після ескалації)
     quickReplies: true,        // панель швидких дій у таймері «клієнт чекає»
+    quickHoldText: '',         // текст кнопки «Вже дивимось» (порожньо → вбудований дефолт за мовою)
+    quickUpdText: '',          // текст кнопки «Апдейт» (порожньо → вбудований дефолт за мовою)
     updateEveryMinutes: 20,    // нагадати надіслати апдейт після N хв очікування (0 = вимкнено)
     // «без відповіді понад N год» — список у popup
     staleEnabled: false, // вимкнено за замовч.: скан відкриває тікети й гасить позначку нового повідомлення
@@ -233,6 +235,8 @@ function normalizeSettings(raw) {
     s.replyWarnColor = String(s.replyWarnColor || DEFAULT_SETTINGS.replyWarnColor);
     s.replyDangerColor = String(s.replyDangerColor || DEFAULT_SETTINGS.replyDangerColor);
     s.quickReplies = s.quickReplies !== false;
+    s.quickHoldText = String(s.quickHoldText || '');
+    s.quickUpdText = String(s.quickUpdText || '');
     s.updateEveryMinutes = Math.max(0, Number(s.updateEveryMinutes) || 0);
     s.reminders = (Array.isArray(s.reminders) ? s.reminders : [])
         .map((r) => ({
@@ -2019,8 +2023,10 @@ function awInsertReserved(kind) {
     let text;
     if (snip) text = fillSnippet(snip);
     else {
-        const map = AW_DEFAULT_TEXT[kind] || {};
-        text = fillSnippet(map[detectTicketLang()] || map.uk || '');
+        // Власний текст із налаштувань (редагується), інакше вбудований дефолт за мовою.
+        const custom = (kind === 'hold' ? settings.quickHoldText : kind === 'upd' ? settings.quickUpdText : '') || '';
+        if (custom.trim()) text = fillSnippet(custom);
+        else { const map = AW_DEFAULT_TEXT[kind] || {}; text = fillSnippet(map[detectTicketLang()] || map.uk || ''); }
     }
     if (text) insertIntoReply(ta, text);
 }
@@ -2074,15 +2080,22 @@ function awTimerTick() {
     const ta = document.querySelector('textarea.ispui-input__textarea');
     if (!ta) { awRemoveTimer(); return; }
     let el = document.getElementById('hr-await-timer');
+    const input = ta.closest('isp-chat-input') || ta.closest('.isp-chat-input');
+    const bar = input ? input.querySelector('.isp-buttons-block') : null;
     if (!el) {
         el = document.createElement('div');
         el.id = 'hr-await-timer';
-        el.style.cssText = 'margin:4px 0;display:flex;align-items:center;gap:8px;flex-wrap:wrap';
+        el.style.cssText = 'margin:6px 0 2px;display:flex;align-items:center;gap:8px;flex-wrap:wrap';
         const pill = document.createElement('span');
         pill.id = 'hr-await-timer-text';
         pill.style.cssText = 'padding:3px 10px;border-radius:6px;font:700 12px/1.4 system-ui,sans-serif;color:#fff';
         el.appendChild(pill);
         if (settings.quickReplies) el.appendChild(awBuildActions());
+    }
+    // Тримаємо таймер ПІД панеллю Сообщение/Комментарий/Шаблоны (.isp-buttons-block),
+    // а не у «порожнечі». Якщо Angular перемалював — повертаємо на місце.
+    if (bar) { if (el.previousElementSibling !== bar) bar.insertAdjacentElement('afterend', el); }
+    else if (!el.isConnected) {
         const host = ta.closest('.isp-chat-input') || ta.parentElement;
         if (host && host.parentElement) host.parentElement.insertBefore(el, host);
         else if (ta.parentElement) ta.parentElement.insertBefore(el, ta);

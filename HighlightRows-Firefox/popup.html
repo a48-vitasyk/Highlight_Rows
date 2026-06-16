@@ -196,6 +196,14 @@
         <div class="field">
             <label class="icon-label" title="Кнопки у тікеті: «Вже дивимось», «Апдейт» (вставляють шаблон зі скороченням hold/upd або типовий текст) і ⏰+30/+1г/+2г (нагад на тікет)"><input type="checkbox" id="quickReplies"> Швидкі дії у тікеті (холдинг / апдейт / нагад)</label>
         </div>
+        <div class="field">
+            <label for="quickHoldText" title="Текст кнопки «Вже дивимось». Порожньо → типовий за мовою тікета. Підстановки: {greeting} {ticket} {service} тощо.">Текст «Вже дивимось»:</label>
+            <textarea id="quickHoldText" rows="2" placeholder="Порожньо → типовий текст за мовою тікета" style="width:100%;box-sizing:border-box;resize:vertical"></textarea>
+        </div>
+        <div class="field">
+            <label for="quickUpdText" title="Текст кнопки «Апдейт». Порожньо → типовий за мовою тікета. Підстановки: {greeting} {ticket} {service} тощо.">Текст «Апдейт»:</label>
+            <textarea id="quickUpdText" rows="2" placeholder="Порожньо → типовий текст за мовою тікета" style="width:100%;box-sizing:border-box;resize:vertical"></textarea>
+        </div>
         <div class="field row">
             <label for="updateEveryMinutes" title="Через скільки хв очікування таймер підкаже надіслати клієнту апдейт (0 = вимкнено)">Апдейт кожні (хв):</label>
             <input type="number" id="updateEveryMinutes" min="0" step="1" style="width:60px">
