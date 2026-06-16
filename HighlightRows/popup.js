@@ -961,9 +961,16 @@ function renderAwaitingList(arr) {
         item.appendChild(makeEl('span', { className: 'ti-num', textContent: '#' + a.ticketId }));
         item.appendChild(makeEl('span', { className: 'ti-age ti-age--warn', textContent: fmtWaitMs(wait) }));
         item.appendChild(makeEl('span', { className: 'ti-text', textContent: who ? ('взяв ' + who) : truncate(a.subject, 24) }));
+        item.appendChild(listActBtn('×', 'Прибрати зі списку (тікет уже опрацьовано)', () => awaitingRemove(a.ticketId)));
         makeClickable(item, a.url);
         box.appendChild(item);
     });
+}
+// Прибрати тікет зі спільного пулу «Клієнт чекає» (застарілий/опрацьований).
+function awaitingRemove(ticketId) {
+    awaitingCache = awaitingCache.filter((a) => String(a.ticketId) !== String(ticketId));
+    renderAwaitingList(awaitingCache); // миттєво зі списку; сервер підтвердить через onChanged
+    try { chrome.runtime.sendMessage({ sb: 'awResolve', ticketId }, () => { void chrome.runtime.lastError; }); } catch (e) { /* ignore */ }
 }
 // Підтягнути свіжий спільний пул із Supabase (background оновить дзеркало → onChanged).
 function awaitingPull(showStatus) {
