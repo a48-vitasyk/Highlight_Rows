@@ -2009,14 +2009,14 @@ function plusMinutesHHMM(min) {
 // Вбудовані дефолти, якщо нема шаблону з відповідним скороченням (hold/upd).
 const AW_DEFAULT_TEXT = {
     hold: {
-        uk: '{greeting}! Дякуємо за звернення — ми вже взяли ваш запит у роботу й повернемось із відповіддю найближчим часом.',
-        ru: '{greeting}! Спасибо за обращение — мы уже взяли ваш запрос в работу и вернёмся с ответом в ближайшее время.',
-        en: '{greeting}! Thanks for reaching out — we\'ve started looking into your request and will get back to you shortly.',
+        uk: 'Я вже взяв Ваш запит у роботу, і працюю над ним. Як тільки буде оновлення, я Вас повідомлю. Очікуйте, будь ласка.',
+        ru: 'Я уже взял Ваш запрос в работу и занимаюсь им. Как только будет обновление, я Вас уведомлю. Пожалуйста, ожидайте.',
+        en: 'I have already taken your request and am working on it. As soon as there is an update, I will let you know. Please bear with me.',
     },
     upd: {
-        uk: '{greeting}! Невелике оновлення: ваш запит ще в роботі, ми продовжуємо розбиратися. Дякуємо за терпіння — повідомимо, щойно буде результат.',
-        ru: '{greeting}! Небольшое обновление: ваш запрос ещё в работе, мы продолжаем разбираться. Спасибо за терпение — сообщим, как только будет результат.',
-        en: '{greeting}! A quick update: your request is still in progress and we\'re actively working on it. Thanks for your patience — we\'ll let you know as soon as we have news.',
+        uk: 'Ваш запит ще в роботі, продовжую ним займатися. Нажаль це займає більше часу ніж очікувалось. Як тільки буде результат, одразу напишу Вам. Дякую за очікування.',
+        ru: 'Ваш запрос ещё в работе, продолжаю им заниматься. К сожалению, это занимает больше времени, чем ожидалось. Как только будет результат, сразу напишу Вам. Спасибо за ожидание.',
+        en: 'Your request is still in progress and I am continuing to work on it. Unfortunately, it is taking longer than expected. As soon as I have a result, I will write to you right away. Thank you for waiting.',
     },
 };
 function awInsertReserved(kind) {
