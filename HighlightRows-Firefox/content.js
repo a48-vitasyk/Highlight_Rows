@@ -837,7 +837,7 @@ function snippetVars() {
         if (trafficData.used != null && trafficData.paid != null && !trafficData.notFound && !trafficData.none) {
             v.traffic = formatTB(trafficData.used) + ' / ' + formatTB(trafficData.paid);
         }
-        v.service = trafficData.id || '';
+        v.service = trafficData.name || '';
         v.serviceid = trafficData.id || '';
     }
     return v;
@@ -2468,12 +2468,17 @@ function currentTicketKey() {
     return currentElid() || getTicketNumberFromDom();
 }
 // Вибрана послуга з поля «Услуга» (select name="item"). Текст: «#<id> ... (<ip>)».
+// Назва послуги — середина тексту (без «#id» та «(ip)»).
 function readSelectedService() {
     const el = document.querySelector('ispui-select-v2[name="item"] .isp-select__text');
-    const txt = el ? (el.textContent || '') : '';
+    const txt = el ? (el.textContent || '').replace(/\s+/g, ' ').trim() : '';
     const idm = txt.match(/#(\d+)/);
     const ipm = txt.match(/\(\s*((?:\d{1,3}\.){3}\d{1,3})\s*\)/);
-    return { id: idm ? idm[1] : '', ip: ipm ? ipm[1] : '' };
+    let name = txt;
+    if (idm) name = name.replace(idm[0], '');
+    if (ipm) name = name.replace(ipm[0], '');
+    name = name.replace(/^[\s\-—:·|]+|[\s\-—:·|]+$/g, '').trim();
+    return { id: idm ? idm[1] : '', ip: ipm ? ipm[1] : '', name };
 }
 
 // Іконка за статусом інстансу (instance_status).
@@ -2548,11 +2553,12 @@ async function loadTraffic(force) {
                 ? {
                     key,
                     id: fieldVal(match.id),
+                    name: svc.name || fieldVal(match.name) || fieldVal(match.pricelist) || fieldVal(match.intname) || '',
                     used: fieldVal(match.used_traffic),
                     paid: fieldVal(match.paid_traffic),
                     service: buildService(match),
                 }
-                : { key, notFound: true };
+                : { key, notFound: true, name: svc.name || '' };
         }
         injectInfo();
     } catch (e) {
