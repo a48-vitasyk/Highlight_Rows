@@ -1592,8 +1592,8 @@ function snipEditRow(s) {
         }
         if (e.key === 'Escape') hideSnipFmtBar();
     });
-    const save = makeEl('button', { type: 'button', className: 'small snip-save', title: 'Зберегти', textContent: 'Зберегти' });
-    const close = makeEl('button', { type: 'button', className: 'small', title: 'Закрити без збереження', textContent: 'Закрити' });
+    const save = makeEl('button', { type: 'button', className: 'small snip-save', title: 'Зберегти', innerHTML: IC.save });
+    const close = makeEl('button', { type: 'button', className: 'small remove', title: 'Закрити без збереження', innerHTML: IC.close });
     save.addEventListener('click', () => {
         bodies[curLang] = body.value;
         const snippet = { id: row.dataset.id || undefined, title: title.value.trim(), body: bodies.uk, bodyRu: bodies.ru.trim(), bodyEn: bodies.en.trim(), shortcut: sc.value.trim(), category: cat.getValue() };
