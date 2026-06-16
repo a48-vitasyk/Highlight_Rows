@@ -1108,13 +1108,21 @@ $('save').addEventListener('click', async () => {
                 status.textContent = 'Збережено (спільне)';
                 loadForm(); // перемалювати рядки з реальними id (uuid) з бази — щоб mute/scope працювали одразу
             } catch (e) {
-                console.error('[HR] syncReminders failed:', e);
                 const msg = String((e && e.message) || e);
                 // 403 = RLS відмовив (напр. спроба зробити чужий спільний «особистим»):
-                // у базі він лишився загальним — пишемо реальний стан, а не «синк не вдався».
-                if (/\b403\b/.test(msg)) status.textContent = 'Залишився загальним — змінити чужий спільний може лише автор';
-                else status.textContent = 'Збережено локально; синк не вдався: ' + msg;
+                // це ОЧІКУВАНО — у базі він лишився загальним. Не червоний error, а warn.
+                if (/\b403\b/.test(msg)) {
+                    console.warn('[HR] reminder stayed shared (RLS 403):', msg);
+                    status.textContent = 'Залишився загальним — змінити чужий спільний може лише автор';
+                } else {
+                    console.error('[HR] syncReminders failed:', e);
+                    status.textContent = 'Збережено локально; синк не вдався: ' + msg;
+                }
                 syncFailed = true;
+                // Відкат: підтягуємо базу й перемальовуємо форму, щоб локальна (невдала)
+                // зміна scope не лишалась і не давала 403 на КОЖНОМУ наступному збереженні.
+                try { await SB.pull(); } catch (_) { /* офлайн — лишаємо локальне */ }
+                loadForm();
             }
         } else {
             status.textContent = 'Збережено';
