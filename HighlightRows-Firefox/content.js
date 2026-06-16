@@ -106,6 +106,7 @@ let awaitingShared = [];  // дзеркало спільного пулу (stora
 let awAnchorQueue = [];   // [{ ticket, elid }] — нові тікети на анкоринг (ticket.edit)
 let awDraining = false;   // чи виконується awDrain зараз
 let awNotifiedAt = {};    // { [ticketId]: ms } — троттл повтору сповіщень
+let awSnoozeUntil = 0;    // банер «Клієнт чекає» приглушено (банер+сигнал) до цього ms
 let awBubbleBaseline = null; // { ticketId, count } — для миттєвого очищення на вихідному баблі
 let replyAudio = null;    // окремий зацикл. звук відповіді (не плутати з reminderAudio)
 let awTimerInterval = null; // 1с-тік таймера в тікеті
@@ -1676,6 +1677,7 @@ async function fetchAllTickets(onPage) {
 // --- «Клієнт чекає на відповідь»: трекер + ескалація ---------------------
 const AW_RECHECK_MS = 60 * 1000;        // як часто пере-перевіряти, чи відписали
 const AW_FETCH_DEDUP_MS = 1200;         // мін. пауза між ticket.edit по всіх вкладках
+const AW_SNOOZE_MS = 10 * 60 * 1000;    // «Відкласти» банер «Клієнт чекає» на 10 хв
 
 function persistAwaiting() { try { chrome.storage.local.set({ awaitingMap }); } catch (e) { /* ignore */ } }
 
@@ -1752,16 +1754,42 @@ function ensureAwaitingBanner(active, now) {
     if (!banner) {
         banner = document.createElement('div');
         banner.id = 'hr-awaiting-banner';
-        banner.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:12px;z-index:2147483646;background:#b3261e;color:#fff;padding:8px 14px;border-radius:8px;font:600 13px/1.3 system-ui,sans-serif;box-shadow:0 4px 14px rgba(0,0,0,.3);max-width:92vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+        banner.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:12px;z-index:2147483646;display:flex;align-items:center;gap:10px;background:#b3261e;color:#fff;padding:8px 14px;border-radius:8px;font:600 13px/1.3 system-ui,sans-serif;box-shadow:0 4px 14px rgba(0,0,0,.3);max-width:92vw';
+        const txt = document.createElement('span');
+        txt.className = 'hr-aw-text';
+        txt.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+        banner.appendChild(txt);
+        const snz = document.createElement('button');
+        snz.type = 'button';
+        snz.textContent = 'Відкласти 10 хв';
+        snz.title = 'Приглушити банер і сигнал на 10 хв';
+        snz.style.cssText = 'flex:none;border:none;background:#fff;color:#b3261e;font:600 12px system-ui,sans-serif;padding:4px 10px;border-radius:6px;cursor:pointer;white-space:nowrap';
+        snz.addEventListener('click', (e) => { e.preventDefault(); awSnoozeBanner(); });
+        banner.appendChild(snz);
+        const x = document.createElement('button');
+        x.type = 'button';
+        x.textContent = '×';
+        x.title = 'Закрити (відкласти на 10 хв)';
+        x.style.cssText = 'flex:none;border:none;background:transparent;color:#fff;font:700 17px/1 system-ui,sans-serif;cursor:pointer;padding:0 2px';
+        x.addEventListener('click', (e) => { e.preventDefault(); awSnoozeBanner(); });
+        banner.appendChild(x);
         document.body.appendChild(banner);
     }
     const label = active.slice().sort((x, y) => x.waitingSince - y.waitingSince)
         .map((a) => '#' + a.ticketId + ' (' + Math.floor((now - a.waitingSince) / 60000) + ' хв)')
         .join(' · ');
     const full = '✉️ Клієнт чекає — відпишіть: ' + label;
-    if (banner.textContent !== full) banner.textContent = full;
+    const txt = banner.querySelector('.hr-aw-text');
+    if (txt && txt.textContent !== full) txt.textContent = full;
 }
 function removeAwaitingBanner() { const b = document.getElementById('hr-awaiting-banner'); if (b) b.remove(); }
+
+// «Відкласти/Закрити» банер «Клієнт чекає»: ховаємо банер і глушимо сигнал на 10 хв.
+function awSnoozeBanner() {
+    awSnoozeUntil = Date.now() + AW_SNOOZE_MS;
+    try { chrome.storage.local.set({ awSnoozeUntil }); } catch (e) { /* ignore */ }
+    removeAwaitingBanner();
+}
 
 // Миттєве очищення: у відкритому тікеті зʼявився новий вихідний бабл (відписали).
 function awInstantClearOpen() {
@@ -1855,9 +1883,10 @@ function awTick(now, newMsgNow, visible, ticketElid) {
     }
     awInstantClearOpen();
     awDrain();
-    // сигнали
+    // сигнали (з урахуванням «Відкласти 10 хв» — приглушує банер і повтор сигналу)
     const active = computeActiveAwaiting(now);
-    if (active.length) { ensureAwaitingBanner(active, now); active.forEach((a) => awNotify(a, now)); }
+    const snoozed = awSnoozeUntil && now < awSnoozeUntil;
+    if (active.length && !snoozed) { ensureAwaitingBanner(active, now); active.forEach((a) => awNotify(a, now)); }
     else { removeAwaitingBanner(); }
     // бейдж — командний лічильник + найдовше очікування
     const all = awWaitingByTicket();
@@ -2478,7 +2507,8 @@ function init() {
         loadFromStorage('local', 'matchAlertState', {}),
         loadFromStorage('local', 'awaitingMap', {}),
         loadFromStorage('local', 'awaitingShared', []),
-    ]).then(([loadedSettings, loadedTimers, loadedReminderState, loadedLabels, loadedMatchState, loadedAwaiting, loadedAwShared]) => {
+        loadFromStorage('local', 'awSnoozeUntil', 0),
+    ]).then(([loadedSettings, loadedTimers, loadedReminderState, loadedLabels, loadedMatchState, loadedAwaiting, loadedAwShared, loadedAwSnooze]) => {
         if (!extensionAlive()) { teardown(); return; }
 
         settings = loadedSettings;
@@ -2488,6 +2518,7 @@ function init() {
         matchAlertState = loadedMatchState && typeof loadedMatchState === 'object' ? loadedMatchState : {};
         awaitingMap = loadedAwaiting && typeof loadedAwaiting === 'object' ? loadedAwaiting : {};
         awaitingShared = Array.isArray(loadedAwShared) ? loadedAwShared : [];
+        awSnoozeUntil = Number(loadedAwSnooze) || 0;
         applyPanelTweaks();
         loadMyEmail();
         loadCustomSounds();
@@ -2529,6 +2560,9 @@ function init() {
                     loadSnippets();
                 } else if (area === 'local' && changes.awaitingShared) {
                     awaitingShared = changes.awaitingShared.newValue || [];
+                    refresh();
+                } else if (area === 'local' && changes.awSnoozeUntil) {
+                    awSnoozeUntil = Number(changes.awSnoozeUntil.newValue) || 0;
                     refresh();
                 }
             });
