@@ -132,6 +132,7 @@ let trafficLoading = false;
 let panelLabels = { ...DEFAULT_LABELS }; // локалізовані підписи (оновлюються з API)
 let visibleTickets = new Set(); // номери тікетів, що зараз відрендерені в DOM
 let matchAlertState = {};       // { 'tag:ID'|'blocked:ID': { lastAlert } } — для off-screen алертів
+let matchTickets = [];          // дзеркало storage.local.matchTickets — для live-очищення блок-збігів
 let matchScanRunning = false;
 let matchIntervalRef = null;
 
@@ -1353,6 +1354,7 @@ function refresh() {
     const matchedTimerKeys = new Set();
     const visible = new Set();
     const newMsgNow = new Set();
+    const blockedNow = new Set(); // тікети, які зараз видно в черзі ЗАБЛОКОВАНИМИ на нас
     const ticketElid = {};
     let timersDirty = false;
 
@@ -1393,6 +1395,7 @@ function refresh() {
         if (settings.enabled && settings.names.length) {
             const blockedName = blockedNameForRow(row);
             if (blockedName) {
+                if (ticket) blockedNow.add(ticket);
                 const key = getRowKey(row);
                 matchedTimerKeys.add(key);
                 if (!rowTimers[key]) { rowTimers[key] = { firstSeen: now, lastAlert: 0 }; timersDirty = true; }
@@ -1426,6 +1429,25 @@ function refresh() {
     });
 
     visibleTickets = visible; // для API-скану: які тікети зараз на екрані
+
+    // Live-очищення «Мої тікети»: блок-збіг, який зараз видно в черзі вже БЕЗ
+    // блокування на нас (опрацьований/перепризначений) — прибираємо без API.
+    // Лише коли детект блокування активний (інакше blockedNow завжди порожній).
+    if (settings.enabled && settings.names.length && matchTickets.length) {
+        let changed = false;
+        const kept = [];
+        for (const m of matchTickets) {
+            if (m && m.kinds && m.kinds.includes('blocked') && visible.has(m.ticketId) && !blockedNow.has(m.ticketId)) {
+                const kinds = m.kinds.filter((k) => k !== 'blocked');
+                changed = true;
+                if (kinds.length) kept.push({ ...m, kinds }); // лишилися tag/reminder — тримаємо
+                // інакше повністю прибираємо рядок
+            } else {
+                kept.push(m);
+            }
+        }
+        if (changed) { matchTickets = kept; try { chrome.storage.local.set({ matchTickets: kept }); } catch (e) { /* ignore */ } }
+    }
 
     // Прибрати стилі з рядків, які цього проходу не оформлювали (зокрема
     // перероблені віртуальним скролом вузли).
@@ -2542,10 +2564,11 @@ function init() {
         loadFromStorage('local', 'reminderState', {}),
         loadFromStorage('local', 'panelLabels', null),
         loadFromStorage('local', 'matchAlertState', {}),
+        loadFromStorage('local', 'matchTickets', []),
         loadFromStorage('local', 'awaitingMap', {}),
         loadFromStorage('local', 'awaitingShared', []),
         loadFromStorage('local', 'awSnooze', {}),
-    ]).then(([loadedSettings, loadedTimers, loadedReminderState, loadedLabels, loadedMatchState, loadedAwaiting, loadedAwShared, loadedAwSnooze]) => {
+    ]).then(([loadedSettings, loadedTimers, loadedReminderState, loadedLabels, loadedMatchState, loadedMatchTickets, loadedAwaiting, loadedAwShared, loadedAwSnooze]) => {
         if (!extensionAlive()) { teardown(); return; }
 
         settings = loadedSettings;
@@ -2553,6 +2576,7 @@ function init() {
         reminderState = loadedReminderState && typeof loadedReminderState === 'object' ? loadedReminderState : {};
         if (loadedLabels && typeof loadedLabels === 'object') panelLabels = { ...DEFAULT_LABELS, ...loadedLabels };
         matchAlertState = loadedMatchState && typeof loadedMatchState === 'object' ? loadedMatchState : {};
+        matchTickets = Array.isArray(loadedMatchTickets) ? loadedMatchTickets : [];
         awaitingMap = loadedAwaiting && typeof loadedAwaiting === 'object' ? loadedAwaiting : {};
         awaitingShared = Array.isArray(loadedAwShared) ? loadedAwShared : [];
         awSnooze = loadedAwSnooze && typeof loadedAwSnooze === 'object' ? loadedAwSnooze : {};
@@ -2601,6 +2625,8 @@ function init() {
                 } else if (area === 'local' && changes.awSnooze) {
                     awSnooze = changes.awSnooze.newValue || {};
                     refresh();
+                } else if (area === 'local' && changes.matchTickets) {
+                    matchTickets = Array.isArray(changes.matchTickets.newValue) ? changes.matchTickets.newValue : [];
                 }
             });
 
