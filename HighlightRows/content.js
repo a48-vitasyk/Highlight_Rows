@@ -110,6 +110,7 @@ let awDraining = false;   // чи виконується awDrain зараз
 let awNotifiedAt = {};    // { [ticketId]: ms } — троттл повтору сповіщень
 let awSnooze = {};        // { [ticketId]: untilMs } — банер+сигнал по тікету приглушено до цього ms
 let awSharedRecheck = {}; // { [ticketId]: ms } — коли востаннє перевіряли чужий тікет пулу через API
+let awResolved = new Set(); // тікети, для яких уже відправили resolve (щоб не слати DELETE щоразу)
 let awBubbleBaseline = null; // { ticketId, count } — для миттєвого очищення на вихідному баблі
 let replyAudio = null;    // окремий зацикл. звук відповіді (не плутати з reminderAudio)
 let awTimerInterval = null; // 1с-тік таймера в тікеті
@@ -1995,10 +1996,16 @@ function awTick(now, newMsgNow, visible, ticketElid, ticketSubject) {
         if (awAnchorQueue.some((q) => q.ticket === t)) return;
         awAnchorQueue.push({ ticket: t, elid: ticketElid[t] || '', subject: (ticketSubject && ticketSubject[t]) || '' });
     });
-    // зник маркер у видимого мого тікета → пере-перевірити якнайшвидше
-    for (const t of Object.keys(awaitingMap)) {
-        if (visible.has(t) && !newMsgNow.has(t)) awaitingMap[t].lastRecheck = 0;
+    // Надійне зняття: тікет видно в черзі БЕЗ позначки нового повідомлення —
+    // отже його опрацювали (прочитали/відписали/закрили) → знімаємо з пулу одразу
+    // (без API). awResolved боронить від повторних DELETE до оновлення дзеркала.
+    for (const id of [...awResolved]) {
+        if (!awaitingMap[id] && !awaitingShared.some((a) => a && a.ticketId === id)) awResolved.delete(id);
     }
+    const pooled = new Set([...Object.keys(awaitingMap), ...awaitingShared.map((a) => a && a.ticketId)]);
+    pooled.forEach((t) => {
+        if (t && visible.has(t) && !newMsgNow.has(t) && !awResolved.has(t)) { awResolved.add(t); awResolve(t); }
+    });
     awInstantClearOpen();
     awDrain();
     // сигнали (з урахуванням «× Відкласти 10 хв» по кожному тікету)
