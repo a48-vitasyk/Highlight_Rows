@@ -156,7 +156,7 @@ function isUuid(s) {
 const SVG_LOCK = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="11" width="15" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>';
 const SVG_USERS = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>';
 
-function buildScopeSeg(row) {
+function buildScopeSeg(row, locked) {
     const seg = makeEl('div', { className: 'scope-seg' });
     const opts = [
         { v: 'personal', svg: SVG_LOCK, t: 'Особистий (лише ви)' },
@@ -164,16 +164,22 @@ function buildScopeSeg(row) {
     ];
     const sync = () => [...seg.children].forEach((c) => c.classList.toggle('active', c.dataset.scope === row.dataset.scope));
     opts.forEach((o) => {
-        const b = makeEl('button', { type: 'button', className: 'scope-opt', title: o.t, innerHTML: o.svg });
+        const b = makeEl('button', { type: 'button', className: 'scope-opt', title: locked ? 'Чужий спільний будильник — щоб узяти, тисніть «Взяти собі»' : o.t, innerHTML: o.svg });
         b.dataset.scope = o.v;
         b.addEventListener('click', () => {
+            if (locked) { // чужий спільний: міняти scope не можна (RLS відмовить) — лише claim
+                const st = $('status');
+                if (st) { st.textContent = 'Це чужий спільний — щоб узяти, тисніть «Взяти собі»'; setTimeout(() => { if (/чужий спільний/.test(st.textContent)) st.textContent = ''; }, 3500); }
+                return;
+            }
             if (o.v === 'shared' && !isLoggedIn) { promptLogin(); return; } // лише для залогінених
             row.dataset.scope = o.v; sync(); markRemindersDirty();
         });
+        if (locked) b.classList.add('locked');
         seg.appendChild(b);
     });
     sync();
-    applyScopeLock();
+    if (!locked) applyScopeLock();
     return seg;
 }
 
@@ -310,7 +316,10 @@ function addReminderRow(reminder, muted) {
     const row = makeEl('div', { className: 'rem-row' });
     row.dataset.id = id;
     row.dataset.scope = scope;
-    const scopeSeg = buildScopeSeg(row);
+    // Чужий спільний будильник (створив не ви) — scope міняти не можна (RLS 403).
+    // Брати його треба через «Взяти собі» (claim), не перемиканням на «особистий».
+    const foreignShared = scope === 'shared' && isUuid(id) && !!myEmailPopup && !!r.creatorEmail && r.creatorEmail !== myEmailPopup;
+    const scopeSeg = buildScopeSeg(row, foreignShared);
 
     // Рядок 1: тікет, час, група дій (сегмент типу + заглушити + видалити).
     // Дії — один блок (.rem-actions), тож переносяться РАЗОМ, а поля тікета/часу
