@@ -827,7 +827,7 @@ function snippetVars() {
         ip: readSummaryItemValue(['IP адрес', 'IP адреса', 'IP-адреса']),
         os: readSummaryItemValue(['Операционная система', 'Операційна система', 'ОС']),
         start: readSummaryItemValue(['Дата открытия', 'Дата відкриття']),
-        expire: '', traffic: '', service: '',
+        expire: '', traffic: '', service: '', serviceid: '',
     };
     if (trafficData && trafficData.service) {
         if (!v.os) v.os = trafficData.service.os || '';
@@ -838,6 +838,7 @@ function snippetVars() {
             v.traffic = formatTB(trafficData.used) + ' / ' + formatTB(trafficData.paid);
         }
         v.service = trafficData.id || '';
+        v.serviceid = trafficData.id || '';
     }
     return v;
 }
@@ -885,7 +886,7 @@ function fillSnippet(snip) {
     v.greeting = greetingFor(lang);
     v.date = now.toLocaleDateString();
     v.time = now.toLocaleTimeString().slice(0, 5);
-    return String(text || '').replace(/\{(ticket|ip|os|start|expire|traffic|service|greeting|date|time)\}/g, (m, k) => v[k] || '');
+    return String(text || '').replace(/\{(ticket|ip|os|start|expire|traffic|serviceid|service|greeting|date|time)\}/g, (m, k) => v[k] || '');
 }
 // Tab-розгортання: токен перед курсором → шаблон, чия назва починається з токена
 // (або будь-яке слово назви починається з нього). Повертає true, якщо розгорнули.
