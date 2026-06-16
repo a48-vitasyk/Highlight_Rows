@@ -1007,8 +1007,22 @@ function awaitingPull(showStatus) {
 // Поки попап відкритий: оновлюємо час очікування + періодично тягнемо свіже з сервера
 // (підстраховка живих оновлень, які приходять через Realtime → onChanged).
 setInterval(() => { renderAwaitingList(awaitingCache); awaitingPull(false); }, 30000);
+// «Оновити»: примусово перевірити через API (активна вкладка панелі), чи відписали,
+// і прибрати відписані — а не лише перетягнути той самий список із бази.
+function awaitingRefresh() {
+    const st = $('awaitingStatus'); if (st) st.textContent = 'Перевіряю…';
+    try { chrome.runtime.sendMessage({ sb: 'awPull' }, () => { void chrome.runtime.lastError; }); } catch (e) { /* ignore */ }
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        const tab = tabs && tabs[0];
+        if (!tab) { if (st) st.textContent = ''; return; }
+        chrome.tabs.sendMessage(tab.id, { action: 'awRecheckNow' }, () => {
+            if (chrome.runtime.lastError) { if (st) st.textContent = 'відкрийте вкладку панелі Zomro'; return; }
+            if (st) setTimeout(() => { if (st.textContent === 'Перевіряю…') st.textContent = ''; }, 5000);
+        });
+    });
+}
 const _refreshAwaitingBtn = $('refreshAwaiting');
-if (_refreshAwaitingBtn) _refreshAwaitingBtn.addEventListener('click', () => awaitingPull(true));
+if (_refreshAwaitingBtn) _refreshAwaitingBtn.addEventListener('click', awaitingRefresh);
 // «Очистити все» — прибрати всі тікети зі спільного пулу одним кліком (з підтвердженням).
 function awaitingClearAll() {
     if (!awaitingCache.length) return;

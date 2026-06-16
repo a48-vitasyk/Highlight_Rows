@@ -1714,7 +1714,7 @@ async function fetchAllTickets(onPage) {
 const AW_RECHECK_MS = 60 * 1000;        // як часто пере-перевіряти, чи відписали
 const AW_FETCH_DEDUP_MS = 1200;         // мін. пауза між ticket.edit по всіх вкладках
 const AW_SNOOZE_MS = 10 * 60 * 1000;    // «Відкласти» банер «Клієнт чекає» на 10 хв
-const AW_SHARED_RECHECK_MS = 5 * 60 * 1000; // як часто будь-яка вкладка перевіряє чужі тікети пулу
+const AW_SHARED_RECHECK_MS = 3 * 60 * 1000; // як часто будь-яка вкладка перевіряє чужі тікети пулу
 
 function persistAwaiting() { try { chrome.storage.local.set({ awaitingMap }); } catch (e) { /* ignore */ } }
 
@@ -1931,11 +1931,13 @@ async function awRecheckOne(t) {
     persistAwaiting();
 }
 
-async function awDrain() {
+async function awDrain(force) {
     if (awDraining || !settings.replyWatchEscalate) return;
     if (!onBillmgr() || !tabVisible() || sessionInCooldown()) return;
-    const last = await loadFromStorage('local', 'awaitingFetchAt', 0);
-    if (Date.now() - (last || 0) < AW_FETCH_DEDUP_MS) return;
+    if (!force) {
+        const last = await loadFromStorage('local', 'awaitingFetchAt', 0);
+        if (Date.now() - (last || 0) < AW_FETCH_DEDUP_MS) return;
+    }
     awDraining = true;
     try {
         while (awAnchorQueue.length && alive && extensionAlive() && tabVisible()) {
@@ -1965,6 +1967,15 @@ async function awDrain() {
             await sleep(STALE_FETCH_GAP_MS);
         }
     } catch (e) { /* ignore */ } finally { awDraining = false; }
+}
+
+// Примусова перевірка ВСІХ тікетів пулу (кнопка «Оновити» в попапі): скидаємо
+// таймери recheck і одразу проганяємо awDrain — відписані/закриті самі зникають.
+async function awForceRecheck() {
+    if (!settings.replyWatchEscalate || !onBillmgr()) return;
+    for (const t of Object.keys(awaitingMap)) awaitingMap[t].lastRecheck = 0;
+    awSharedRecheck = {};
+    await awDrain(true);
 }
 
 // Викликається з refresh() щопроходу.
@@ -2702,6 +2713,7 @@ function init() {
                 if (!req) return;
                 if (req.action === 'scanStaleTickets') scanStaleTickets(true);
                 else if (req.action === 'scanMatches') scanMatches(true);
+                else if (req.action === 'awRecheckNow') awForceRecheck();
                 else if (req.action === 'refreshTraffic') loadTraffic(true);
             });
 
