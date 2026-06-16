@@ -157,12 +157,8 @@
 .hr-msg-tr:hover { opacity: 1; color: var(--isp-main-color, #1a76e2); }
 .hr-msg-tr svg { display: block; width: 15px; height: 15px; }
 .hr-msg-tr-text {
-    margin: 4px 0 2px; padding: 6px 9px; border-left: 3px solid #1a76e2;
-    background: rgba(26, 118, 226, .08); border-radius: 4px;
-    font: 13px/1.4 system-ui, sans-serif; color: #333; white-space: pre-wrap;
-}
-@media (prefers-color-scheme: dark) {
-    .hr-msg-tr-text { background: rgba(78, 109, 160, .18); color: #e8eaed; }
+    margin: 4px 0 2px; white-space: pre-wrap;
+    color: inherit; background: transparent; font: inherit;
 }
 
 /* Розумні підказки шаблонів — у верхньому барі, праворуч від «Шаблоны» */
