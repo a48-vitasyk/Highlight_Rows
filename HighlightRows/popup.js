@@ -978,8 +978,10 @@ function renderAwaitingList(arr) {
     if (!box) return;
     const now = Date.now();
     const list = awaitingCache.slice().sort((a, b) => (a.clientMessageAt || 0) - (b.clientMessageAt || 0));
+    const st = $('awaitingStatus');
+    if (st) st.textContent = list.length ? ('Чекає: ' + list.length) : '';
     box.innerHTML = '';
-    if (!list.length) { box.appendChild(makeEl('div', { className: 'list-empty', textContent: 'Натисніть «Оновити», щоб просканувати' })); return; }
+    if (!list.length) { box.appendChild(makeEl('div', { className: 'list-empty', textContent: 'Поки порожньо' })); return; }
     list.forEach((a) => {
         const wait = now - (a.clientMessageAt || now);
         const subj = (a.subject || '').trim();
@@ -992,19 +994,6 @@ function renderAwaitingList(arr) {
         box.appendChild(item);
     });
 }
-// Статус скану «Клієнт чекає» (як у «Без відповіді») + стан кнопки.
-function renderAwaitingScanStatus(s) {
-    const el = $('awaitingStatus');
-    const btn = $('refreshAwaiting');
-    if (btn) btn.disabled = !!(s && s.scanning);
-    if (!el) return;
-    if (!s) { el.textContent = ''; return; }
-    if (s.note) { el.textContent = s.note; return; }
-    if (s.loading) { el.textContent = 'Завантажую чергу… ' + (s.total || 0); return; }
-    el.textContent = s.scanning
-        ? ('Сканую ' + (s.scanned || 0) + '/' + (s.total || 0) + ' · чекає ' + (s.passed || 0))
-        : ('Чекає: ' + (s.passed || 0));
-}
 // Прибрати тікет із локального списку (не чіпає Supabase — список локальний).
 function awaitingRemove(ticketId) {
     awaitingCache = awaitingCache.filter((a) => String(a.ticketId) !== String(ticketId));
@@ -1013,16 +1002,20 @@ function awaitingRemove(ticketId) {
 }
 // Поки попап відкритий — оновлюємо лише ВІДОБРАЖЕНИЙ час очікування (без скану/мережі).
 setInterval(() => renderAwaitingList(awaitingCache), 30000);
-// «Оновити»: ручний скан черги в активній вкладці панелі (content.js → awaitingScan).
+// «Оновити»: пере-перевірити awaitingMap через API (активна вкладка панелі) — відписані
+// зникнуть; блок оновиться сам (content.js публікує awaitingScan з awaitingMap).
 function awaitingRefresh() {
     const st = $('awaitingStatus'); const btn = $('refreshAwaiting');
-    if (st) st.textContent = 'Сканую…';
+    if (st) st.textContent = 'Перевіряю…';
     if (btn) btn.disabled = true;
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
         const tab = tabs && tabs[0];
-        const fail = () => { if (st) st.textContent = 'відкрийте вкладку панелі Zomro'; if (btn) btn.disabled = false; };
-        if (!tab) { fail(); return; }
-        chrome.tabs.sendMessage(tab.id, { action: 'scanAwaiting' }, () => { if (chrome.runtime.lastError) fail(); });
+        if (!tab) { if (st) st.textContent = 'відкрийте вкладку панелі Zomro'; if (btn) btn.disabled = false; return; }
+        chrome.tabs.sendMessage(tab.id, { action: 'awRecheckNow' }, () => {
+            if (btn) btn.disabled = false;
+            if (chrome.runtime.lastError) { if (st) st.textContent = 'відкрийте вкладку панелі Zomro'; return; }
+            setTimeout(() => renderAwaitingList(awaitingCache), 2000); // оновити лічильник/час
+        });
     });
 }
 const _refreshAwaitingBtn = $('refreshAwaiting');
@@ -1038,14 +1031,13 @@ function awaitingClearAll() {
 const _clearAwaitingBtn = $('clearAwaiting');
 if (_clearAwaitingBtn) _clearAwaitingBtn.addEventListener('click', awaitingClearAll);
 
-chrome.storage.local.get(['staleTickets', 'matchTickets', 'staleScanStatus', 'matchScanStatus', 'myTickets', 'awaitingScan', 'awaitingScanStatus'], (d) => {
+chrome.storage.local.get(['staleTickets', 'matchTickets', 'staleScanStatus', 'matchScanStatus', 'myTickets', 'awaitingScan'], (d) => {
     renderStaleTickets((d && d.staleTickets) || []);
     renderMatchTickets((d && d.matchTickets) || []);
     renderStaleStatus(d && d.staleScanStatus);
     renderMatchStatus(d && d.matchScanStatus);
     renderMyTickets((d && d.myTickets) || []);
     renderAwaitingList((d && d.awaitingScan) || []);
-    renderAwaitingScanStatus(d && d.awaitingScanStatus);
 });
 
 // Лічильник біля «Оновити» в «Особисті тікети»: скільки тікетів зараз у списку.
@@ -1079,9 +1071,6 @@ chrome.storage.onChanged.addListener((changes, area) => {
     }
     if (changes.awaitingScan) {
         renderAwaitingList(changes.awaitingScan.newValue || []);
-    }
-    if (changes.awaitingScanStatus) {
-        renderAwaitingScanStatus(changes.awaitingScanStatus.newValue);
     }
     if (changes.staleScanStatus) {
         const st = changes.staleScanStatus.newValue;
