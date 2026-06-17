@@ -32,6 +32,7 @@ const DEFAULT_SETTINGS = {
     updateEveryMinutes: 20,
     staleEnabled: false,
     staleHours: 4,
+    awaitWaitMinutes: 30,
     trafficEnabled: false,
     serviceShow: { status: true, os: true, cost: true, expiredate: true, traffic: true },
     reverseEnabled: false,
@@ -399,6 +400,7 @@ function fillForm(s, reminderState) {
     setToggle($('soundEnabled'), s.soundEnabled);
     $('staleEnabled').checked = s.staleEnabled;
     $('staleHours').value = s.staleHours || DEFAULT_SETTINGS.staleHours;
+    if ($('awaitWaitMinutes')) $('awaitWaitMinutes').value = s.awaitWaitMinutes || DEFAULT_SETTINGS.awaitWaitMinutes;
     $('trafficEnabled').checked = s.trafficEnabled;
     $('reverseEnabled').checked = s.reverseEnabled;
     $('resizeEnabled').checked = s.resizeEnabled;
@@ -464,6 +466,7 @@ function readForm() {
         soundEnabled: $('soundEnabled').classList.contains('on'),
         staleEnabled: $('staleEnabled').checked,
         staleHours: Number($('staleHours').value) > 0 ? Number($('staleHours').value) : DEFAULT_SETTINGS.staleHours,
+        awaitWaitMinutes: ($('awaitWaitMinutes') && Number($('awaitWaitMinutes').value) > 0) ? Number($('awaitWaitMinutes').value) : DEFAULT_SETTINGS.awaitWaitMinutes,
         trafficEnabled: $('trafficEnabled').checked,
         reverseEnabled: $('reverseEnabled').checked,
         resizeEnabled: $('resizeEnabled').checked,
@@ -962,7 +965,7 @@ function renderMatchTickets(arr) {
     });
 }
 
-// --- Блок «Клієнт чекає» (спільний пул, storage.local.awaitingShared) -----
+// --- Блок «Клієнт чекає» (локальний ручний скан, storage.local.awaitingScan) -----
 let awaitingCache = [];
 function fmtWaitMs(ms) {
     const min = Math.floor(ms / 60000);
@@ -974,90 +977,76 @@ function renderAwaitingList(arr) {
     const box = $('awaitingList');
     if (!box) return;
     const now = Date.now();
-    const AW_SHOW_MIN_MS = 30 * 60000; // показуємо лише тих, кому не відповіли > 30 хв
-    const list = awaitingCache.slice()
-        .filter((a) => (now - (a.clientMessageAt || now)) >= AW_SHOW_MIN_MS)
-        .sort((a, b) => (a.clientMessageAt || 0) - (b.clientMessageAt || 0));
-    const st = $('awaitingStatus');
-    if (st) st.textContent = list.length ? ('чекає: ' + list.length) : '';
+    const list = awaitingCache.slice().sort((a, b) => (a.clientMessageAt || 0) - (b.clientMessageAt || 0));
     box.innerHTML = '';
-    if (!list.length) { box.appendChild(makeEl('div', { className: 'list-empty', textContent: 'Поки порожньо' })); return; }
+    if (!list.length) { box.appendChild(makeEl('div', { className: 'list-empty', textContent: 'Натисніть «Оновити», щоб просканувати' })); return; }
     list.forEach((a) => {
         const wait = now - (a.clientMessageAt || now);
-        const who = a.ownerEmail ? a.ownerEmail.split('@')[0] : '';
         const subj = (a.subject || '').trim();
-        const item = makeEl('div', { className: 'stale-item', title: (subj || ('#' + a.ticketId)) + (who ? ' — стежить ' + who : '') });
+        const item = makeEl('div', { className: 'stale-item', title: subj || ('#' + a.ticketId) });
         item.appendChild(makeEl('span', { className: 'ti-num', textContent: '#' + a.ticketId }));
         item.appendChild(makeEl('span', { className: 'ti-age ti-age--warn', textContent: fmtWaitMs(wait) }));
         item.appendChild(makeEl('span', { className: 'ti-text', textContent: truncate(subj, 32) }));
-        item.appendChild(listActBtn('×', 'Прибрати зі списку (тікет уже опрацьовано)', () => awaitingRemove(a.ticketId)));
+        item.appendChild(listActBtn('×', 'Прибрати зі списку', () => awaitingRemove(a.ticketId)));
         makeClickable(item, a.url);
         box.appendChild(item);
     });
 }
-// Прибрати тікет зі спільного пулу «Клієнт чекає» (застарілий/опрацьований).
+// Статус скану «Клієнт чекає» (як у «Без відповіді») + стан кнопки.
+function renderAwaitingScanStatus(s) {
+    const el = $('awaitingStatus');
+    const btn = $('refreshAwaiting');
+    if (btn) btn.disabled = !!(s && s.scanning);
+    if (!el) return;
+    if (!s) { el.textContent = ''; return; }
+    if (s.note) { el.textContent = s.note; return; }
+    if (s.loading) { el.textContent = 'Завантажую чергу… ' + (s.total || 0); return; }
+    el.textContent = s.scanning
+        ? ('Сканую ' + (s.scanned || 0) + '/' + (s.total || 0) + ' · чекає ' + (s.passed || 0))
+        : ('Чекає: ' + (s.passed || 0));
+}
+// Прибрати тікет із локального списку (не чіпає Supabase — список локальний).
 function awaitingRemove(ticketId) {
     awaitingCache = awaitingCache.filter((a) => String(a.ticketId) !== String(ticketId));
-    renderAwaitingList(awaitingCache); // миттєво зі списку; сервер підтвердить через onChanged
-    try { chrome.runtime.sendMessage({ sb: 'awResolve', ticketId }, () => { void chrome.runtime.lastError; }); } catch (e) { /* ignore */ }
+    renderAwaitingList(awaitingCache);
+    try { chrome.storage.local.set({ awaitingScan: awaitingCache }); } catch (e) { /* ignore */ }
 }
-// Підтягнути свіжий спільний пул із Supabase (background оновить дзеркало → onChanged).
-function awaitingPull(showStatus) {
-    if (showStatus) { const st = $('awaitingStatus'); if (st) st.textContent = 'Оновлюю…'; }
-    try { chrome.runtime.sendMessage({ sb: 'awPull' }, () => { void chrome.runtime.lastError; renderAwaitingList(awaitingCache); }); }
-    catch (e) { renderAwaitingList(awaitingCache); }
-}
-// Поки попап відкритий: оновлюємо час очікування + періодично тягнемо свіже з сервера
-// (підстраховка живих оновлень, які приходять через Realtime → onChanged).
-setInterval(() => { renderAwaitingList(awaitingCache); awaitingPull(false); }, 30000);
-// «Оновити»: примусово перевірити через API (активна вкладка панелі), чи відписали,
-// і прибрати відписані — а не лише перетягнути той самий список із бази.
+// Поки попап відкритий — оновлюємо лише ВІДОБРАЖЕНИЙ час очікування (без скану/мережі).
+setInterval(() => renderAwaitingList(awaitingCache), 30000);
+// «Оновити»: ручний скан черги в активній вкладці панелі (content.js → awaitingScan).
 function awaitingRefresh() {
-    const st = $('awaitingStatus'); if (st) st.textContent = 'Перевіряю…';
-    try { chrome.runtime.sendMessage({ sb: 'awPull' }, () => { void chrome.runtime.lastError; }); } catch (e) { /* ignore */ }
-    // Розсилаємо на ВСІ вкладки: спрацює на будь-якій вкладці панелі Zomro (навіть
-    // фоновій / коли відкрита бічна панель), а не лише на активній.
-    chrome.tabs.query({}, (tabs) => {
-        const ids = (tabs || []).map((t) => t.id).filter((x) => x != null);
-        let pending = ids.length, anyOk = false;
-        if (!pending) { if (st) st.textContent = 'відкрийте вкладку панелі Zomro'; return; }
-        ids.forEach((id) => {
-            try {
-                chrome.tabs.sendMessage(id, { action: 'awRecheckNow' }, () => {
-                    if (!chrome.runtime.lastError) anyOk = true; // content-скрипт панелі отримав
-                    if (--pending === 0 && st) {
-                        if (anyOk) { st.textContent = 'Перевіряю…'; setTimeout(() => { if (st.textContent === 'Перевіряю…') st.textContent = ''; }, 5000); }
-                        else st.textContent = 'відкрийте вкладку панелі Zomro';
-                    }
-                });
-            } catch (e) { if (--pending === 0 && st) st.textContent = anyOk ? '' : 'відкрийте вкладку панелі Zomro'; }
-        });
+    const st = $('awaitingStatus'); const btn = $('refreshAwaiting');
+    if (st) st.textContent = 'Сканую…';
+    if (btn) btn.disabled = true;
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        const tab = tabs && tabs[0];
+        const fail = () => { if (st) st.textContent = 'відкрийте вкладку панелі Zomro'; if (btn) btn.disabled = false; };
+        if (!tab) { fail(); return; }
+        chrome.tabs.sendMessage(tab.id, { action: 'scanAwaiting' }, () => { if (chrome.runtime.lastError) fail(); });
     });
 }
 const _refreshAwaitingBtn = $('refreshAwaiting');
 if (_refreshAwaitingBtn) _refreshAwaitingBtn.addEventListener('click', awaitingRefresh);
-// «Очистити все» — прибрати всі тікети зі спільного пулу одним кліком (з підтвердженням).
+// «Очистити все» — очистити локальний список одним кліком (з підтвердженням).
 function awaitingClearAll() {
     if (!awaitingCache.length) return;
     if (!confirm('Прибрати всі тікети (' + awaitingCache.length + ') з «Клієнт чекає»?')) return;
-    const ids = awaitingCache.map((a) => a.ticketId);
     awaitingCache = [];
-    renderAwaitingList(awaitingCache); // миттєво; сервер підтвердить через onChanged
-    ids.forEach((ticketId) => { try { chrome.runtime.sendMessage({ sb: 'awResolve', ticketId }, () => { void chrome.runtime.lastError; }); } catch (e) { /* ignore */ } });
+    renderAwaitingList(awaitingCache);
+    try { chrome.storage.local.set({ awaitingScan: [] }); } catch (e) { /* ignore */ }
 }
 const _clearAwaitingBtn = $('clearAwaiting');
 if (_clearAwaitingBtn) _clearAwaitingBtn.addEventListener('click', awaitingClearAll);
 
-chrome.storage.local.get(['staleTickets', 'matchTickets', 'staleScanStatus', 'matchScanStatus', 'myTickets', 'awaitingShared'], (d) => {
+chrome.storage.local.get(['staleTickets', 'matchTickets', 'staleScanStatus', 'matchScanStatus', 'myTickets', 'awaitingScan', 'awaitingScanStatus'], (d) => {
     renderStaleTickets((d && d.staleTickets) || []);
     renderMatchTickets((d && d.matchTickets) || []);
     renderStaleStatus(d && d.staleScanStatus);
     renderMatchStatus(d && d.matchScanStatus);
     renderMyTickets((d && d.myTickets) || []);
-    renderAwaitingList((d && d.awaitingShared) || []);
+    renderAwaitingList((d && d.awaitingScan) || []);
+    renderAwaitingScanStatus(d && d.awaitingScanStatus);
 });
-// Свіжий стан спільного пулу при відкритті попапа (background оновить дзеркало → onChanged).
-try { chrome.runtime.sendMessage({ sb: 'awPull' }, () => { void chrome.runtime.lastError; }); } catch (e) { /* ignore */ }
 
 // Лічильник біля «Оновити» в «Особисті тікети»: скільки тікетів зараз у списку.
 function renderMatchStatus(s) {
@@ -1088,8 +1077,11 @@ chrome.storage.onChanged.addListener((changes, area) => {
     if (changes.matchTickets) {
         renderMatchTickets(changes.matchTickets.newValue || []);
     }
-    if (changes.awaitingShared) {
-        renderAwaitingList(changes.awaitingShared.newValue || []);
+    if (changes.awaitingScan) {
+        renderAwaitingList(changes.awaitingScan.newValue || []);
+    }
+    if (changes.awaitingScanStatus) {
+        renderAwaitingScanStatus(changes.awaitingScanStatus.newValue);
     }
     if (changes.staleScanStatus) {
         const st = changes.staleScanStatus.newValue;

@@ -191,6 +191,10 @@
             <label for="replyRepeatMinutes" title="Як часто повторювати сигнал, поки не відповіси (0 = один раз)">Повтор (хв):</label>
             <input type="number" id="replyRepeatMinutes" min="0" step="1" style="width:60px">
         </div>
+        <div class="field row">
+            <label for="awaitWaitMinutes" title="Блок «Клієнт чекає» на Головній (ручний скан за кнопкою «Оновити»): показувати тікети, де клієнту не відповіли понад N хв">Блок «Клієнт чекає»: без відповіді (хв):</label>
+            <input type="number" id="awaitWaitMinutes" min="1" step="1" style="width:60px">
+        </div>
         <div class="field">
             <label class="icon-label" title="Кнопки у тікеті: «Вже дивимось», «Апдейт» (вставляють шаблон зі скороченням hold/upd або типовий текст) і ⏰+30/+1г/+2г (нагад на тікет)"><input type="checkbox" id="quickReplies"> Швидкі дії у тікеті (холдинг / апдейт / нагад)</label>
         </div>

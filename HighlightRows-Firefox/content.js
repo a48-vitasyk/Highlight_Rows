@@ -83,6 +83,8 @@ const DEFAULT_SETTINGS = {
     // «без відповіді понад N год» — список у popup
     staleEnabled: false, // вимкнено за замовч.: скан відкриває тікети й гасить позначку нового повідомлення
     staleHours: 4,
+    // «Клієнт чекає» (блок на Головній) — ручний локальний скан: клієнт без відповіді > N хв
+    awaitWaitMinutes: 30,
     // показувати дані послуги в тікеті (майстер-тогл) + які саме поля
     trafficEnabled: false,
     serviceShow: { status: true, os: true, cost: true, expiredate: true, traffic: true },
@@ -201,6 +203,8 @@ function normalizeSettings(raw) {
     s.staleEnabled = !!s.staleEnabled;
     s.staleHours = Number(s.staleHours);
     if (!(s.staleHours > 0)) s.staleHours = DEFAULT_SETTINGS.staleHours;
+    s.awaitWaitMinutes = Number(s.awaitWaitMinutes);
+    if (!(s.awaitWaitMinutes > 0)) s.awaitWaitMinutes = DEFAULT_SETTINGS.awaitWaitMinutes;
     s.trafficEnabled = !!s.trafficEnabled;
     s.reverseEnabled = !!s.reverseEnabled;
     s.resizeEnabled = !!s.resizeEnabled;
@@ -1672,6 +1676,73 @@ async function scanStaleTickets(force) {
     }
 }
 
+// --- «Клієнт чекає»: ручний локальний скан черги (блок на Головній) ------
+let awaitingScanRunning = false;
+function setAwaitingScanStatus(o) { try { chrome.storage.local.set({ awaitingScanStatus: o }); } catch (e) { /* ignore */ } }
+
+// Лише за кнопкою «Оновити»: обходить усю чергу, для кожного тікета бере часи
+// через ticket.edit; лишає ті, де останнє повідомлення — від клієнта і підтримка
+// не відповіла > awaitWaitMinutes. Результат → storage.local.awaitingScan (локально).
+async function scanAwaiting() {
+    if (!alive || !extensionAlive() || awaitingScanRunning) return;
+    if (!onBillmgr()) { setAwaitingScanStatus({ scanning: false, note: 'відкрийте сторінку панелі (billmgr)' }); return; }
+    if (sessionInCooldown()) { setAwaitingScanStatus({ scanning: false, note: 'панель щойно розлогінилась — оновіть' }); return; }
+    awaitingScanRunning = true;
+    const thresholdMs = Math.max(1, settings.awaitWaitMinutes || 30) * 60000;
+    let total = 0, scanned = 0;
+    let sessionLost = false;
+    const result = [];
+    try { chrome.storage.local.set({ awaitingScan: [] }); } catch (e) { /* ignore */ }
+    setAwaitingScanStatus({ scanning: true, loading: true, total: 0, scanned: 0, passed: 0, at: Date.now() });
+    try {
+        const elems = await fetchAllTickets((all, pnum) => {
+            setAwaitingScanStatus({ scanning: true, loading: true, total: all.length, page: pnum, scanned: 0, passed: 0, at: Date.now() });
+        });
+        total = elems.length;
+        setAwaitingScanStatus({ scanning: true, total, scanned: 0, passed: 0, at: Date.now() });
+        const now = Date.now();
+        for (const el of elems) {
+            if (!alive || !extensionAlive()) break;
+            const elid = fieldVal(el.id);
+            const ticketNo = fieldVal(el.ticket);
+            if (!elid) continue;
+            scanned++;
+            let times = { lastIncoming: null, lastOutgoing: null };
+            try {
+                const det = await fetchBillmgr('func=ticket.edit&elid=' + encodeURIComponent(elid));
+                times = awMsgTimes(det);
+            } catch (e) {
+                if (e && e.message === 'session-redirect') { sessionLost = true; break; }
+                // інакше — пропускаємо цей тікет
+            }
+            // «Клієнт чекає»: останнє повідомлення від клієнта (нема вихідного пізніше)
+            // і відтоді минуло більше порога.
+            const waiting = times.lastIncoming !== null
+                && (times.lastOutgoing === null || times.lastOutgoing < times.lastIncoming);
+            if (waiting && (now - times.lastIncoming) > thresholdMs) {
+                result.push({
+                    ticketId: ticketNo,
+                    subject: fieldVal(el.name),
+                    clientMessageAt: times.lastIncoming,
+                    url: location.origin + '/billmgr?startform=ticket.edit&elid=' + encodeURIComponent(elid),
+                });
+                const sorted = result.slice().sort((a, b) => a.clientMessageAt - b.clientMessageAt);
+                try { chrome.storage.local.set({ awaitingScan: sorted }); } catch (e) { /* ignore */ }
+            }
+            setAwaitingScanStatus({ scanning: true, total, scanned, passed: result.length, at: Date.now() });
+            await sleep(STALE_FETCH_GAP_MS);
+        }
+        result.sort((a, b) => a.clientMessageAt - b.clientMessageAt);
+        try { chrome.storage.local.set({ awaitingScan: result }); } catch (e) { /* ignore */ }
+    } catch (e) {
+        if (e && e.message === 'session-redirect') sessionLost = true;
+    } finally {
+        awaitingScanRunning = false;
+        if (sessionLost) setAwaitingScanStatus({ scanning: false, note: 'панель розлогінено — оновіть сторінку' });
+        else setAwaitingScanStatus({ scanning: false, total, scanned, passed: result.length, at: Date.now() });
+    }
+}
+
 // --- Скан збігів по всій черзі (теги/блокування/будильники) -------------
 
 // Дата блокування з поля blocked_by: "Эдвард Г., 2026-06-09 16:07:42".
@@ -2741,6 +2812,7 @@ function init() {
                 if (!req) return;
                 if (req.action === 'scanStaleTickets') scanStaleTickets(true);
                 else if (req.action === 'scanMatches') scanMatches(true);
+                else if (req.action === 'scanAwaiting') scanAwaiting();
                 else if (req.action === 'awRecheckNow') awForceRecheck();
                 else if (req.action === 'refreshTraffic') loadTraffic(true);
             });
