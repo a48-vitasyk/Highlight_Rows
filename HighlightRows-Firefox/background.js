@@ -141,25 +141,23 @@ chrome.runtime.onMessage.addListener((req, sender, sendResponse) => {
                 const ticketId = String(req.ticketId || '').trim();
                 const time = String(req.time || '').trim();
                 if (!ticketId || !time) { sendResponse({ ok: false, error: 'no ticket/time' }); return; }
-                const existing = await new Promise((res) => {
-                    try { chrome.storage.sync.get('settings', (d) => res(((d && d.settings && d.settings.reminders) || []))); }
-                    catch (e) { res([]); }
+                const settings = await new Promise((res) => {
+                    try { chrome.storage.sync.get('settings', (d) => res((d && d.settings) || {})); }
+                    catch (e) { res({}); }
                 });
-                if (existing.some((r) => r && String(r.ticketId) === ticketId)) {
+                settings.reminders = Array.isArray(settings.reminders) ? settings.reminders : [];
+                if (settings.reminders.some((r) => r && String(r.ticketId) === ticketId)) {
                     sendResponse({ ok: true, duplicate: true }); return;
                 }
+                // 1) Пишемо локально ОДРАЗУ (з часом) — щоб попап показав будильник миттєво
+                //    в обох браузерах, не чекаючи кругообігу Supabase (у Firefox він повільніший).
+                const id = (self.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now());
+                settings.reminders.push({ id, ticketId, time, note: '', scope: 'personal' });
+                await new Promise((res) => { try { chrome.storage.sync.set({ settings }, res); } catch (e) { res(); } });
+                // 2) Синк у спільну базу (для інших пристроїв); pull замінить локальний id на uuid із бази.
                 if (await SB.loggedIn()) {
-                    await SB.insertReminder({ ticketId, time, scope: 'personal', note: '' });
-                    await SB.pull();
-                } else {
-                    const settings = await new Promise((res) => {
-                        try { chrome.storage.sync.get('settings', (d) => res((d && d.settings) || {})); }
-                        catch (e) { res({}); }
-                    });
-                    settings.reminders = Array.isArray(settings.reminders) ? settings.reminders : [];
-                    const id = (self.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now());
-                    settings.reminders.push({ id, ticketId, time, note: '', scope: 'personal' });
-                    await new Promise((res) => { try { chrome.storage.sync.set({ settings }, res); } catch (e) { res(); } });
+                    try { await SB.insertReminder({ ticketId, time, scope: 'personal', note: '' }); await SB.pull(); }
+                    catch (e) { /* локально вже додано — синк підхопиться згодом */ }
                 }
                 sendResponse({ ok: true });
                 return;
