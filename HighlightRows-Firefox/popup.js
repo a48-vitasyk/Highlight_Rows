@@ -1010,7 +1010,7 @@ function awaitingRefresh() {
         if (!pending) { finish(); return; }
         ids.forEach((id) => {
             try {
-                chrome.tabs.sendMessage(id, { action: 'awRecheckNow' }, () => {
+                chrome.tabs.sendMessage(id, { action: 'scanAwaiting' }, () => {
                     if (!chrome.runtime.lastError) anyOk = true;
                     if (--pending === 0) finish();
                 });
@@ -1031,14 +1031,24 @@ function awaitingClearAll() {
 const _clearAwaitingBtn = $('clearAwaiting');
 if (_clearAwaitingBtn) _clearAwaitingBtn.addEventListener('click', awaitingClearAll);
 
-chrome.storage.local.get(['staleTickets', 'matchTickets', 'staleScanStatus', 'matchScanStatus', 'myTickets', 'awaitingScan'], (d) => {
+chrome.storage.local.get(['staleTickets', 'matchTickets', 'staleScanStatus', 'matchScanStatus', 'myTickets', 'awaitingScan', 'awaitingScanStatus'], (d) => {
     renderStaleTickets((d && d.staleTickets) || []);
     renderMatchTickets((d && d.matchTickets) || []);
     renderStaleStatus(d && d.staleScanStatus);
     renderMatchStatus(d && d.matchScanStatus);
     renderMyTickets((d && d.myTickets) || []);
     renderAwaitingList((d && d.awaitingScan) || []);
+    renderAwaitingScanStatus(d && d.awaitingScanStatus);
 });
+// Статус скану «Клієнт чекає»: примітки/помилки + лічильник; стан кнопки.
+function renderAwaitingScanStatus(s) {
+    const el = $('awaitingStatus'); const btn = $('refreshAwaiting');
+    if (btn) btn.disabled = !!(s && s.scanning);
+    if (!el || !s) return;
+    if (s.note) { el.textContent = s.note; return; }
+    if (s.scanning) { el.textContent = 'Сканую…'; return; }
+    el.textContent = 'Чекає: ' + (s.passed || 0);
+}
 
 // Лічильник біля «Оновити» в «Особисті тікети»: скільки тікетів зараз у списку.
 function renderMatchStatus(s) {
@@ -1071,6 +1081,9 @@ chrome.storage.onChanged.addListener((changes, area) => {
     }
     if (changes.awaitingScan) {
         renderAwaitingList(changes.awaitingScan.newValue || []);
+    }
+    if (changes.awaitingScanStatus) {
+        renderAwaitingScanStatus(changes.awaitingScanStatus.newValue);
     }
     if (changes.staleScanStatus) {
         const st = changes.staleScanStatus.newValue;
