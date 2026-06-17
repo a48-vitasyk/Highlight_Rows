@@ -110,8 +110,8 @@ let awDraining = false;   // чи виконується awDrain зараз
 let awNotifiedAt = {};    // { [ticketId]: ms } — троттл повтору сповіщень
 let awSnooze = {};        // { [ticketId]: untilMs } — банер+сигнал по тікету приглушено до цього ms
 let awSharedRecheck = {}; // { [ticketId]: ms } — коли востаннє перевіряли чужий тікет пулу через API
-let awResolved = new Set(); // тікети, для яких уже відправили resolve (щоб не слати DELETE щоразу)
 let awBubbleBaseline = null; // { ticketId, count } — для миттєвого очищення на вихідному баблі
+let awOpenWait = { ticket: '', since: undefined, at: 0, fetching: false }; // wait відкритого тікета (коли ескалацію вимкнено)
 let replyAudio = null;    // окремий зацикл. звук відповіді (не плутати з reminderAudio)
 let awTimerInterval = null; // 1с-тік таймера в тікеті
 function rowHasNewMsg(row) {
@@ -1716,6 +1716,7 @@ const AW_RECHECK_MS = 60 * 1000;        // як часто пере-переві
 const AW_FETCH_DEDUP_MS = 1200;         // мін. пауза між ticket.edit по всіх вкладках
 const AW_SNOOZE_MS = 10 * 60 * 1000;    // «Відкласти» банер «Клієнт чекає» на 10 хв
 const AW_SHARED_RECHECK_MS = 3 * 60 * 1000; // як часто будь-яка вкладка перевіряє чужі тікети пулу
+const AW_SHOW_MS = 30 * 60 * 1000;      // показувати тікет/швидкі дії лише після N хв очікування
 
 function persistAwaiting() { try { chrome.storage.local.set({ awaitingMap }); } catch (e) { /* ignore */ } }
 
@@ -1996,16 +1997,9 @@ function awTick(now, newMsgNow, visible, ticketElid, ticketSubject) {
         if (awAnchorQueue.some((q) => q.ticket === t)) return;
         awAnchorQueue.push({ ticket: t, elid: ticketElid[t] || '', subject: (ticketSubject && ticketSubject[t]) || '' });
     });
-    // Надійне зняття: тікет видно в черзі БЕЗ позначки нового повідомлення —
-    // отже його опрацювали (прочитали/відписали/закрили) → знімаємо з пулу одразу
-    // (без API). awResolved боронить від повторних DELETE до оновлення дзеркала.
-    for (const id of [...awResolved]) {
-        if (!awaitingMap[id] && !awaitingShared.some((a) => a && a.ticketId === id)) awResolved.delete(id);
-    }
-    const pooled = new Set([...Object.keys(awaitingMap), ...awaitingShared.map((a) => a && a.ticketId)]);
-    pooled.forEach((t) => {
-        if (t && visible.has(t) && !newMsgNow.has(t) && !awResolved.has(t)) { awResolved.add(t); awResolve(t); }
-    });
+    // (Прибрано авто-зняття «видно в черзі без позначки» — позначка гасне і коли
+    // тікет лише прочитали, тож тікети хибно зникали. Знімаємо лише за реальною
+    // відповіддю: awInstantClearOpen / awRecheckOne / awRecheckShared / вручну.)
     awInstantClearOpen();
     awDrain();
     // сигнали (з урахуванням «× Відкласти 10 хв» по кожному тікету)
@@ -2097,12 +2091,38 @@ function awBuildActions() {
     return row;
 }
 
+// Коли «Наполягати…» вимкнено, пул порожній — для ВІДКРИТОГО тікета визначаємо
+// час очікування одним (тротленим, раз на ~60с) запитом ticket.edit. Повертає
+// since(ms) якщо клієнт чекає (без відповіді), null якщо відписано, undefined поки невідомо.
+function awOpenWaitSince(ticket, elid) {
+    if (awOpenWait.ticket === ticket && (Date.now() - awOpenWait.at < 60000) && !awOpenWait.fetching) return awOpenWait.since;
+    if (!awOpenWait.fetching && elid && onBillmgr() && tabVisible() && !sessionInCooldown()) {
+        awOpenWait.fetching = true;
+        if (awOpenWait.ticket !== ticket) awOpenWait.since = undefined; // новий тікет — поки невідомо
+        (async () => {
+            let since = null;
+            try {
+                const det = await fetchBillmgr('func=ticket.edit&elid=' + encodeURIComponent(elid));
+                const times = awMsgTimes(det);
+                if (times.lastIncoming !== null && !(times.lastOutgoing !== null && times.lastOutgoing >= times.lastIncoming)) since = times.lastIncoming;
+            } catch (e) { since = (awOpenWait.ticket === ticket ? awOpenWait.since : null) ?? null; }
+            awOpenWait = { ticket, since, at: Date.now(), fetching: false };
+        })();
+    }
+    return awOpenWait.ticket === ticket ? awOpenWait.since : undefined;
+}
+
 // Таймер у відкритому тікеті (1с-тік, окремо від 15с refresh) + панель дій.
+// Працює і коли «Наполягати…» вимкнено: тоді показуємо лише після AW_SHOW_MS (30 хв).
 function awTimerTick() {
-    if (!alive || !settings.replyWatchEscalate) { awRemoveTimer(); return; }
+    if (!alive) { awRemoveTimer(); return; }
     const t = readTicketId();
-    const since = t ? awWaitingByTicket()[t] : undefined;
-    if (!t || since === undefined) { awRemoveTimer(); return; }
+    if (!t) { awRemoveTimer(); return; }
+    let since = awWaitingByTicket()[t];            // з пулу (коли ескалацію ввімкнено)
+    if (since === undefined) since = awOpenWaitSince(t, currentElid()); // інакше — легка перевірка
+    if (since === undefined || since === null) { awRemoveTimer(); return; }
+    // Без ескалації — показуємо таймер і дії лише коли клієнт чекає > 30 хв.
+    if (!settings.replyWatchEscalate && (Date.now() - since) < AW_SHOW_MS) { awRemoveTimer(); return; }
     const ta = document.querySelector('textarea.ispui-input__textarea');
     if (!ta) { awRemoveTimer(); return; }
     let el = document.getElementById('hr-await-timer');

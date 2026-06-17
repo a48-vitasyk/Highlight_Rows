@@ -974,7 +974,10 @@ function renderAwaitingList(arr) {
     const box = $('awaitingList');
     if (!box) return;
     const now = Date.now();
-    const list = awaitingCache.slice().sort((a, b) => (a.clientMessageAt || 0) - (b.clientMessageAt || 0));
+    const AW_SHOW_MIN_MS = 30 * 60000; // показуємо лише тих, кому не відповіли > 30 хв
+    const list = awaitingCache.slice()
+        .filter((a) => (now - (a.clientMessageAt || now)) >= AW_SHOW_MIN_MS)
+        .sort((a, b) => (a.clientMessageAt || 0) - (b.clientMessageAt || 0));
     const st = $('awaitingStatus');
     if (st) st.textContent = list.length ? ('чекає: ' + list.length) : '';
     box.innerHTML = '';
