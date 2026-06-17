@@ -1680,51 +1680,62 @@ async function scanStaleTickets(force) {
 let awaitingScanRunning = false;
 function setAwaitingScanStatus(o) { try { chrome.storage.local.set({ awaitingScanStatus: o }); } catch (e) { /* ignore */ } }
 
-// Лише за кнопкою «Оновити»: обходить усю чергу, для кожного тікета бере часи
-// через ticket.edit; лишає ті, де останнє повідомлення — від клієнта і підтримка
-// не відповіла > awaitWaitMinutes. Результат → storage.local.awaitingScan (локально).
+// Лише за кнопкою «Оновити». Кандидати — рядки ПОТОЧНОЇ черги з позначкою нового
+// повідомлення (`rowHasNewMsg`) — те саме джерело, що й стара «Клієнт чекає»
+// (newMsgNow), а НЕ вся черга команди. Для кожного беремо часи через ticket.edit;
+// лишаємо ті, де останнє повідомлення — від клієнта і не відповіли > awaitWaitMinutes.
+// Результат → storage.local.awaitingScan (локально).
 async function scanAwaiting() {
     if (!alive || !extensionAlive() || awaitingScanRunning) return;
     if (!onBillmgr()) { setAwaitingScanStatus({ scanning: false, note: 'відкрийте сторінку панелі (billmgr)' }); return; }
     if (sessionInCooldown()) { setAwaitingScanStatus({ scanning: false, note: 'панель щойно розлогінилась — оновіть' }); return; }
+
+    // Зібрати кандидатів із видимої черги: рядки з позначкою нового повідомлення клієнта.
+    const seen = new Set();
+    const cands = [];
+    document.querySelectorAll(ROW_SELECTOR).forEach((row) => {
+        const ticket = getCellText(row, TICKET_SELECTOR);
+        const elid = row.dataset && row.dataset.tableRowElid;
+        if (!ticket || !elid || seen.has(ticket) || !rowHasNewMsg(row)) return;
+        seen.add(ticket);
+        cands.push({ ticket, elid, subject: getCellText(row, SUBJECT_SELECTOR) });
+    });
+    if (!cands.length) {
+        try { chrome.storage.local.set({ awaitingScan: [] }); } catch (e) { /* ignore */ }
+        setAwaitingScanStatus({ scanning: false, total: 0, scanned: 0, passed: 0, note: 'у черзі немає нових повідомлень клієнтів', at: Date.now() });
+        return;
+    }
+
     awaitingScanRunning = true;
     const thresholdMs = Math.max(1, settings.awaitWaitMinutes || 30) * 60000;
-    let total = 0, scanned = 0;
+    const total = cands.length;
+    let scanned = 0;
     let sessionLost = false;
     const result = [];
     try { chrome.storage.local.set({ awaitingScan: [] }); } catch (e) { /* ignore */ }
-    setAwaitingScanStatus({ scanning: true, loading: true, total: 0, scanned: 0, passed: 0, at: Date.now() });
+    setAwaitingScanStatus({ scanning: true, total, scanned: 0, passed: 0, at: Date.now() });
     try {
-        const elems = await fetchAllTickets((all, pnum) => {
-            setAwaitingScanStatus({ scanning: true, loading: true, total: all.length, page: pnum, scanned: 0, passed: 0, at: Date.now() });
-        });
-        total = elems.length;
-        setAwaitingScanStatus({ scanning: true, total, scanned: 0, passed: 0, at: Date.now() });
         const now = Date.now();
-        for (const el of elems) {
+        for (const c of cands) {
             if (!alive || !extensionAlive()) break;
-            const elid = fieldVal(el.id);
-            const ticketNo = fieldVal(el.ticket);
-            if (!elid) continue;
             scanned++;
             let times = { lastIncoming: null, lastOutgoing: null };
             try {
-                const det = await fetchBillmgr('func=ticket.edit&elid=' + encodeURIComponent(elid));
+                const det = await fetchBillmgr('func=ticket.edit&elid=' + encodeURIComponent(c.elid));
                 times = awMsgTimes(det);
             } catch (e) {
                 if (e && e.message === 'session-redirect') { sessionLost = true; break; }
                 // інакше — пропускаємо цей тікет
             }
-            // «Клієнт чекає»: останнє повідомлення від клієнта (нема вихідного пізніше)
-            // і відтоді минуло більше порога.
+            // Останнє повідомлення від клієнта (нема вихідного пізніше) і минуло > порога.
             const waiting = times.lastIncoming !== null
                 && (times.lastOutgoing === null || times.lastOutgoing < times.lastIncoming);
             if (waiting && (now - times.lastIncoming) > thresholdMs) {
                 result.push({
-                    ticketId: ticketNo,
-                    subject: fieldVal(el.name),
+                    ticketId: c.ticket,
+                    subject: c.subject,
                     clientMessageAt: times.lastIncoming,
-                    url: location.origin + '/billmgr?startform=ticket.edit&elid=' + encodeURIComponent(elid),
+                    url: location.origin + '/billmgr?startform=ticket.edit&elid=' + encodeURIComponent(c.elid),
                 });
                 const sorted = result.slice().sort((a, b) => a.clientMessageAt - b.clientMessageAt);
                 try { chrome.storage.local.set({ awaitingScan: sorted }); } catch (e) { /* ignore */ }
