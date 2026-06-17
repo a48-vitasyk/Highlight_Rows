@@ -263,7 +263,6 @@ function makeToggle(onHtml, offHtml, on, title) {
 // вікном і popup закривається. Тож у Firefox замінюємо такі поля на інлайн-
 // пікер: прев'ю + hex-поле + пресети (id/клас зберігаємо, щоб форма читалась).
 const IS_FIREFOX = /firefox/i.test(navigator.userAgent || '');
-const COLOR_PRESETS = ['#ffac5a', '#ff5a5a', '#ffd93b', '#7be25b', '#5ab0ff', '#c08bff', '#ffffff', '#b0b0b0'];
 
 function firefoxifyColor(input) {
     if (!IS_FIREFOX || !input || input.type !== 'color') return;
@@ -282,18 +281,8 @@ function firefoxifyColor(input) {
     text.style.width = '70px';
     text.style.verticalAlign = 'middle';
 
-    const palette = document.createElement('span');
-    palette.style.cssText = 'display:inline-flex;gap:3px;margin-left:6px;vertical-align:middle';
-    COLOR_PRESETS.forEach((c) => {
-        const sq = document.createElement('span');
-        sq.title = c;
-        sq.style.cssText = 'display:inline-block;width:14px;height:14px;border:1px solid #999;border-radius:3px;cursor:pointer;background:' + c;
-        sq.addEventListener('click', () => { text.value = c; swatch.style.background = c; });
-        palette.appendChild(sq);
-    });
-
     text.addEventListener('input', () => { swatch.style.background = text.value; });
-    input.replaceWith(swatch, text, palette);
+    input.replaceWith(swatch, text); // лише прев'ю + код кольору, без заготовок
 }
 
 function addTagRuleRow(rule) {
