@@ -1680,41 +1680,56 @@ async function scanStaleTickets(force) {
 let awaitingScanRunning = false;
 function setAwaitingScanStatus(o) { try { chrome.storage.local.set({ awaitingScanStatus: o }); } catch (e) { /* ignore */ } }
 
-// Лише за кнопкою «Оновити». Кандидати — рядки ПОТОЧНОЇ черги з позначкою нового
-// повідомлення (`rowHasNewMsg`) — те саме джерело, що й стара «Клієнт чекає»
-// (newMsgNow), а НЕ вся черга команди. Для кожного беремо часи через ticket.edit;
-// лишаємо ті, де останнє повідомлення — від клієнта і не відповіли > awaitWaitMinutes.
-// Результат → storage.local.awaitingScan (локально).
+// Поле-індикатор нового повідомлення у func=ticket (для запасного API-шляху).
+// Якщо жодного відомого поля нема — повертає null (невідомо).
+function elemHasNewMsg(el) {
+    for (const k of ['p-newmsg', 'p_newmsg', 'newmessage', 'new_message', 'newmsg', 'unread']) {
+        if (el && el[k] !== undefined) {
+            const v = String(fieldVal(el[k]) || '').toLowerCase();
+            return !(v === '' || v === '0' || v === 'off' || v === 'false');
+        }
+    }
+    return null;
+}
+// Лише за кнопкою «Оновити». Кандидати — тікети з позначкою нового повідомлення
+// (клієнт чекає): спершу з ВИДИМОЇ черги (DOM-позначка, як було — швидко); якщо
+// видимої черги нема — із API-списку, відфільтрованого за полем нового повідомлення.
+// Усю чергу (920) НЕ відкриваємо — лише кандидатів. Лишаємо ті, де останнє
+// повідомлення від клієнта і не відповіли > awaitWaitMinutes.
 async function scanAwaiting() {
     if (!alive || !extensionAlive() || awaitingScanRunning) return;
     if (!onBillmgr()) { setAwaitingScanStatus({ scanning: false, note: 'відкрийте сторінку панелі (billmgr)' }); return; }
     if (sessionInCooldown()) { setAwaitingScanStatus({ scanning: false, note: 'панель щойно розлогінилась — оновіть' }); return; }
-
-    // Зібрати кандидатів із видимої черги: рядки з позначкою нового повідомлення клієнта.
-    const seen = new Set();
-    const cands = [];
-    document.querySelectorAll(ROW_SELECTOR).forEach((row) => {
-        const ticket = getCellText(row, TICKET_SELECTOR);
-        const elid = row.dataset && row.dataset.tableRowElid;
-        if (!ticket || !elid || seen.has(ticket) || !rowHasNewMsg(row)) return;
-        seen.add(ticket);
-        cands.push({ ticket, elid, subject: getCellText(row, SUBJECT_SELECTOR) });
-    });
-    if (!cands.length) {
-        try { chrome.storage.local.set({ awaitingScan: [] }); } catch (e) { /* ignore */ }
-        setAwaitingScanStatus({ scanning: false, total: 0, scanned: 0, passed: 0, note: 'у черзі немає нових повідомлень клієнтів', at: Date.now() });
-        return;
-    }
-
     awaitingScanRunning = true;
     const thresholdMs = Math.max(1, settings.awaitWaitMinutes || 30) * 60000;
-    const total = cands.length;
-    let scanned = 0;
+    let total = 0, scanned = 0;
     let sessionLost = false;
     const result = [];
     try { chrome.storage.local.set({ awaitingScan: [] }); } catch (e) { /* ignore */ }
-    setAwaitingScanStatus({ scanning: true, total, scanned: 0, passed: 0, at: Date.now() });
+    setAwaitingScanStatus({ scanning: true, loading: true, total: 0, scanned: 0, passed: 0, at: Date.now() });
     try {
+        // 1) Видима черга: рядки з позначкою нового повідомлення (швидко, без мережі).
+        let cands = [];
+        const seen = new Set();
+        document.querySelectorAll(ROW_SELECTOR).forEach((row) => {
+            const ticket = getCellText(row, TICKET_SELECTOR);
+            const elid = row.dataset && row.dataset.tableRowElid;
+            if (ticket && elid && !seen.has(ticket) && rowHasNewMsg(row)) { seen.add(ticket); cands.push({ elid, ticket, subject: getCellText(row, SUBJECT_SELECTOR) }); }
+        });
+        // 2) Якщо видимої черги нема — пробуємо API-список, але лише за полем нового
+        //    повідомлення (без відкриття всіх 920). Нема поля → лишаємо порожньо.
+        if (!cands.length) {
+            const elems = await fetchAllTickets((all, pnum) => {
+                setAwaitingScanStatus({ scanning: true, loading: true, total: all.length, page: pnum, scanned: 0, passed: 0, at: Date.now() });
+            });
+            if (elems.some((el) => elemHasNewMsg(el) !== null)) {
+                cands = elems.filter((el) => elemHasNewMsg(el))
+                    .map((el) => ({ elid: fieldVal(el.id), ticket: fieldVal(el.ticket), subject: fieldVal(el.name) }))
+                    .filter((c) => c.elid);
+            }
+        }
+        total = cands.length;
+        setAwaitingScanStatus({ scanning: true, total, scanned: 0, passed: 0, at: Date.now() });
         const now = Date.now();
         for (const c of cands) {
             if (!alive || !extensionAlive()) break;
@@ -1727,7 +1742,6 @@ async function scanAwaiting() {
                 if (e && e.message === 'session-redirect') { sessionLost = true; break; }
                 // інакше — пропускаємо цей тікет
             }
-            // Останнє повідомлення від клієнта (нема вихідного пізніше) і минуло > порога.
             const waiting = times.lastIncoming !== null
                 && (times.lastOutgoing === null || times.lastOutgoing < times.lastIncoming);
             if (waiting && (now - times.lastIncoming) > thresholdMs) {
@@ -1750,6 +1764,7 @@ async function scanAwaiting() {
     } finally {
         awaitingScanRunning = false;
         if (sessionLost) setAwaitingScanStatus({ scanning: false, note: 'панель розлогінено — оновіть сторінку' });
+        else if (!total) setAwaitingScanStatus({ scanning: false, total: 0, scanned: 0, passed: 0, note: 'нема нових повідомлень у видимій черзі — відкрийте чергу й оновіть', at: Date.now() });
         else setAwaitingScanStatus({ scanning: false, total, scanned, passed: result.length, at: Date.now() });
     }
 }
