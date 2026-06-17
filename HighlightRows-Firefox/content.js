@@ -1615,13 +1615,12 @@ async function scanStaleTickets(force) {
     if (force) { try { chrome.storage.local.set({ staleTickets: [] }); } catch (e) { /* ignore */ } }
     setStaleStatus({ scanning: true, loading: true, total: 0, scanned: 0, passed: 0, at: Date.now() });
     try {
-        // Скануємо всю чергу (всі сторінки), а не лише поточну — інакше тікети
-        // з інших сторінок не потраплять у монітор. fetchAllTickets() сам
-        // оновлює локалізовані підписи й повертає користувача на його сторінку.
-        // onPage: живий прогрес завантаження черги по сторінках.
-        const elems = await fetchAllTickets((all, pnum) => {
-            setStaleStatus({ scanning: true, loading: true, total: all.length, page: pnum, scanned: 0, passed: 0, at: Date.now() });
-        });
+        // Лише ПОТОЧНА сторінка черги (те, що зараз на екрані) — без гортання всіх
+        // сторінок: легше для білінгу й без ризику 301/WAF. Інші сторінки — гортайте
+        // у черзі та тисніть «Оновити» ще раз.
+        const list = await fetchBillmgr('func=ticket');
+        updatePanelLabelsFrom(list);
+        const elems = asArray(list.elem);
         total = elems.length;
         setStaleStatus({ scanning: true, total, scanned: 0, passed: 0, at: Date.now() });
         const thresholdMs = settings.staleHours * 60 * 60 * 1000;
