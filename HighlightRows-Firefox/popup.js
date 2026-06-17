@@ -991,19 +991,30 @@ function awaitingRemove(ticketId) {
 }
 // Поки попап відкритий — оновлюємо лише ВІДОБРАЖЕНИЙ час очікування (без скану/мережі).
 setInterval(() => renderAwaitingList(awaitingCache), 30000);
-// «Оновити»: пере-перевірити awaitingMap через API (активна вкладка панелі) — відписані
-// зникнуть; блок оновиться сам (content.js публікує awaitingScan з awaitingMap).
+// «Оновити»: пере-перевірити awaitingMap через API — відписані зникнуть; блок
+// оновиться сам (content.js публікує awaitingScan з awaitingMap). Розсилаємо на ВСІ
+// вкладки: спрацює на будь-якій вкладці панелі (навіть фоновій / коли відкрита
+// бічна панель), а не лише на активній — інакше було хибне «відкрийте вкладку».
 function awaitingRefresh() {
     const st = $('awaitingStatus'); const btn = $('refreshAwaiting');
     if (st) st.textContent = 'Перевіряю…';
     if (btn) btn.disabled = true;
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-        const tab = tabs && tabs[0];
-        if (!tab) { if (st) st.textContent = 'відкрийте вкладку панелі Zomro'; if (btn) btn.disabled = false; return; }
-        chrome.tabs.sendMessage(tab.id, { action: 'awRecheckNow' }, () => {
+    chrome.tabs.query({}, (tabs) => {
+        const ids = (tabs || []).map((t) => t.id).filter((x) => x != null);
+        let pending = ids.length, anyOk = false;
+        const finish = () => {
             if (btn) btn.disabled = false;
-            if (chrome.runtime.lastError) { if (st) st.textContent = 'відкрийте вкладку панелі Zomro'; return; }
-            setTimeout(() => renderAwaitingList(awaitingCache), 2000); // оновити лічильник/час
+            if (!anyOk) { if (st) st.textContent = 'відкрийте вкладку панелі Zomro'; return; }
+            setTimeout(() => { renderAwaitingList(awaitingCache); if (st && st.textContent === 'Перевіряю…') st.textContent = ''; }, 2500);
+        };
+        if (!pending) { finish(); return; }
+        ids.forEach((id) => {
+            try {
+                chrome.tabs.sendMessage(id, { action: 'awRecheckNow' }, () => {
+                    if (!chrome.runtime.lastError) anyOk = true;
+                    if (--pending === 0) finish();
+                });
+            } catch (e) { if (--pending === 0) finish(); }
         });
     });
 }
