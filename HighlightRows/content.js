@@ -353,11 +353,20 @@ function todayStr() {
     return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
 }
 
-function targetTimeToday(hhmm) {
-    const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm);
+// Час спрацювання будильника (ms). Підтримує два формати поля time:
+//  - "YYYY-MM-DDTHH:MM" (datetime-local) → конкретний момент (разово);
+//  - "HH:MM" (легасі) → сьогодні о цій годині (добове).
+function reminderTarget(s) {
+    s = String(s || '').trim();
+    const dt = /^(\d{4})-(\d{2})-(\d{2})T(\d{1,2}):(\d{2})$/.exec(s);
+    if (dt) {
+        const h = +dt[4], min = +dt[5];
+        if (h > 23 || min > 59) return null;
+        return new Date(+dt[1], +dt[2] - 1, +dt[3], h, min, 0, 0).getTime();
+    }
+    const m = /^(\d{1,2}):(\d{2})$/.exec(s);
     if (!m) return null;
-    const h = +m[1];
-    const min = +m[2];
+    const h = +m[1], min = +m[2];
     if (h > 23 || min > 59) return null;
     const d = new Date();
     d.setHours(h, min, 0, 0);
@@ -651,7 +660,7 @@ function computeActiveReminders(now) {
         const st = reminderState[r.id];
         if (st && st.mutedDate === today) continue; // заглушено сьогодні
         if (st && st.snoozeUntil && now < st.snoozeUntil) continue; // відкладено (снуз)
-        const target = targetTimeToday(r.time);
+        const target = reminderTarget(r.time);
         if (target === null) continue;
         if (now < target - REMINDER_LEAD_MS) continue;
         // Передача зміни (лише shared): закрито → не дзвонить; взято кимось →

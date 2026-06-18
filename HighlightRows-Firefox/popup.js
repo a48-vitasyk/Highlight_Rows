@@ -305,12 +305,28 @@ function addTagRuleRow(rule) {
     firefoxifyColor(color); // Firefox: інлайн-пікер замість нативного діалогу
 }
 
+function pad2(n) { return String(n).padStart(2, '0'); }
+// Значення поля будильника → для <input type="datetime-local"> ("YYYY-MM-DDTHH:MM").
+// Підтримує: повний datetime (як є), легасі "HH:MM" (→ сьогодні), порожньо (→ зараз+1 год).
+function toDatetimeLocal(time) {
+    const s = String(time || '').trim();
+    const ymd = (dt) => dt.getFullYear() + '-' + pad2(dt.getMonth() + 1) + '-' + pad2(dt.getDate());
+    const dt = /^(\d{4}-\d{2}-\d{2})T(\d{1,2}):(\d{2})$/.exec(s);
+    if (dt) return dt[1] + 'T' + pad2(dt[2]) + ':' + dt[3];
+    const hm = /^(\d{1,2}):(\d{2})$/.exec(s);
+    if (hm) return ymd(new Date()) + 'T' + pad2(hm[1]) + ':' + hm[2];
+    const later = new Date(Date.now() + 60 * 60000);
+    return ymd(later) + 'T' + pad2(later.getHours()) + ':' + pad2(later.getMinutes());
+}
+// Ключ хронологічного сортування (легасі "HH:MM" → сьогодні), лексика = хронологія.
+function whenKey(time) { return toDatetimeLocal(time); }
+
 function addReminderRow(reminder, muted) {
     const r = reminder || { id: genId(), ticketId: '', time: '', note: '', scope: 'personal' };
     const id = r.id || genId();
     const scope = r.scope === 'shared' ? 'shared' : 'personal';
     const ticket = makeEl('input', { type: 'text', className: 'rm-ticket', value: r.ticketId, placeholder: 'ID тікета' });
-    const time = makeEl('input', { type: 'time', className: 'rm-time', value: r.time });
+    const time = makeEl('input', { type: 'datetime-local', className: 'rm-time', value: toDatetimeLocal(r.time) });
     const note = makeEl('input', { type: 'text', className: 'rm-note', value: r.note, placeholder: 'текст нагадування' });
     const mute = makeEl('button', { type: 'button', className: 'small mute' });
     setMuteBtn(mute, !!muted);
@@ -425,8 +441,8 @@ function fillForm(s, reminderState) {
     // Стабільне сортування за часом (HH:MM) — щоб записи не «стрибали» при збереженні/
     // claim/mute/статусі (база віддає за updated_at). Порожній час — у кінець, нічия — за тікетом.
     const rems = (s.reminders || []).slice().sort((a, b) => {
-        const ta = a.time || '99:99', tb = b.time || '99:99';
-        return ta !== tb ? (ta < tb ? -1 : 1) : String(a.ticketId || '').localeCompare(String(b.ticketId || ''));
+        const ka = whenKey(a.time), kb = whenKey(b.time);
+        return ka !== kb ? (ka < kb ? -1 : 1) : String(a.ticketId || '').localeCompare(String(b.ticketId || ''));
     });
     rems.forEach((r) => addReminderRow(r, isMutedToday(reminderState, r.id)));
 }
