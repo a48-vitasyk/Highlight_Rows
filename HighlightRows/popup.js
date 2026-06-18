@@ -422,7 +422,13 @@ function fillForm(s, reminderState) {
     $('tagRules').innerHTML = '';
     (s.tagRules || []).forEach(addTagRuleRow);
     $('reminders').innerHTML = '';
-    (s.reminders || []).forEach((r) => addReminderRow(r, isMutedToday(reminderState, r.id)));
+    // Стабільне сортування за часом (HH:MM) — щоб записи не «стрибали» при збереженні/
+    // claim/mute/статусі (база віддає за updated_at). Порожній час — у кінець, нічия — за тікетом.
+    const rems = (s.reminders || []).slice().sort((a, b) => {
+        const ta = a.time || '99:99', tb = b.time || '99:99';
+        return ta !== tb ? (ta < tb ? -1 : 1) : String(a.ticketId || '').localeCompare(String(b.ticketId || ''));
+    });
+    rems.forEach((r) => addReminderRow(r, isMutedToday(reminderState, r.id)));
 }
 
 function readForm() {
