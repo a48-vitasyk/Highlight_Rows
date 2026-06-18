@@ -112,10 +112,11 @@ if (chrome.notifications && chrome.notifications.onClicked) {
         if (id === RED_GROUP_ID) { redGroup = []; redGroupUrl = ''; }
     });
 }
-// Закрили згруповане сповіщення → почати лічильник наново.
+// Користувач закрив згруповане сповіщення → почати лічильник наново. Лише byUser:
+// наш власний clear() при перепоказі тоста НЕ має скидати накопичення.
 if (chrome.notifications && chrome.notifications.onClosed) {
-    chrome.notifications.onClosed.addListener((id) => {
-        if (id === RED_GROUP_ID) { redGroup = []; redGroupUrl = ''; }
+    chrome.notifications.onClosed.addListener((id, byUser) => {
+        if (byUser && id === RED_GROUP_ID) { redGroup = []; redGroupUrl = ''; }
     });
 }
 

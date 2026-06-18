@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Highlight Rows",
-  "version": "3.175.0",
+  "version": "3.176.0",
   "description": "Ticket helper for the Zomro panel: highlight by blocked request and subject tags, manual time reminders, a 'no support reply > N h' monitor, and client traffic/service info in the ticket. (Firefox build)",
   "browser_specific_settings": {
     "gecko": {
