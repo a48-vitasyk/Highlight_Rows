@@ -34,11 +34,20 @@ function getSyncSettings() {
 }
 
 function showNotification(id, title, message, url, cb) {
-    try {
-        chrome.notifications.create(id, {
-            type: 'basic', iconUrl: chrome.runtime.getURL('images/icon48.png'), title, message,
-        }, () => { const err = chrome.runtime.lastError; if (cb) cb(err); });
-    } catch (e) { if (cb) cb(e); return; }
+    const opts = { type: 'basic', iconUrl: chrome.runtime.getURL('images/icon48.png'), title, message };
+    const create = () => {
+        try {
+            chrome.notifications.create(id, opts, () => {
+                const err = chrome.runtime.lastError;
+                if (err) { try { console.warn('[HR] notify:', err.message || err); } catch (e) { /* ignore */ } }
+                if (cb) cb(err);
+            });
+        } catch (e) { if (cb) cb(e); }
+    };
+    // Прибрати наявне сповіщення з тим самим id, щоб тост вискочив ЗАНОВО — інакше
+    // Chrome лише мовчки оновлює наявне й не перепоказує (звук є, попапа нема).
+    // Для нового id clear — фактично no-op.
+    try { chrome.notifications.clear(id, () => create()); } catch (e) { create(); }
     if (url) notifUrls[id] = url;
 }
 
