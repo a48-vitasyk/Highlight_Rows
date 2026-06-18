@@ -371,6 +371,22 @@ function remStatusChip(r) {
     return null;
 }
 
+// Відкрити тікет будильника: активна вкладка панелі знаходить elid за номером і переходить.
+function openReminderTicket(ticketId) {
+    if (!ticketId) return;
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        const tab = tabs && tabs[0];
+        if (!tab) return;
+        chrome.tabs.sendMessage(tab.id, { action: 'openTicket', ticketId: String(ticketId) }, () => {
+            if (chrome.runtime.lastError) {
+                const st = $('status');
+                if (st) { st.textContent = 'Відкрийте вкладку панелі Zomro'; setTimeout(() => { if (st.textContent === 'Відкрийте вкладку панелі Zomro') st.textContent = ''; }, 3000); }
+                return;
+            }
+            if (!IS_PANEL) window.close();
+        });
+    });
+}
 function addReminderRow(reminder, muted, opts) {
     opts = opts || {};
     const r = reminder || { id: genId(), ticketId: '', time: '', note: '', scope: 'personal' };
@@ -406,7 +422,13 @@ function addReminderRow(reminder, muted, opts) {
     // Підсумок (завжди видимий) — клік розгортає тіло-редактор; × видаляє.
     const summary = makeEl('div', { className: 'rem-summary' });
     summary.appendChild(makeEl('span', { className: 'rs-time', textContent: fmtRemWhen(r.time) }));
-    summary.appendChild(makeEl('span', { className: 'rs-num', textContent: r.ticketId ? '#' + r.ticketId : '—' }));
+    const numEl = makeEl('span', { className: 'rs-num', textContent: r.ticketId ? '#' + r.ticketId : '—' });
+    if (r.ticketId) {
+        numEl.classList.add('rm-link');
+        numEl.title = 'Відкрити тікет';
+        numEl.addEventListener('click', (e) => { e.stopPropagation(); openReminderTicket(r.ticketId); });
+    }
+    summary.appendChild(numEl);
     summary.appendChild(makeEl('span', { className: 'rs-note', textContent: r.note || '' }));
     const chip = remStatusChip(r);
     if (chip) summary.appendChild(makeEl('span', { className: 'rs-chip rs-' + chip.cls, textContent: chip.text }));

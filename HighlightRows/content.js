@@ -113,6 +113,7 @@ let awNotifiedAt = {};    // { [ticketId]: ms } — троттл повтору 
 let awSnooze = {};        // { [ticketId]: untilMs } — банер+сигнал по тікету приглушено до цього ms
 let awSharedRecheck = {}; // { [ticketId]: ms } — коли востаннє перевіряли чужий тікет пулу через API
 let awBubbleBaseline = null; // { ticketId, count } — для миттєвого очищення на вихідному баблі
+let knownElids = {};        // { [номер тікета]: elid } — для відкриття тікета з будильника/сповіщення
 let awOpenWait = { ticket: '', since: undefined, at: 0, fetching: false }; // wait відкритого тікета (коли ескалацію вимкнено)
 let replyAudio = null;    // окремий зацикл. звук відповіді (не плутати з reminderAudio)
 let awTimerInterval = null; // 1с-тік таймера в тікеті
@@ -472,6 +473,39 @@ function stopReminderAudio() {
     }
 }
 
+let knownElidsTimer = null;
+function persistKnownElids() {
+    clearTimeout(knownElidsTimer);
+    knownElidsTimer = setTimeout(() => {
+        try {
+            if (Object.keys(knownElids).length > 1500) knownElids = {}; // обмежити кеш — наступні скани наповнять знову
+            chrome.storage.local.set({ ticketElids: knownElids });
+        } catch (e) { /* ignore */ }
+    }, 1000);
+}
+function elidUrl(elid) { return location.origin + '/billmgr?startform=ticket.edit&elid=' + encodeURIComponent(elid); }
+// Відкрити тікет за номером: elid із кешу → інакше дорезолв через чергу billmgr.
+async function openTicketByNumber(num) {
+    num = String(num || '').trim();
+    if (!num) return;
+    let elid = knownElids[num];
+    if (!elid && onBillmgr() && !sessionInCooldown()) {
+        let pageSize = 0;
+        for (let pnum = 1; pnum <= MATCH_MAX_PAGES; pnum++) {
+            if (!alive || !extensionAlive()) break;
+            let doc; try { doc = await fetchBillmgr('func=ticket&p_num=' + pnum); } catch (e) { break; }
+            const elems = asArray(doc.elem);
+            for (const el of elems) { const t = fieldVal(el.ticket), id = fieldVal(el.id); if (id && t) knownElids[t] = id; if (String(t) === num) elid = id; }
+            if (elid) break;
+            if (pnum === 1) pageSize = elems.length;
+            if (elems.length === 0 || (pageSize > 0 && elems.length < pageSize)) break;
+            await sleep(STALE_FETCH_GAP_MS);
+        }
+        persistKnownElids();
+    }
+    if (elid) location.href = elidUrl(elid);
+}
+
 function notifyReminder(reminder, now) {
     const last = reminderNotifiedAt[reminder.id] || 0;
     if (now - last < REMINDER_NOTIFY_MS) return;
@@ -481,6 +515,7 @@ function notifyReminder(reminder, now) {
             action: 'reminderAlert',
             ticketId: reminder.ticketId,
             note: reminder.note || '',
+            url: knownElids[reminder.ticketId] ? elidUrl(knownElids[reminder.ticketId]) : '',
         });
     } catch (e) {
         teardown();
@@ -1394,7 +1429,10 @@ function refresh() {
         const ticket = getCellText(row, TICKET_SELECTOR);
         if (ticket) visible.add(ticket); // для API-скану: цей тікет зараз видно
         if (ticket) ticketSubject[ticket] = subject;
-        if (ticket && row.dataset && row.dataset.tableRowElid) ticketElid[ticket] = row.dataset.tableRowElid;
+        if (ticket && row.dataset && row.dataset.tableRowElid) {
+            ticketElid[ticket] = row.dataset.tableRowElid;
+            if (knownElids[ticket] !== row.dataset.tableRowElid) { knownElids[ticket] = row.dataset.tableRowElid; persistKnownElids(); }
+        }
         if ((settings.replyWatch || awWatch) && ticket && rowHasNewMsg(row)) newMsgNow.add(ticket);
 
         // 1) Правило за тегом (найнижчий пріоритет).
@@ -2734,7 +2772,8 @@ function init() {
         loadFromStorage('local', 'awaitingMap', {}),
         loadFromStorage('local', 'awaitingShared', []),
         loadFromStorage('local', 'awSnooze', {}),
-    ]).then(([loadedSettings, loadedTimers, loadedReminderState, loadedLabels, loadedMatchState, loadedMatchTickets, loadedAwaiting, loadedAwShared, loadedAwSnooze]) => {
+        loadFromStorage('local', 'ticketElids', {}),
+    ]).then(([loadedSettings, loadedTimers, loadedReminderState, loadedLabels, loadedMatchState, loadedMatchTickets, loadedAwaiting, loadedAwShared, loadedAwSnooze, loadedElids]) => {
         if (!extensionAlive()) { teardown(); return; }
 
         settings = loadedSettings;
@@ -2746,6 +2785,7 @@ function init() {
         awaitingMap = loadedAwaiting && typeof loadedAwaiting === 'object' ? loadedAwaiting : {};
         awaitingShared = Array.isArray(loadedAwShared) ? loadedAwShared : [];
         awSnooze = loadedAwSnooze && typeof loadedAwSnooze === 'object' ? loadedAwSnooze : {};
+        knownElids = loadedElids && typeof loadedElids === 'object' ? loadedElids : {};
         applyPanelTweaks();
         loadMyEmail();
         loadCustomSounds();
@@ -2803,6 +2843,7 @@ function init() {
                 else if (req.action === 'scanMatches') scanMatches(true);
                 else if (req.action === 'scanAwaiting') scanAwaiting();
                 else if (req.action === 'awRecheckNow') awForceRecheck();
+                else if (req.action === 'openTicket') openTicketByNumber(req.ticketId);
                 else if (req.action === 'refreshTraffic') loadTraffic(true);
             });
 

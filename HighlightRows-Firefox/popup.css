@@ -387,6 +387,8 @@ body[data-view="panel"] .stale-list { max-height: 300px; }
 .rem-summary:hover { background: var(--surface); border-radius: var(--radius-sm); }
 .rem-summary .rs-time { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--text); white-space: nowrap; flex: 0 0 auto; }
 .rem-summary .rs-num { color: var(--accent); font-weight: 600; white-space: nowrap; flex: 0 0 auto; }
+.rem-summary .rs-num.rm-link { cursor: pointer; text-decoration: underline; text-decoration-color: transparent; }
+.rem-summary .rs-num.rm-link:hover { text-decoration-color: currentColor; }
 .rem-summary .rs-note { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 auto; min-width: 0; }
 .rem-summary .rs-chip { font-size: 10px; padding: 1px 7px; border-radius: 999px; white-space: nowrap; flex: 0 0 auto; background: var(--surface); color: var(--muted); border: 1px solid var(--border); }
 .rs-chip.rs-overdue { background: var(--danger); color: #fff; border-color: var(--danger); }
