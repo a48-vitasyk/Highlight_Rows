@@ -87,6 +87,13 @@
         <label for="escalateMinutes" title="Спільний: взяв і не закрив → через N хв дзвонить усім">Ескалація:</label>
         <input type="number" id="escalateMinutes" min="1" step="1">
     </div>
+    <div class="rem-tools">
+        <input type="search" id="remSearch" placeholder="Пошук за # тікета або текстом…">
+        <div class="rem-filter">
+            <button type="button" data-remf="all" class="active">Усі</button>
+            <button type="button" data-remf="mine">Мої</button>
+        </div>
+    </div>
     <div id="reminders"></div>
     <button type="button" class="add" id="addReminder">+ Додати будильник</button>
 </div>

@@ -163,6 +163,11 @@ function promptLogin() {
 // Незбережені правки в секції будильників — щоб live-оновлення не перетирало їх.
 let remindersDirty = false;
 function markRemindersDirty() { remindersDirty = true; }
+// Список будильників: email поточного юзера (для «Мої»), фільтр і стан згортання груп.
+let myEmailPopup = '';
+let remFilter = 'all'; // 'all' | 'mine'
+let remGroupsCollapsed = {}; // { overdue|today|tomorrow|later|closed: bool }
+function saveRemGroupsCollapsed() { try { chrome.storage.local.set({ remGroupsCollapsed }); } catch (e) { /* ignore */ } }
 // Під час власного збереження ігноруємо storage-подію (щоб не блимав reload-лінк).
 let savingNow = false;
 
@@ -333,14 +338,47 @@ function splitWhen(time) {
 }
 const ICON_CAL = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
 
-function addReminderRow(reminder, muted) {
+// Час спрацювання (ms) з поля time ("HH:MM" → сьогодні; повний datetime → той момент).
+function reminderWhenMs(time) {
+    const v = whenKey(time);
+    const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(v);
+    return m ? new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], 0, 0).getTime() : null;
+}
+function dayBucket(time) {
+    const ms = reminderWhenMs(time);
+    if (ms == null) return 'later';
+    if (ms < Date.now()) return 'overdue';
+    const day = whenKey(time).slice(0, 10);
+    const t = new Date(Date.now() + 86400000);
+    const tmr = t.getFullYear() + '-' + pad2(t.getMonth() + 1) + '-' + pad2(t.getDate());
+    if (day === ymdToday()) return 'today';
+    if (day === tmr) return 'tomorrow';
+    return 'later';
+}
+// Короткий показ: "HH:MM" або "DD.MM HH:MM", якщо не сьогодні.
+function fmtRemWhen(time) {
+    const w = splitWhen(time);
+    if (w.date === ymdToday()) return w.time;
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(w.date);
+    return (m ? m[3] + '.' + m[2] : w.date) + ' ' + w.time;
+}
+function remStatusChip(r) {
+    if (r.doneAt) return { cls: 'done', text: '✓ закрито' };
+    const ms = reminderWhenMs(r.time);
+    if (ms != null && ms < Date.now()) return { cls: 'overdue', text: 'прострочено' };
+    if (r.scope === 'shared' && r.ownerEmail) return { cls: 'owner', text: 'взяв ' + r.ownerEmail.split('@')[0] };
+    if (r.scope === 'shared') return { cls: 'shared', text: 'спільний' };
+    return null;
+}
+
+function addReminderRow(reminder, muted, opts) {
+    opts = opts || {};
     const r = reminder || { id: genId(), ticketId: '', time: '', note: '', scope: 'personal' };
     const id = r.id || genId();
     const scope = r.scope === 'shared' ? 'shared' : 'personal';
     const ticket = makeEl('input', { type: 'text', className: 'rm-ticket', value: r.ticketId, placeholder: 'ID тікета' });
     const w = splitWhen(r.time);
     const time = makeEl('input', { type: 'time', className: 'rm-time', value: w.time });
-    // Дата прихована (типово сьогодні); календар-іконка дозволяє відкласти на інший день.
     const dateInput = makeEl('input', { type: 'date', className: 'rm-date', value: w.date });
     const cal = makeEl('button', { type: 'button', className: 'small rm-cal', innerHTML: ICON_CAL });
     const syncCal = () => {
@@ -357,40 +395,57 @@ function addReminderRow(reminder, muted) {
     const note = makeEl('input', { type: 'text', className: 'rm-note', value: r.note, placeholder: 'текст нагадування' });
     const mute = makeEl('button', { type: 'button', className: 'small mute' });
     setMuteBtn(mute, !!muted);
-    const remove = makeEl('button', { type: 'button', className: 'small remove', textContent: '×', title: 'Видалити' });
 
     const row = makeEl('div', { className: 'rem-row' });
     row.dataset.id = id;
     row.dataset.scope = scope;
+    row.dataset.creator = r.creatorEmail || '';
+    row.dataset.owner = r.ownerEmail || '';
     const scopeSeg = buildScopeSeg(row);
 
-    // Рядок 1: тікет, час, група дій (сегмент типу + заглушити + видалити).
-    // Дії — один блок (.rem-actions), тож переносяться РАЗОМ, а поля тікета/часу
-    // стискаються першими. .rm-note має flex-basis:100% → рядок 2; автор — рядок 3.
-    const actions = makeEl('div', { className: 'rem-actions' }, [scopeSeg, mute, remove]);
-    row.appendChild(ticket);
-    row.appendChild(time);
-    row.appendChild(cal);
-    row.appendChild(dateInput);
-    row.appendChild(actions);
-    row.appendChild(note);
+    // Підсумок (завжди видимий) — клік розгортає тіло-редактор; × видаляє.
+    const summary = makeEl('div', { className: 'rem-summary' });
+    summary.appendChild(makeEl('span', { className: 'rs-time', textContent: fmtRemWhen(r.time) }));
+    summary.appendChild(makeEl('span', { className: 'rs-num', textContent: r.ticketId ? '#' + r.ticketId : '—' }));
+    summary.appendChild(makeEl('span', { className: 'rs-note', textContent: r.note || '' }));
+    const chip = remStatusChip(r);
+    if (chip) summary.appendChild(makeEl('span', { className: 'rs-chip rs-' + chip.cls, textContent: chip.text }));
+    const del = makeEl('button', { type: 'button', className: 'rs-del', textContent: '×', title: 'Видалити' });
+    summary.appendChild(del);
+    summary.addEventListener('click', (e) => { if (e.target === del) return; row.classList.toggle('expanded'); });
+    del.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (isUuid(row.dataset.id)) removedIds.add(row.dataset.id);
+        markRemindersDirty();
+        row.remove();
+    });
+
+    // Тіло-редактор: інпути (їх читає readForm незалежно від згортання/фільтра).
+    const body = makeEl('div', { className: 'rem-body' });
+    const actions = makeEl('div', { className: 'rem-actions' }, [scopeSeg, mute]);
+    body.appendChild(ticket);
+    body.appendChild(time);
+    body.appendChild(cal);
+    body.appendChild(dateInput);
+    body.appendChild(actions);
+    body.appendChild(note);
     if (scope === 'shared' && (r.creatorEmail || r.ownerEmail || r.doneAt)) {
         const auth = makeEl('div', { className: 'rem-author', innerHTML: IC.user12 });
         let txt = ' ' + (r.creatorEmail || '');
         if (r.doneAt) txt += ' · ✓ ' + (r.doneByEmail || '').split('@')[0];
         else if (r.ownerEmail) txt += ' · взяв ' + (r.ownerEmail || '').split('@')[0];
         auth.appendChild(document.createTextNode(txt));
-        row.appendChild(auth);
+        body.appendChild(auth);
     }
+
+    row.appendChild(summary);
+    row.appendChild(body);
+    if (opts.expanded) row.classList.add('expanded');
 
     [ticket, time, note].forEach((el) => el.addEventListener('input', markRemindersDirty));
     mute.addEventListener('click', () => toggleMute(id, mute));
-    remove.addEventListener('click', () => {
-        if (isUuid(row.dataset.id)) removedIds.add(row.dataset.id); // видалити в базі лише наявні там
-        markRemindersDirty();
-        row.remove();
-    });
-    $('reminders').appendChild(row);
+    (opts.container || $('reminders')).appendChild(row);
+    return row;
 }
 
 // --- Заглушення / увімкнення (storage.local, миттєво) --------------------
@@ -467,13 +522,71 @@ function fillForm(s, reminderState) {
     $('tagRules').innerHTML = '';
     (s.tagRules || []).forEach(addTagRuleRow);
     $('reminders').innerHTML = '';
-    // Стабільне сортування за часом (HH:MM) — щоб записи не «стрибали» при збереженні/
-    // claim/mute/статусі (база віддає за updated_at). Порожній час — у кінець, нічия — за тікетом.
+    // Стабільне сортування за датою+часом (щоб не «стрибали»), далі — групи за днем.
     const rems = (s.reminders || []).slice().sort((a, b) => {
         const ka = whenKey(a.time), kb = whenKey(b.time);
         return ka !== kb ? (ka < kb ? -1 : 1) : String(a.ticketId || '').localeCompare(String(b.ticketId || ''));
     });
-    rems.forEach((r) => addReminderRow(r, isMutedToday(reminderState, r.id)));
+    const groups = { overdue: [], today: [], tomorrow: [], later: [], closed: [] };
+    for (const r of rems) {
+        if (r.scope === 'shared' && r.doneAt) groups.closed.push(r);
+        else groups[dayBucket(r.time)].push(r);
+    }
+    const GROUP_DEFS = [
+        { key: 'overdue', title: 'Прострочені', openByDefault: true },
+        { key: 'today', title: 'Сьогодні', openByDefault: true },
+        { key: 'tomorrow', title: 'Завтра', openByDefault: false },
+        { key: 'later', title: 'Пізніше', openByDefault: false },
+        { key: 'closed', title: 'Закриті', openByDefault: false },
+    ];
+    for (const g of GROUP_DEFS) {
+        const list = groups[g.key];
+        if (!list.length) continue;
+        const sec = makeEl('div', { className: 'rem-group' });
+        sec.dataset.group = g.key;
+        const head = makeEl('div', { className: 'rem-group-head' });
+        head.appendChild(makeEl('span', { className: 'rgh-arrow', textContent: '▸' }));
+        head.appendChild(makeEl('span', { className: 'rgh-title', textContent: g.title }));
+        const count = makeEl('span', { className: 'rem-group-count', textContent: String(list.length) });
+        head.appendChild(count);
+        const bodyC = makeEl('div', { className: 'rem-group-body' });
+        const collapsed = (g.key in remGroupsCollapsed) ? remGroupsCollapsed[g.key] : !g.openByDefault;
+        sec.classList.toggle('collapsed', collapsed);
+        head.addEventListener('click', () => {
+            sec.classList.toggle('collapsed');
+            remGroupsCollapsed[g.key] = sec.classList.contains('collapsed');
+            saveRemGroupsCollapsed();
+        });
+        list.forEach((r) => addReminderRow(r, isMutedToday(reminderState, r.id), { container: bodyC }));
+        sec.appendChild(head);
+        sec.appendChild(bodyC);
+        $('reminders').appendChild(sec);
+    }
+    applyRemFilter();
+}
+// Візуальний фільтр списку будильників: пошук (#тікет/нотатка) + «Мої/Усі».
+// Лише ховає рядки — інпути лишаються в DOM, тож readForm зберігає все.
+function remRowMine(row) {
+    if (row.dataset.scope !== 'shared') return true; // особистий = мій
+    return !!myEmailPopup && (row.dataset.creator === myEmailPopup || row.dataset.owner === myEmailPopup);
+}
+function applyRemFilter() {
+    const q = (($('remSearch') && $('remSearch').value) || '').trim().toLowerCase();
+    document.querySelectorAll('#reminders .rem-group').forEach((sec) => {
+        let visible = 0;
+        sec.querySelectorAll('.rem-row').forEach((row) => {
+            const tkt = ((row.querySelector('.rm-ticket') || {}).value || '').toLowerCase();
+            const note = ((row.querySelector('.rm-note') || {}).value || '').toLowerCase();
+            const matchQ = !q || tkt.includes(q) || note.includes(q);
+            const matchF = remFilter === 'all' || remRowMine(row);
+            const show = matchQ && matchF;
+            row.classList.toggle('rm-hidden', !show);
+            if (show) visible++;
+        });
+        sec.style.display = visible ? '' : 'none';
+        const cnt = sec.querySelector('.rem-group-count');
+        if (cnt) cnt.textContent = String(visible);
+    });
 }
 
 function readForm() {
@@ -626,18 +739,23 @@ function addTicketToReminders(t) {
     if (!tid) return;
     const rows0 = [...document.querySelectorAll('#reminders .rm-ticket')];
     const exists = rows0.some((i) => i.value.trim() === tid);
+    let row;
     if (!exists) {
         const d = new Date(Date.now() + 60 * 60 * 1000);
-        const hhmm = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
-        addReminderRow({ id: genId(), ticketId: tid, time: hhmm, note: truncate(t.subject || '', 40), scope: 'personal' });
+        const hhmm = pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+        row = addReminderRow({ id: genId(), ticketId: tid, time: hhmm, note: truncate(t.subject || '', 40), scope: 'personal' }, false, { expanded: true });
         markRemindersDirty();
+    } else {
+        row = [...document.querySelectorAll('#reminders .rem-row')].find((r) => { const i = r.querySelector('.rm-ticket'); return i && i.value.trim() === tid; });
+        if (row) row.classList.add('expanded');
     }
     goToTab('home');
-    const rows = [...document.querySelectorAll('#reminders .rem-row')];
-    const row = exists
-        ? rows.find((r) => { const i = r.querySelector('.rm-ticket'); return i && i.value.trim() === tid; })
-        : rows[rows.length - 1];
-    if (row) { row.scrollIntoView({ block: 'center' }); const tm = row.querySelector('.rm-time'); if (tm) tm.focus(); }
+    if (row) {
+        const g = row.closest('.rem-group'); if (g) g.classList.remove('collapsed'); // якщо в згорнутій групі
+        row.classList.remove('rm-hidden'); // або сховано пошуком/фільтром
+        row.scrollIntoView({ block: 'center' });
+        const tm = row.querySelector('.rm-time'); if (tm) tm.focus();
+    }
     const st = $('status');
     if (st) {
         st.textContent = exists ? 'Цей тікет уже в Будильниках' : 'Додано в Будильники — встановіть час і Зберегти';
@@ -674,6 +792,7 @@ async function renderAccount() {
     const logoutBtn = $('logoutBtn');
     if (sess) {
         const email = (sess.user && sess.user.email) || '';
+        myEmailPopup = email;
         if (name) {
             name.textContent = email ? email.split('@')[0] : 'акаунт'; // частина до @
             name.title = email || 'Залогінено';
@@ -682,6 +801,7 @@ async function renderAccount() {
         if (loginBtn) loginBtn.style.display = 'none';
         if (logoutBtn) { logoutBtn.title = email ? ('Вийти — ' + email) : 'Вийти'; logoutBtn.style.display = ''; }
     } else {
+        myEmailPopup = '';
         if (name) { name.style.display = 'none'; name.textContent = ''; }
         if (loginBtn) loginBtn.style.display = '';
         if (logoutBtn) logoutBtn.style.display = 'none';
@@ -1188,7 +1308,28 @@ $('refreshStale').addEventListener('click', () => {
 });
 
 $('addTagRule').addEventListener('click', () => addTagRuleRow());
-$('addReminder').addEventListener('click', () => { addReminderRow(); markRemindersDirty(); });
+$('addReminder').addEventListener('click', () => { addReminderRow(undefined, false, { expanded: true }); markRemindersDirty(); });
+
+// Тулбар будильників: пошук + фільтр «Мої/Усі» (стан памʼятаємо локально).
+chrome.storage.local.get(['remFilter', 'remGroupsCollapsed'], (d) => {
+    remFilter = (d && d.remFilter === 'mine') ? 'mine' : 'all';
+    remGroupsCollapsed = (d && d.remGroupsCollapsed && typeof d.remGroupsCollapsed === 'object') ? d.remGroupsCollapsed : {};
+    document.querySelectorAll('.rem-filter [data-remf]').forEach((b) => b.classList.toggle('active', b.dataset.remf === remFilter));
+    // Якщо групи вже відмальовано до завантаження стану — застосувати збережене згортання.
+    document.querySelectorAll('#reminders .rem-group').forEach((sec) => {
+        if (sec.dataset.group in remGroupsCollapsed) sec.classList.toggle('collapsed', !!remGroupsCollapsed[sec.dataset.group]);
+    });
+    applyRemFilter();
+});
+if ($('remSearch')) $('remSearch').addEventListener('input', applyRemFilter);
+document.querySelectorAll('.rem-filter [data-remf]').forEach((b) => {
+    b.addEventListener('click', () => {
+        remFilter = b.dataset.remf === 'mine' ? 'mine' : 'all';
+        document.querySelectorAll('.rem-filter [data-remf]').forEach((x) => x.classList.toggle('active', x === b));
+        try { chrome.storage.local.set({ remFilter }); } catch (e) { /* ignore */ }
+        applyRemFilter();
+    });
+});
 
 // Живе оновлення: коли спільні будильники змінились (синк/realtime оновив дзеркало),
 // перемалювати форму — але не перетирати незбережені правки (тоді лише підказка).
