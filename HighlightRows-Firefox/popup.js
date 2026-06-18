@@ -320,13 +320,40 @@ function toDatetimeLocal(time) {
 }
 // Ключ хронологічного сортування (легасі "HH:MM" → сьогодні), лексика = хронологія.
 function whenKey(time) { return toDatetimeLocal(time); }
+function ymdToday() { const d = new Date(); return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
+// Поле будильника → окремо дата (YYYY-MM-DD) і час (HH:MM) для компактного UI.
+function splitWhen(time) {
+    const s = String(time || '').trim();
+    const dt = /^(\d{4}-\d{2}-\d{2})T(\d{1,2}):(\d{2})$/.exec(s);
+    if (dt) return { date: dt[1], time: pad2(dt[2]) + ':' + dt[3] };
+    const hm = /^(\d{1,2}):(\d{2})$/.exec(s);
+    if (hm) return { date: ymdToday(), time: pad2(hm[1]) + ':' + hm[2] };
+    const later = new Date(Date.now() + 60 * 60000); // новий будильник → сьогодні, зараз+1 год
+    return { date: ymdToday(), time: pad2(later.getHours()) + ':' + pad2(later.getMinutes()) };
+}
+const ICON_CAL = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
 
 function addReminderRow(reminder, muted) {
     const r = reminder || { id: genId(), ticketId: '', time: '', note: '', scope: 'personal' };
     const id = r.id || genId();
     const scope = r.scope === 'shared' ? 'shared' : 'personal';
     const ticket = makeEl('input', { type: 'text', className: 'rm-ticket', value: r.ticketId, placeholder: 'ID тікета' });
-    const time = makeEl('input', { type: 'datetime-local', className: 'rm-time', value: toDatetimeLocal(r.time) });
+    const w = splitWhen(r.time);
+    const time = makeEl('input', { type: 'time', className: 'rm-time', value: w.time });
+    // Дата прихована (типово сьогодні); календар-іконка дозволяє відкласти на інший день.
+    const dateInput = makeEl('input', { type: 'date', className: 'rm-date', value: w.date });
+    const cal = makeEl('button', { type: 'button', className: 'small rm-cal', innerHTML: ICON_CAL });
+    const syncCal = () => {
+        const other = dateInput.value && dateInput.value !== ymdToday();
+        cal.classList.toggle('set', !!other);
+        cal.title = other ? ('Відкладено на ' + dateInput.value + ' — натисніть, щоб змінити') : 'Сьогодні · натисніть, щоб обрати інший день';
+    };
+    cal.addEventListener('click', (e) => {
+        e.preventDefault();
+        try { dateInput.showPicker(); } catch (err) { dateInput.style.cssText = 'width:auto;opacity:1;pointer-events:auto'; dateInput.focus(); }
+    });
+    dateInput.addEventListener('change', () => { syncCal(); markRemindersDirty(); });
+    syncCal();
     const note = makeEl('input', { type: 'text', className: 'rm-note', value: r.note, placeholder: 'текст нагадування' });
     const mute = makeEl('button', { type: 'button', className: 'small mute' });
     setMuteBtn(mute, !!muted);
@@ -343,6 +370,8 @@ function addReminderRow(reminder, muted) {
     const actions = makeEl('div', { className: 'rem-actions' }, [scopeSeg, mute, remove]);
     row.appendChild(ticket);
     row.appendChild(time);
+    row.appendChild(cal);
+    row.appendChild(dateInput);
     row.appendChild(actions);
     row.appendChild(note);
     if (scope === 'shared' && (r.creatorEmail || r.ownerEmail || r.doneAt)) {
@@ -459,13 +488,18 @@ function readForm() {
         .filter((r) => r.query);
 
     const reminders = [...document.querySelectorAll('#reminders .rem-row')]
-        .map((row) => ({
-            id: row.dataset.id || genId(),
-            ticketId: row.querySelector('.rm-ticket').value.trim(),
-            time: row.querySelector('.rm-time').value.trim(),
-            note: row.querySelector('.rm-note').value,
-            scope: row.dataset.scope === 'shared' ? 'shared' : 'personal',
-        }))
+        .map((row) => {
+            const t = (row.querySelector('.rm-time').value || '').trim();
+            const dEl = row.querySelector('.rm-date');
+            const d = ((dEl && dEl.value) || '').trim() || ymdToday();
+            return {
+                id: row.dataset.id || genId(),
+                ticketId: row.querySelector('.rm-ticket').value.trim(),
+                time: t ? (d + 'T' + t) : '', // дата+час разом ("YYYY-MM-DDTHH:MM")
+                note: row.querySelector('.rm-note').value,
+                scope: row.dataset.scope === 'shared' ? 'shared' : 'personal',
+            };
+        })
         .filter((r) => r.ticketId && r.time);
 
     return {
