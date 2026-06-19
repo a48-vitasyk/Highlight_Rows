@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Highlight Rows",
-  "version": "3.188.0",
+  "version": "3.189.0",
   "description": "Ticket helper for the Zomro panel: highlight by blocked request and subject tags, manual time reminders, a 'no support reply > N h' monitor, and client traffic in the ticket.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsfFvntEqzxprnQTbHQ0IS3innYBxr8yFc+mkjJkXObV4v7yYOrf+9rKKEtG/VMsn38QzumohrAafnb4e2czjfD1kOv0X3pV/CBbCSUCbOSkd/YrF7heptlTMx7tI8OJOvfcvzkYtSL5qEM4TyWicsCO9mKMR6NAQPU7d4DgUsTNduTkhRKxvps8h/rFwjKuyAht7q6qNJ/ElN867lE2Y3GP1/NckDxjJJqxcFEFWtBryzwlwxWcw2iRl2X5qZd1arvIA62AvElw74ltORVTzb9xaEnGrvkrGe5uxoOyFKyfgZQXG3efHaq4F9xyQnYrmc7iLnVZwT0T90UJlW2hemQIDAQAB",
   "permissions": [

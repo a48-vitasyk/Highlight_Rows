@@ -368,8 +368,10 @@ body[data-view="panel"] .stale-list { max-height: 300px; }
 /* Преміум: вибір періоду + діапазон дат */
 .premium-tools { margin-bottom: 8px; }
 .premium-tools select { flex: 1 1 auto; min-width: 0; }
-.premium-range { gap: 6px; margin-bottom: 8px; }
-.premium-range input[type="date"] { flex: 1 1 auto; min-width: 0; }
+.premium-range { display: flex; gap: 8px; margin-bottom: 8px; }
+.premium-range[hidden] { display: none; }
+.rng-field { flex: 1 1 0; display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); }
+.rng-field input[type="date"] { flex: 1 1 auto; min-width: 0; }
 
 /* --- Групи за днем --- */
 .rem-group { margin-bottom: 8px; }

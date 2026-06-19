@@ -1225,13 +1225,15 @@ function renderPremiumList(arr) {
     });
 }
 function renderPremiumStatus(s) {
-    const el = $('premiumStatus'); const btn = $('refreshPremium');
-    if (btn) btn.disabled = !!(s && s.scanning);
+    const el = $('premiumStatus'); const btn = $('refreshPremium'); const stop = $('stopPremium');
+    const scanning = !!(s && s.scanning);
+    if (btn) btn.disabled = scanning;       // ↻ = старт (вимкнено під час збору)
+    if (stop) stop.hidden = !scanning;      // ⏹ показуємо лише під час збору
     if (!el) return;
     if (!s) { el.textContent = ''; return; }
     if (s.note) { el.textContent = s.note; return; }
     if (s.loading) { el.textContent = 'Збираю тікети… ' + (s.total || 0); return; }
-    if (s.scanning) { el.textContent = 'Сканую ' + (s.scanned || 0) + '/' + (s.total || 0); return; }
+    if (s.scanning) { el.textContent = 'Збір ' + (s.scanned || 0) + '/' + (s.total || 0); return; }
     el.textContent = 'Знайдено: ' + (s.total || 0);
 }
 
@@ -1420,15 +1422,23 @@ function premiumRefresh() {
         });
     });
 }
+function premiumStop() {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        const tab = tabs && tabs[0];
+        if (tab) { try { chrome.tabs.sendMessage(tab.id, { action: 'stopPremium' }, () => { void chrome.runtime.lastError; }); } catch (e) { /* ignore */ } }
+    });
+}
 const _premiumPeriodSel = $('premiumPeriod');
+// Зміна періоду лише показує/ховає поля діапазону й запам'ятовує — збір стартує кнопкою.
 if (_premiumPeriodSel) _premiumPeriodSel.addEventListener('change', () => {
     const range = document.querySelector('.premium-range');
     if (range) range.hidden = (_premiumPeriodSel.value !== 'range');
-    if (_premiumPeriodSel.value !== 'range') premiumRefresh();
+    try { chrome.storage.local.set({ premiumPeriod: _premiumPeriodSel.value }); } catch (e) { /* ignore */ }
 });
-['premiumFrom', 'premiumTo'].forEach((id) => { const el = $(id); if (el) el.addEventListener('change', () => { if (($('premiumPeriod') || {}).value === 'range') premiumRefresh(); }); });
 const _refreshPremiumBtn = $('refreshPremium');
-if (_refreshPremiumBtn) _refreshPremiumBtn.addEventListener('click', premiumRefresh);
+if (_refreshPremiumBtn) _refreshPremiumBtn.addEventListener('click', premiumRefresh); // ↻ = старт збору
+const _stopPremiumBtn = $('stopPremium');
+if (_stopPremiumBtn) _stopPremiumBtn.addEventListener('click', premiumStop);
 chrome.storage.local.get('premiumPeriod', (d) => {
     const p = (d && d.premiumPeriod) || 'thisWeek';
     if ($('premiumPeriod')) $('premiumPeriod').value = p;

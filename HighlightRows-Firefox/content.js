@@ -1736,10 +1736,17 @@ async function scanStaleTickets(force) {
 // відкриваємо func=ticket_all.edit&elid=<id> (elid == id зі списку) і беремо
 // перше вихідне (працівник) мінус перше вхідне (клієнт) / дату створення.
 let premiumScanRunning = false;
+let premiumStopRequested = false; // користувач натиснув «Стоп»
 function setPremiumStatus(o) { try { chrome.storage.local.set({ premiumScanStatus: o }); } catch (e) { /* ignore */ } }
 
+// Ім'я автора повідомлення (поле точно не знаю — пробуємо багато варіантів).
+function premiumMsgAuthor(msg) {
+    return fieldVal(msg.user) || fieldVal(msg.from) || fieldVal(msg.name) || fieldVal(msg.employee) ||
+        fieldVal(msg.author) || fieldVal(msg.$user) || fieldVal(msg.fromuser) || fieldVal(msg.sender) ||
+        fieldVal(msg.user_name) || fieldVal(msg.username) || fieldVal(msg.from_name) || fieldVal(msg.who) || '';
+}
 function premiumMsgTimes(det) {
-    let firstIn = null, firstOut = null, firstOutAuthor = '';
+    let firstIn = null, firstOut = null, firstOutAuthor = '', firstOutMsg = null;
     const msgs = asArray(det.mlist).flatMap((m) => asArray(m.message));
     for (const msg of msgs) {
         if (!msg) continue;
@@ -1747,16 +1754,12 @@ function premiumMsgTimes(det) {
         if (t === null) continue;
         if (msg.$type === 'incoming') { if (firstIn === null || t < firstIn) firstIn = t; }
         else if (msg.$type === 'outcoming') {
-            if (firstOut === null || t < firstOut) {
-                firstOut = t;
-                // Ім'я сапорта, що першим відповів (поле точно не знаю — пробуємо кілька).
-                firstOutAuthor = fieldVal(msg.user) || fieldVal(msg.from) || fieldVal(msg.name) ||
-                    fieldVal(msg.employee) || fieldVal(msg.author) || '';
-            }
+            if (firstOut === null || t < firstOut) { firstOut = t; firstOutMsg = msg; firstOutAuthor = premiumMsgAuthor(msg); }
         }
     }
-    return { firstIn, firstOut, firstOutAuthor };
+    return { firstIn, firstOut, firstOutAuthor, firstOutMsg };
 }
+let premiumLoggedMsgKeys = false; // разова діагностика структури повідомлення
 // Ім'я з blocked_by ("Эдвард Г., 2026-06-19 10:47:42") — частина до коми.
 function blockedByName(s) {
     const v = String(s || '').trim();
@@ -1776,7 +1779,8 @@ async function scanPremium(fromMs, toMs) {
     const to = Number(toMs) || Date.now();
 
     premiumScanRunning = true;
-    let sessionLost = false, note = '';
+    premiumStopRequested = false;
+    let sessionLost = false, note = '', stopped = false;
     const found = [];
     const seen = new Set(); // дедуп: billmgr клемпить p_num на останню сторінку й повторює її
     try {
@@ -1789,6 +1793,7 @@ async function scanPremium(fromMs, toMs) {
         const MAX_PAGES = 50;
         for (let p = 1; p <= MAX_PAGES; p++) {
             if (!alive || !extensionAlive()) break;
+            if (premiumStopRequested) { stopped = true; break; }
             const list = await fetchBillmgr('func=ticket_all&p_num=' + p);
             if (p === 1) updatePanelLabelsFrom(list);
             const elems = asArray(list.elem);
@@ -1825,6 +1830,7 @@ async function scanPremium(fromMs, toMs) {
         let scanned = 0;
         for (const f of work) {
             if (!alive || !extensionAlive()) break;
+            if (premiumStopRequested) { stopped = true; break; }
             scanned++;
             let frtMs = null, client0 = f.createdAt, support = f.blockedBy || '';
             try {
@@ -1833,6 +1839,11 @@ async function scanPremium(fromMs, toMs) {
                 if (tm.firstIn !== null) client0 = tm.firstIn;
                 if (tm.firstOut !== null) frtMs = Math.max(0, tm.firstOut - (client0 != null ? client0 : tm.firstOut));
                 if (tm.firstOutAuthor) support = tm.firstOutAuthor;
+                // Діагностика: якщо ім'я сапорта не знайдено — раз залогувати поля повідомлення.
+                else if (!premiumLoggedMsgKeys && tm.firstOutMsg) {
+                    premiumLoggedMsgKeys = true;
+                    try { console.warn('[HR] premium: поля 1-го вихідного повідомлення =', Object.keys(tm.firstOutMsg).join(', '), '|', JSON.stringify(tm.firstOutMsg).slice(0, 400)); } catch (e) { /* ignore */ }
+                }
             } catch (e) {
                 if (e && e.message === 'session-redirect') { sessionLost = true; break; }
             }
@@ -1850,8 +1861,9 @@ async function scanPremium(fromMs, toMs) {
         if (e && e.message === 'session-redirect') sessionLost = true;
     } finally {
         premiumScanRunning = false;
+        premiumStopRequested = false;
         if (sessionLost) setPremiumStatus({ scanning: false, note: 'панель розлогінено — оновіть сторінку' });
-        else setPremiumStatus({ scanning: false, total: found.length, at: Date.now(), note });
+        else setPremiumStatus({ scanning: false, total: found.length, at: Date.now(), note: stopped ? 'зупинено' : note });
     }
 }
 
@@ -3009,6 +3021,7 @@ function init() {
                 else if (req.action === 'scanMatches') scanMatches(true);
                 else if (req.action === 'scanAwaiting') scanAwaiting();
                 else if (req.action === 'scanPremium') scanPremium(req.from, req.to);
+                else if (req.action === 'stopPremium') premiumStopRequested = true;
                 else if (req.action === 'awRecheckNow') awForceRecheck();
                 else if (req.action === 'openTicket') openTicketByNumber(req.ticketId);
                 else if (req.action === 'refreshTraffic') loadTraffic(true);
