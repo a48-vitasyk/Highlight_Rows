@@ -116,8 +116,27 @@
             <span id="premiumStatus" class="hint"></span>
             <button type="button" class="small icon-btn" id="refreshPremium" title="Оновити"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></button>
         </div>
+        <div class="field row premium-tools">
+            <label for="premiumPeriod">Період:</label>
+            <select id="premiumPeriod">
+                <option value="thisWeek">Поточний тиждень</option>
+                <option value="lastWeek">Минулий тиждень</option>
+                <option value="thisMonth">Поточний місяць</option>
+                <option value="lastMonth">Минулий місяць</option>
+                <option value="quarter">Квартал</option>
+                <option value="6m">6 місяців</option>
+                <option value="1y">1 рік</option>
+                <option value="range">Діапазон…</option>
+            </select>
+        </div>
+        <div class="field row premium-range" hidden>
+            <label for="premiumFrom">Від:</label>
+            <input type="date" id="premiumFrom">
+            <label for="premiumTo">До:</label>
+            <input type="date" id="premiumTo">
+        </div>
         <div id="premiumList" class="stale-list"></div>
-        <div class="hint">Застосуйте фільтр у billmgr (Відділ + час, напр. «L2 - день»). Час першої відповіді: зелений ≤ SLA, червоний — більше.</div>
+        <div class="hint">Відділ Premium + дата створення в періоді. Час першої відповіді: зелений ≤ SLA, червоний — більше. У billmgr зніміть фільтр за датою (період задається тут).</div>
     </div>
 </div>
 <div class="tab-panel" data-panel="snippets" hidden>

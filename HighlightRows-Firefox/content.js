@@ -1768,10 +1768,12 @@ function isPremiumDept(responsible) {
     return (settings.premiumDepartments || []).some((d) => d && r.indexOf(String(d).toLowerCase()) !== -1);
 }
 
-async function scanPremium() {
+async function scanPremium(fromMs, toMs) {
     if (!alive || !extensionAlive() || premiumScanRunning) return;
     if (!onBillmgr()) { setPremiumStatus({ scanning: false, note: 'відкрийте сторінку панелі (billmgr)' }); return; }
     if (sessionInCooldown()) { setPremiumStatus({ scanning: false, note: 'панель розлогінено — оновіть сторінку' }); return; }
+    const from = Number(fromMs) || 0;
+    const to = Number(toMs) || Date.now();
 
     premiumScanRunning = true;
     let sessionLost = false, note = '';
@@ -1781,8 +1783,9 @@ async function scanPremium() {
         try { chrome.storage.local.set({ premiumScan: [] }); } catch (e) { /* ignore */ }
         setPremiumStatus({ scanning: true, loading: true, total: 0, scanned: 0, at: Date.now() });
 
-        // 1) Читаємо ПОТОЧНИЙ (відфільтрований у billmgr) вид ticket_all. Період/відділ
-        //    задає користувач фільтром billmgr. Гортаємо, доки сторінка дає нові id.
+        // 1) Гортаємо ticket_all (за last_message спадаюче). Фільтр у розширенні: відділ
+        //    Premium + дата СТВОРЕННЯ в [from,to]. Рання зупинка: коли вся сторінка має
+        //    last_message < from (created ≤ last_message ⟹ далі нічого з періоду).
         const MAX_PAGES = 50;
         for (let p = 1; p <= MAX_PAGES; p++) {
             if (!alive || !extensionAlive()) break;
@@ -1790,24 +1793,28 @@ async function scanPremium() {
             if (p === 1) updatePanelLabelsFrom(list);
             const elems = asArray(list.elem);
             if (!elems.length) break;
-            let newOnPage = 0;
+            let newOnPage = 0, pageAllOld = true;
             for (const el of elems) {
                 const id = fieldVal(el.id);
                 if (!id || seen.has(id)) continue; // дубль (клемп) — пропускаємо
                 seen.add(id);
                 newOnPage++;
-                if (!isPremiumDept(fieldVal(el.responsible))) continue; // блок лишається «Premium»
+                const lm = parseServerDate(fieldVal(el.last_message));
+                if (lm === null || lm >= from) pageAllOld = false;
+                const created = parseServerDate(fieldVal(el.date_start));
+                if (created === null || created < from || created > to) continue; // поза періодом
+                if (!isPremiumDept(fieldVal(el.responsible))) continue; // лише Premium-відділ
                 found.push({
                     elid: id,
                     subject: fieldVal(el.name),
                     client: fieldVal(el.client),
-                    createdAt: parseServerDate(fieldVal(el.date_start)),
+                    createdAt: created,
                     blockedBy: blockedByName(fieldVal(el.blocked_by)),
                 });
             }
             setPremiumStatus({ scanning: true, loading: true, total: found.length, scanned: 0, at: Date.now() });
-            if (newOnPage === 0) break; // сторінка без нових id → кінець (клемп/повтор)
-            if (p === MAX_PAGES) note = 'показано перші ' + MAX_PAGES + ' стор.';
+            if (newOnPage === 0 || pageAllOld) break; // кінець: клемп/повтор або все старіше за період
+            if (p === MAX_PAGES) note = 'показано перші ' + MAX_PAGES + ' стор. — звузьте період';
         }
 
         // 2) Для кожного — час першої відповіді + ім'я сапорта через ticket_all.edit.
@@ -3001,7 +3008,7 @@ function init() {
                 if (req.action === 'scanStaleTickets') scanStaleTickets(true);
                 else if (req.action === 'scanMatches') scanMatches(true);
                 else if (req.action === 'scanAwaiting') scanAwaiting();
-                else if (req.action === 'scanPremium') scanPremium();
+                else if (req.action === 'scanPremium') scanPremium(req.from, req.to);
                 else if (req.action === 'awRecheckNow') awForceRecheck();
                 else if (req.action === 'openTicket') openTicketByNumber(req.ticketId);
                 else if (req.action === 'refreshTraffic') loadTraffic(true);

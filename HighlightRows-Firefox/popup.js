@@ -1387,19 +1387,54 @@ $('refreshStale').addEventListener('click', () => {
     });
 });
 
-// --- Premium: «Оновити» (читає активний фільтр billmgr; скан важкий → активна вкладка) ---
+// --- Premium: вибір періоду (за датою створення) + «Оновити» (активна вкладка) ---
+function premiumPeriodRange(period) {
+    const now = new Date();
+    const sod = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
+    const monday = (d) => { const x = sod(d); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x; };
+    const to = now.getTime();
+    if (period === 'thisWeek') return { from: monday(now).getTime(), to };
+    if (period === 'lastWeek') { const tw = monday(now); const lw = new Date(tw); lw.setDate(tw.getDate() - 7); return { from: lw.getTime(), to: tw.getTime() }; }
+    if (period === 'thisMonth') return { from: new Date(now.getFullYear(), now.getMonth(), 1).getTime(), to };
+    if (period === 'lastMonth') return { from: new Date(now.getFullYear(), now.getMonth() - 1, 1).getTime(), to: new Date(now.getFullYear(), now.getMonth(), 1).getTime() };
+    if (period === 'quarter') return { from: new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1).getTime(), to };
+    if (period === '6m') return { from: new Date(now.getFullYear(), now.getMonth() - 6, now.getDate()).getTime(), to };
+    if (period === '1y') return { from: new Date(now.getFullYear() - 1, now.getMonth(), now.getDate()).getTime(), to };
+    if (period === 'range') {
+        const fv = ($('premiumFrom') && $('premiumFrom').value) || '';
+        const tv = ($('premiumTo') && $('premiumTo').value) || '';
+        return { from: fv ? new Date(fv + 'T00:00:00').getTime() : monday(now).getTime(), to: tv ? new Date(tv + 'T23:59:59').getTime() : to };
+    }
+    return { from: monday(now).getTime(), to };
+}
 function premiumRefresh() {
+    const period = ($('premiumPeriod') && $('premiumPeriod').value) || 'thisWeek';
+    const { from, to } = premiumPeriodRange(period);
+    try { chrome.storage.local.set({ premiumPeriod: period }); } catch (e) { /* ignore */ }
     const st = $('premiumStatus'); if (st) st.textContent = 'Перевіряю…';
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
         const tab = tabs && tabs[0];
         if (!tab) { renderPremiumStatus({ note: 'відкрийте вкладку панелі Zomro' }); return; }
-        chrome.tabs.sendMessage(tab.id, { action: 'scanPremium' }, () => {
+        chrome.tabs.sendMessage(tab.id, { action: 'scanPremium', from, to }, () => {
             if (chrome.runtime.lastError) renderPremiumStatus({ note: 'відкрийте вкладку панелі Zomro' });
         });
     });
 }
+const _premiumPeriodSel = $('premiumPeriod');
+if (_premiumPeriodSel) _premiumPeriodSel.addEventListener('change', () => {
+    const range = document.querySelector('.premium-range');
+    if (range) range.hidden = (_premiumPeriodSel.value !== 'range');
+    if (_premiumPeriodSel.value !== 'range') premiumRefresh();
+});
+['premiumFrom', 'premiumTo'].forEach((id) => { const el = $(id); if (el) el.addEventListener('change', () => { if (($('premiumPeriod') || {}).value === 'range') premiumRefresh(); }); });
 const _refreshPremiumBtn = $('refreshPremium');
 if (_refreshPremiumBtn) _refreshPremiumBtn.addEventListener('click', premiumRefresh);
+chrome.storage.local.get('premiumPeriod', (d) => {
+    const p = (d && d.premiumPeriod) || 'thisWeek';
+    if ($('premiumPeriod')) $('premiumPeriod').value = p;
+    const range = document.querySelector('.premium-range');
+    if (range) range.hidden = (p !== 'range');
+});
 // Живий лічильник очікування для невідписаних (поки попап відкрито).
 setInterval(() => {
     if (document.visibilityState !== 'visible') return;

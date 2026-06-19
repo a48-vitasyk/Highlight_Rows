@@ -366,7 +366,8 @@ body[data-view="panel"] .stale-list { max-height: 300px; }
 .rem-filter button + button { border-left: 1px solid var(--border); }
 .rem-filter button.active { background: var(--accent); color: #fff; }
 /* Преміум: вибір періоду + діапазон дат */
-.premium-period { margin-bottom: 8px; }
+.premium-tools { margin-bottom: 8px; }
+.premium-tools select { flex: 1 1 auto; min-width: 0; }
 .premium-range { gap: 6px; margin-bottom: 8px; }
 .premium-range input[type="date"] { flex: 1 1 auto; min-width: 0; }
 
