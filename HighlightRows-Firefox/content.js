@@ -1779,9 +1779,10 @@ async function scanPremium(fromMs, toMs) {
         for (let p = 1; p <= MAX_PAGES; p++) {
             if (!alive || !extensionAlive()) break;
             if (premiumStopRequested) { stopped = true; break; }
-            // Сортуємо за датою СТВОРЕННЯ (а не last_message) — щоб період був суцільним
-            // зрізом і рання зупинка працювала для будь-якого діапазону (мин. місяць, рік…).
-            const list = await fetchBillmgr('func=ticket_all&p_sort=date_start&p_order=desc&p_num=' + p);
+            // Сортуємо за `id` спадаюче. id тікета монотонно зростає з часом створення
+            // (date_start НЕ сортована колонка, тож billmgr її ігнорує), тож це фактично
+            // порядок створення — період стає суцільним зрізом, рання зупинка працює.
+            const list = await fetchBillmgr('func=ticket_all&p_sort=id&p_order=desc&p_num=' + p);
             if (p === 1) updatePanelLabelsFrom(list);
             const elems = asArray(list.elem);
             if (!elems.length) break;
