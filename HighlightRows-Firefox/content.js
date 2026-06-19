@@ -85,6 +85,9 @@ const DEFAULT_SETTINGS = {
     staleHours: 4,
     // «Клієнт чекає» (блок на Головній) — ручний локальний скан: клієнт без відповіді > N хв
     awaitWaitMinutes: 30,
+    // Premium-тікети (вкладка «Тікети»): відділи (підрядки responsible) + SLA першої відповіді
+    premiumDepartments: ['Премиум', 'Преміум', 'Premium'],
+    premiumSlaMinutes: 30,
     // показувати дані послуги в тікеті (майстер-тогл) + які саме поля
     trafficEnabled: false,
     serviceShow: { status: true, os: true, cost: true, expiredate: true, traffic: true },
@@ -206,6 +209,11 @@ function normalizeSettings(raw) {
     if (!(s.staleHours > 0)) s.staleHours = DEFAULT_SETTINGS.staleHours;
     s.awaitWaitMinutes = Number(s.awaitWaitMinutes);
     if (!(s.awaitWaitMinutes > 0)) s.awaitWaitMinutes = DEFAULT_SETTINGS.awaitWaitMinutes;
+    s.premiumDepartments = (Array.isArray(s.premiumDepartments) ? s.premiumDepartments : [])
+        .map((d) => String(d).trim()).filter(Boolean);
+    if (!s.premiumDepartments.length) s.premiumDepartments = DEFAULT_SETTINGS.premiumDepartments.slice();
+    s.premiumSlaMinutes = Number(s.premiumSlaMinutes);
+    if (!(s.premiumSlaMinutes > 0)) s.premiumSlaMinutes = DEFAULT_SETTINGS.premiumSlaMinutes;
     s.trafficEnabled = !!s.trafficEnabled;
     s.reverseEnabled = !!s.reverseEnabled;
     s.resizeEnabled = !!s.resizeEnabled;
@@ -1723,6 +1731,105 @@ async function scanStaleTickets(force) {
     }
 }
 
+// --- Premium-тікети: час першої відповіді (FRT, SLA) ----------------------
+// Джерело — func=ticket_all (усі тікети, поле responsible=відділ). Для FRT
+// відкриваємо func=ticket_all.edit&elid=<id> (elid == id зі списку) і беремо
+// перше вихідне (працівник) мінус перше вхідне (клієнт) / дату створення.
+let premiumScanRunning = false;
+function setPremiumStatus(o) { try { chrome.storage.local.set({ premiumScanStatus: o }); } catch (e) { /* ignore */ } }
+
+function premiumMsgTimes(det) {
+    let firstIn = null, firstOut = null;
+    const msgs = asArray(det.mlist).flatMap((m) => asArray(m.message));
+    for (const msg of msgs) {
+        if (!msg) continue;
+        const t = parseServerDate(fieldVal(msg.date_post));
+        if (t === null) continue;
+        if (msg.$type === 'incoming') { if (firstIn === null || t < firstIn) firstIn = t; }
+        else if (msg.$type === 'outcoming') { if (firstOut === null || t < firstOut) firstOut = t; }
+    }
+    return { firstIn, firstOut };
+}
+function isPremiumDept(responsible) {
+    const r = String(responsible || '').toLowerCase();
+    return (settings.premiumDepartments || []).some((d) => d && r.indexOf(String(d).toLowerCase()) !== -1);
+}
+
+async function scanPremium(fromMs, toMs) {
+    if (!alive || !extensionAlive() || premiumScanRunning) return;
+    if (!onBillmgr()) { setPremiumStatus({ scanning: false, note: 'відкрийте сторінку панелі (billmgr)' }); return; }
+    if (sessionInCooldown()) { setPremiumStatus({ scanning: false, note: 'панель розлогінено — оновіть сторінку' }); return; }
+    const from = Number(fromMs) || 0;
+    const to = Number(toMs) || Date.now();
+
+    premiumScanRunning = true;
+    let sessionLost = false, note = '';
+    const found = [];
+    try {
+        try { chrome.storage.local.set({ premiumScan: [] }); } catch (e) { /* ignore */ }
+        setPremiumStatus({ scanning: true, loading: true, total: 0, scanned: 0, at: Date.now(), from, to });
+
+        // 1) Гортаємо ticket_all, доки last_message не стане < from. Список
+        //    відсортований за last_message спадаюче, а «створено в періоді» ⟹
+        //    last_message ≥ created ≥ from, тож далі нічого нашого не буде.
+        const MAX_PAGES = 50;
+        for (let p = 1; p <= MAX_PAGES; p++) {
+            if (!alive || !extensionAlive()) break;
+            const list = await fetchBillmgr('func=ticket_all&p_num=' + p);
+            if (p === 1) updatePanelLabelsFrom(list);
+            const elems = asArray(list.elem);
+            if (!elems.length) break;
+            let pageAllOld = true;
+            for (const el of elems) {
+                const lm = parseServerDate(fieldVal(el.last_message));
+                if (lm === null || lm >= from) pageAllOld = false;
+                const created = parseServerDate(fieldVal(el.date_start));
+                if (created !== null && created >= from && created <= to && isPremiumDept(fieldVal(el.responsible))) {
+                    found.push({ elid: fieldVal(el.id), subject: fieldVal(el.name), client: fieldVal(el.client), createdAt: created });
+                }
+            }
+            setPremiumStatus({ scanning: true, loading: true, total: found.length, scanned: 0, at: Date.now(), from, to });
+            if (pageAllOld) break;
+            if (p === MAX_PAGES) note = 'показано останні сторінки — звузьте період';
+        }
+
+        // 2) Для кожного — FRT через ticket_all.edit (кеп, щоб не довбати білінг).
+        const CAP = 100;
+        if (found.length > CAP) note = 'забагато тікетів — показано перші ' + CAP;
+        const work = found.slice(0, CAP).sort((a, b) => b.createdAt - a.createdAt);
+        const result = [];
+        let scanned = 0;
+        for (const f of work) {
+            if (!alive || !extensionAlive()) break;
+            scanned++;
+            let frtMs = null, client0 = f.createdAt;
+            try {
+                const det = await fetchBillmgr('func=ticket_all.edit&elid=' + encodeURIComponent(f.elid));
+                const tm = premiumMsgTimes(det);
+                if (tm.firstIn !== null) client0 = tm.firstIn;
+                if (tm.firstOut !== null) frtMs = Math.max(0, tm.firstOut - client0);
+            } catch (e) {
+                if (e && e.message === 'session-redirect') { sessionLost = true; break; }
+            }
+            result.push({
+                ticketId: f.elid, subject: f.subject, client: f.client,
+                createdAt: f.createdAt, client0, frtMs,
+                url: location.origin + '/billmgr?startform=ticket_all.edit&elid=' + encodeURIComponent(f.elid),
+            });
+            try { chrome.storage.local.set({ premiumScan: result.slice() }); } catch (e) { /* ignore */ }
+            setPremiumStatus({ scanning: true, total: work.length, scanned, at: Date.now(), from, to, note });
+            await sleep(STALE_FETCH_GAP_MS);
+        }
+        try { chrome.storage.local.set({ premiumScan: result }); } catch (e) { /* ignore */ }
+    } catch (e) {
+        if (e && e.message === 'session-redirect') sessionLost = true;
+    } finally {
+        premiumScanRunning = false;
+        if (sessionLost) setPremiumStatus({ scanning: false, note: 'панель розлогінено — оновіть сторінку', from, to });
+        else setPremiumStatus({ scanning: false, total: found.length, at: Date.now(), from, to, note });
+    }
+}
+
 // --- «Клієнт чекає»: блок на Головній = скан списку черги за полем `delay` --------
 // Надійно й стабільно: `delay` ("Nd+HH:MM") у func=ticket — це час очікування в
 // черзі (скільки клієнту не відповідали), є в КОЖНОГО тікета й НЕ залежить від того,
@@ -2876,6 +2983,7 @@ function init() {
                 if (req.action === 'scanStaleTickets') scanStaleTickets(true);
                 else if (req.action === 'scanMatches') scanMatches(true);
                 else if (req.action === 'scanAwaiting') scanAwaiting();
+                else if (req.action === 'scanPremium') scanPremium(req.from, req.to);
                 else if (req.action === 'awRecheckNow') awForceRecheck();
                 else if (req.action === 'openTicket') openTicketByNumber(req.ticketId);
                 else if (req.action === 'refreshTraffic') loadTraffic(true);

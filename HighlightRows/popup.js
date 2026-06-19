@@ -33,6 +33,8 @@ const DEFAULT_SETTINGS = {
     staleEnabled: false,
     staleHours: 4,
     awaitWaitMinutes: 30,
+    premiumDepartments: ['Премиум', 'Преміум', 'Premium'],
+    premiumSlaMinutes: 30,
     trafficEnabled: false,
     serviceShow: { status: true, os: true, cost: true, expiredate: true, traffic: true },
     reverseEnabled: false,
@@ -511,6 +513,10 @@ function fillForm(s, reminderState) {
     setToggle($('soundEnabled'), s.soundEnabled);
     $('staleEnabled').checked = s.staleEnabled;
     $('staleHours').value = s.staleHours || DEFAULT_SETTINGS.staleHours;
+    premiumSlaMin = s.premiumSlaMinutes || DEFAULT_SETTINGS.premiumSlaMinutes;
+    if ($('premiumSlaMinutes')) $('premiumSlaMinutes').value = s.premiumSlaMinutes || DEFAULT_SETTINGS.premiumSlaMinutes;
+    if (premiumCache.length) renderPremiumList(premiumCache);
+    if ($('premiumDepartments')) $('premiumDepartments').value = (Array.isArray(s.premiumDepartments) ? s.premiumDepartments : DEFAULT_SETTINGS.premiumDepartments).join(', ');
     if ($('awaitWaitMinutes')) $('awaitWaitMinutes').value = s.awaitWaitMinutes || DEFAULT_SETTINGS.awaitWaitMinutes;
     $('trafficEnabled').checked = s.trafficEnabled;
     $('reverseEnabled').checked = s.reverseEnabled;
@@ -647,6 +653,8 @@ function readForm() {
         staleEnabled: $('staleEnabled').checked,
         staleHours: Number($('staleHours').value) > 0 ? Number($('staleHours').value) : DEFAULT_SETTINGS.staleHours,
         awaitWaitMinutes: ($('awaitWaitMinutes') && Number($('awaitWaitMinutes').value) > 0) ? Number($('awaitWaitMinutes').value) : DEFAULT_SETTINGS.awaitWaitMinutes,
+        premiumSlaMinutes: ($('premiumSlaMinutes') && Number($('premiumSlaMinutes').value) > 0) ? Number($('premiumSlaMinutes').value) : DEFAULT_SETTINGS.premiumSlaMinutes,
+        premiumDepartments: (($('premiumDepartments') && $('premiumDepartments').value) || '').split(',').map((d) => d.trim()).filter(Boolean),
         trafficEnabled: $('trafficEnabled').checked,
         reverseEnabled: $('reverseEnabled').checked,
         resizeEnabled: $('resizeEnabled').checked,
@@ -1181,6 +1189,51 @@ function renderAwaitingList(arr) {
         box.appendChild(item);
     });
 }
+// --- Блок «Premium · перша відповідь» (storage.local.premiumScan) ----------------
+let premiumCache = [];
+let premiumSlaMin = 30;
+function renderPremiumList(arr) {
+    premiumCache = Array.isArray(arr) ? arr : [];
+    const box = $('premiumList');
+    if (!box) return;
+    const now = Date.now();
+    const slaMs = premiumSlaMin * 60000;
+    // Невідписані зверху (хто довше чекає — вище), далі відписані (новіші зверху).
+    const list = premiumCache.slice().sort((a, b) => {
+        const aw = a.frtMs == null, bw = b.frtMs == null;
+        if (aw !== bw) return aw ? -1 : 1;
+        if (aw) return (a.client0 || 0) - (b.client0 || 0);
+        return (b.createdAt || 0) - (a.createdAt || 0);
+    });
+    box.innerHTML = '';
+    if (!list.length) { box.appendChild(makeEl('div', { className: 'list-empty', textContent: 'Поки порожньо' })); return; }
+    list.forEach((t) => {
+        const item = makeEl('div', { className: 'stale-item', title: (t.subject || '') + (t.client ? ' — ' + t.client : '') });
+        item.appendChild(makeEl('span', { className: 'ti-num', textContent: '#' + t.ticketId }));
+        let badge;
+        if (t.frtMs == null) {
+            const wait = now - (t.client0 || t.createdAt || now);
+            badge = makeEl('span', { className: 'ti-age ' + (wait > slaMs ? 'ti-frt-breach' : 'ti-frt-wait'), textContent: 'очікує ' + fmtWaitMs(wait) });
+        } else {
+            badge = makeEl('span', { className: 'ti-age ' + (t.frtMs > slaMs ? 'ti-frt-breach' : 'ti-frt-ok'), textContent: fmtWaitMs(t.frtMs) });
+        }
+        item.appendChild(badge);
+        item.appendChild(makeEl('span', { className: 'ti-text', textContent: truncate(t.subject || '', 30) }));
+        makeClickable(item, t.url);
+        box.appendChild(item);
+    });
+}
+function renderPremiumStatus(s) {
+    const el = $('premiumStatus'); const btn = $('refreshPremium');
+    if (btn) btn.disabled = !!(s && s.scanning);
+    if (!el) return;
+    if (!s) { el.textContent = ''; return; }
+    if (s.note) { el.textContent = s.note; return; }
+    if (s.loading) { el.textContent = 'Збираю тікети… ' + (s.total || 0); return; }
+    if (s.scanning) { el.textContent = 'Сканую ' + (s.scanned || 0) + '/' + (s.total || 0); return; }
+    el.textContent = 'Знайдено: ' + (s.total || 0);
+}
+
 // Прибрати тікет із локального списку (не чіпає Supabase — список локальний).
 function awaitingRemove(ticketId) {
     awaitingCache = awaitingCache.filter((a) => String(a.ticketId) !== String(ticketId));
@@ -1229,7 +1282,7 @@ function awaitingClearAll() {
 const _clearAwaitingBtn = $('clearAwaiting');
 if (_clearAwaitingBtn) _clearAwaitingBtn.addEventListener('click', awaitingClearAll);
 
-chrome.storage.local.get(['staleTickets', 'matchTickets', 'staleScanStatus', 'matchScanStatus', 'myTickets', 'awaitingScan', 'awaitingScanStatus'], (d) => {
+chrome.storage.local.get(['staleTickets', 'matchTickets', 'staleScanStatus', 'matchScanStatus', 'myTickets', 'awaitingScan', 'awaitingScanStatus', 'premiumScan', 'premiumScanStatus'], (d) => {
     renderStaleTickets((d && d.staleTickets) || []);
     renderMatchTickets((d && d.matchTickets) || []);
     renderStaleStatus(d && d.staleScanStatus);
@@ -1237,6 +1290,8 @@ chrome.storage.local.get(['staleTickets', 'matchTickets', 'staleScanStatus', 'ma
     renderMyTickets((d && d.myTickets) || []);
     renderAwaitingList((d && d.awaitingScan) || []);
     renderAwaitingScanStatus(d && d.awaitingScanStatus);
+    renderPremiumList((d && d.premiumScan) || []);
+    renderPremiumStatus(d && d.premiumScanStatus);
 });
 // Статус скану «Клієнт чекає»: примітки/помилки + лічильник; стан кнопки.
 function renderAwaitingScanStatus(s) {
@@ -1283,6 +1338,8 @@ chrome.storage.onChanged.addListener((changes, area) => {
     if (changes.awaitingScanStatus) {
         renderAwaitingScanStatus(changes.awaitingScanStatus.newValue);
     }
+    if (changes.premiumScan) renderPremiumList(changes.premiumScan.newValue || []);
+    if (changes.premiumScanStatus) renderPremiumStatus(changes.premiumScanStatus.newValue);
     if (changes.staleScanStatus) {
         const st = changes.staleScanStatus.newValue;
         renderStaleStatus(st);
@@ -1328,6 +1385,58 @@ $('refreshStale').addEventListener('click', () => {
         });
     });
 });
+
+// --- Premium: вибір періоду + «Оновити» (скан важкий → лише активна вкладка) ---
+function setActivePeriod(pp) {
+    document.querySelectorAll('.premium-period [data-pp]').forEach((b) => b.classList.toggle('active', b.dataset.pp === pp));
+    const range = document.querySelector('.premium-range');
+    if (range) range.hidden = (pp !== 'range');
+}
+function currentPeriodType() {
+    const b = document.querySelector('.premium-period [data-pp].active');
+    return (b && b.dataset.pp) || '24h';
+}
+function computePremiumRange() {
+    const now = Date.now();
+    const type = currentPeriodType();
+    if (type === 'today') { const d = new Date(); d.setHours(0, 0, 0, 0); return { from: d.getTime(), to: now }; }
+    if (type === '7d') return { from: now - 7 * 86400000, to: now };
+    if (type === 'range') {
+        const fv = ($('premiumFrom') && $('premiumFrom').value) || '';
+        const tv = ($('premiumTo') && $('premiumTo').value) || '';
+        return { from: fv ? new Date(fv + 'T00:00:00').getTime() : (now - 86400000), to: tv ? new Date(tv + 'T23:59:59').getTime() : now };
+    }
+    return { from: now - 86400000, to: now }; // 24h
+}
+function premiumRefresh() {
+    const { from, to } = computePremiumRange();
+    try { chrome.storage.local.set({ premiumPeriod: { type: currentPeriodType(), from: (($('premiumFrom') || {}).value) || '', to: (($('premiumTo') || {}).value) || '' } }); } catch (e) { /* ignore */ }
+    const st = $('premiumStatus'); if (st) st.textContent = 'Перевіряю…';
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        const tab = tabs && tabs[0];
+        if (!tab) { renderPremiumStatus({ note: 'відкрийте вкладку панелі Zomro' }); return; }
+        chrome.tabs.sendMessage(tab.id, { action: 'scanPremium', from, to }, () => {
+            if (chrome.runtime.lastError) renderPremiumStatus({ note: 'відкрийте вкладку панелі Zomro' });
+        });
+    });
+}
+document.querySelectorAll('.premium-period [data-pp]').forEach((b) => {
+    b.addEventListener('click', () => { setActivePeriod(b.dataset.pp); if (b.dataset.pp !== 'range') premiumRefresh(); });
+});
+['premiumFrom', 'premiumTo'].forEach((id) => { const el = $(id); if (el) el.addEventListener('change', () => { if (currentPeriodType() === 'range') premiumRefresh(); }); });
+const _refreshPremiumBtn = $('refreshPremium');
+if (_refreshPremiumBtn) _refreshPremiumBtn.addEventListener('click', premiumRefresh);
+chrome.storage.local.get('premiumPeriod', (d) => {
+    const p = (d && d.premiumPeriod) || {};
+    if (p.type) setActivePeriod(p.type);
+    if (p.from && $('premiumFrom')) $('premiumFrom').value = p.from;
+    if (p.to && $('premiumTo')) $('premiumTo').value = p.to;
+});
+// Живий лічильник очікування для невідписаних (поки попап відкрито).
+setInterval(() => {
+    if (document.visibilityState !== 'visible') return;
+    if (premiumCache.some((t) => t && t.frtMs == null)) renderPremiumList(premiumCache);
+}, 30000);
 
 $('addTagRule').addEventListener('click', () => addTagRuleRow());
 $('addReminder').addEventListener('click', () => { addReminderRow(undefined, false, { expanded: true }); markRemindersDirty(); });

@@ -344,6 +344,10 @@ body[data-view="panel"] .stale-list { max-height: 300px; }
 .chip-reminder { background: var(--primary-weak); }
 .ti-age { flex: none; font-variant-numeric: tabular-nums; color: var(--muted); font-size: 10.5px; }
 .ti-age--warn { color: var(--accent-2); font-weight: 700; }
+/* Premium FRT: зелений ≤ SLA, червоний — порушення, амбер — ще чекає */
+.ti-frt-ok { color: var(--ok); font-weight: 700; }
+.ti-frt-breach { color: var(--danger); font-weight: 700; }
+.ti-frt-wait { color: var(--accent-2); font-weight: 700; }
 .list-empty { color: var(--muted); text-align: center; padding: 12px 0; font-size: 10.5px; }
 .stale-item .ti-act {
     flex: none; display: inline-flex; align-items: center; justify-content: center;
@@ -360,6 +364,10 @@ body[data-view="panel"] .stale-list { max-height: 300px; }
 .rem-filter button { border: 0; background: var(--surface); color: var(--muted); padding: 5px 11px; font-size: 12px; cursor: pointer; }
 .rem-filter button + button { border-left: 1px solid var(--border); }
 .rem-filter button.active { background: var(--accent); color: #fff; }
+/* Преміум: вибір періоду + діапазон дат */
+.premium-period { margin-bottom: 8px; }
+.premium-range { gap: 6px; margin-bottom: 8px; }
+.premium-range input[type="date"] { flex: 1 1 auto; min-width: 0; }
 
 /* --- Групи за днем --- */
 .rem-group { margin-bottom: 8px; }
