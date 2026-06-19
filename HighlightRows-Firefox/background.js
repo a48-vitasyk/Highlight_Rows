@@ -282,6 +282,8 @@ function rtSchedulePull() {
     rtPullTimer = setTimeout(() => {
         try { SB.pull(); } catch (e) { /* ignore */ }
         try { SB.pullAwaiting(); } catch (e) { /* ignore */ }
+        try { SB.pullSnippets(); } catch (e) { /* ignore */ } // шаблони — live для всіх залогінених
+        try { SB.pullCategories(); } catch (e) { /* ignore */ }
     }, 800);
 }
 
@@ -322,6 +324,8 @@ async function rtConnect() {
                 postgres_changes: [
                     { event: '*', schema: 'public', table: 'reminders' },
                     { event: '*', schema: 'public', table: 'awaiting_reply' },
+                    { event: '*', schema: 'public', table: 'snippets' },
+                    { event: '*', schema: 'public', table: 'snippet_categories' },
                 ],
                 private: false,
             },
