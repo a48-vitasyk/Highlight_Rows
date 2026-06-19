@@ -1218,8 +1218,7 @@ function renderPremiumList(arr) {
             badge = makeEl('span', { className: 'ti-age ' + (t.frtMs > slaMs ? 'ti-frt-breach' : 'ti-frt-ok'), textContent: fmtWaitMs(t.frtMs) });
         }
         item.appendChild(badge);
-        item.appendChild(makeEl('span', { className: 'ti-text', textContent: truncate(t.subject || '', 28) }));
-        if (t.support) item.appendChild(makeEl('span', { className: 'ti-support', textContent: truncate(t.support, 16) }));
+        item.appendChild(makeEl('span', { className: 'ti-text', textContent: truncate(t.subject || '', 32) }));
         makeClickable(item, t.url);
         box.appendChild(item);
     });
@@ -1429,11 +1428,19 @@ function premiumStop() {
     });
 }
 const _premiumPeriodSel = $('premiumPeriod');
-// Зміна періоду лише показує/ховає поля діапазону й запам'ятовує — збір стартує кнопкою.
+// Зміна періоду одразу стартує збір (для «Діапазон…» — лише показує поля, старт по ↻).
 if (_premiumPeriodSel) _premiumPeriodSel.addEventListener('change', () => {
     const range = document.querySelector('.premium-range');
     if (range) range.hidden = (_premiumPeriodSel.value !== 'range');
     try { chrome.storage.local.set({ premiumPeriod: _premiumPeriodSel.value }); } catch (e) { /* ignore */ }
+    if (_premiumPeriodSel.value !== 'range') premiumRefresh();
+});
+// Діапазон: коли обидві дати задано — стартуємо.
+['premiumFrom', 'premiumTo'].forEach((id) => {
+    const el = $(id);
+    if (el) el.addEventListener('change', () => {
+        if (($('premiumPeriod') || {}).value === 'range' && $('premiumFrom').value && $('premiumTo').value) premiumRefresh();
+    });
 });
 const _refreshPremiumBtn = $('refreshPremium');
 if (_refreshPremiumBtn) _refreshPremiumBtn.addEventListener('click', premiumRefresh); // ↻ = старт збору

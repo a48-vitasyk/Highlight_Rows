@@ -1739,32 +1739,17 @@ let premiumScanRunning = false;
 let premiumStopRequested = false; // користувач натиснув «Стоп»
 function setPremiumStatus(o) { try { chrome.storage.local.set({ premiumScanStatus: o }); } catch (e) { /* ignore */ } }
 
-// Ім'я автора повідомлення (поле точно не знаю — пробуємо багато варіантів).
-function premiumMsgAuthor(msg) {
-    return fieldVal(msg.user) || fieldVal(msg.from) || fieldVal(msg.name) || fieldVal(msg.employee) ||
-        fieldVal(msg.author) || fieldVal(msg.$user) || fieldVal(msg.fromuser) || fieldVal(msg.sender) ||
-        fieldVal(msg.user_name) || fieldVal(msg.username) || fieldVal(msg.from_name) || fieldVal(msg.who) || '';
-}
 function premiumMsgTimes(det) {
-    let firstIn = null, firstOut = null, firstOutAuthor = '', firstOutMsg = null;
+    let firstIn = null, firstOut = null;
     const msgs = asArray(det.mlist).flatMap((m) => asArray(m.message));
     for (const msg of msgs) {
         if (!msg) continue;
         const t = parseServerDate(fieldVal(msg.date_post));
         if (t === null) continue;
         if (msg.$type === 'incoming') { if (firstIn === null || t < firstIn) firstIn = t; }
-        else if (msg.$type === 'outcoming') {
-            if (firstOut === null || t < firstOut) { firstOut = t; firstOutMsg = msg; firstOutAuthor = premiumMsgAuthor(msg); }
-        }
+        else if (msg.$type === 'outcoming') { if (firstOut === null || t < firstOut) firstOut = t; }
     }
-    return { firstIn, firstOut, firstOutAuthor, firstOutMsg };
-}
-let premiumLoggedMsgKeys = false; // разова діагностика структури повідомлення
-// Ім'я з blocked_by ("Эдвард Г., 2026-06-19 10:47:42") — частина до коми.
-function blockedByName(s) {
-    const v = String(s || '').trim();
-    if (!v) return '';
-    return v.split(',')[0].trim();
+    return { firstIn, firstOut };
 }
 function isPremiumDept(responsible) {
     const r = String(responsible || '').toLowerCase();
@@ -1814,7 +1799,6 @@ async function scanPremium(fromMs, toMs) {
                     subject: fieldVal(el.name),
                     client: fieldVal(el.client),
                     createdAt: created,
-                    blockedBy: blockedByName(fieldVal(el.blocked_by)),
                 });
             }
             setPremiumStatus({ scanning: true, loading: true, total: found.length, scanned: 0, at: Date.now() });
@@ -1832,24 +1816,18 @@ async function scanPremium(fromMs, toMs) {
             if (!alive || !extensionAlive()) break;
             if (premiumStopRequested) { stopped = true; break; }
             scanned++;
-            let frtMs = null, client0 = f.createdAt, support = f.blockedBy || '';
+            let frtMs = null, client0 = f.createdAt;
             try {
                 const det = await fetchBillmgr('func=ticket_all.edit&elid=' + encodeURIComponent(f.elid));
                 const tm = premiumMsgTimes(det);
                 if (tm.firstIn !== null) client0 = tm.firstIn;
                 if (tm.firstOut !== null) frtMs = Math.max(0, tm.firstOut - (client0 != null ? client0 : tm.firstOut));
-                if (tm.firstOutAuthor) support = tm.firstOutAuthor;
-                // Діагностика: якщо ім'я сапорта не знайдено — раз залогувати поля повідомлення.
-                else if (!premiumLoggedMsgKeys && tm.firstOutMsg) {
-                    premiumLoggedMsgKeys = true;
-                    try { console.warn('[HR] premium: поля 1-го вихідного повідомлення =', Object.keys(tm.firstOutMsg).join(', '), '|', JSON.stringify(tm.firstOutMsg).slice(0, 400)); } catch (e) { /* ignore */ }
-                }
             } catch (e) {
                 if (e && e.message === 'session-redirect') { sessionLost = true; break; }
             }
             result.push({
                 ticketId: f.elid, subject: f.subject, client: f.client,
-                createdAt: f.createdAt, client0, frtMs, support,
+                createdAt: f.createdAt, client0, frtMs,
                 url: location.origin + '/billmgr?startform=ticket_all.edit&elid=' + encodeURIComponent(f.elid),
             });
             try { chrome.storage.local.set({ premiumScan: result.slice() }); } catch (e) { /* ignore */ }
