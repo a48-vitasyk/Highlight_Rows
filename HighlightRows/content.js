@@ -895,6 +895,7 @@ function snippetVars() {
         }
         v.service = trafficData.name || '';
         v.serviceid = trafficData.id || '';
+        if (trafficData.ip) v.ip = trafficData.ip; // IP саме вибраної/матчингової послуги (DOM — резерв вище)
     }
     return v;
 }
@@ -2545,6 +2546,7 @@ function trafficValueText() {
     if (!trafficData) return '';
     if (trafficData.none) return 'немає прив\'язаної послуги';
     if (trafficData.notFound) return '—';
+    if (trafficData.used == null || trafficData.paid == null) return '—'; // послуга без трафіку (напр. info-послуга)
     return `${formatTB(trafficData.used)} / ${formatTB(trafficData.paid)}`;
 }
 
@@ -2673,6 +2675,23 @@ function buildService(match) {
     };
 }
 
+// Послуга з info-блоку тікета (rowgroup «info_item_title») — для послуг, яких немає
+// у func=instances (ліцензії/панелі). Повертає мапу { row.$name: row.$ } або {}.
+function parseTicketServiceInfo(ticket) {
+    const out = {};
+    for (const ml of asArray(ticket && ticket.mlist)) {
+        for (const m of asArray(ml.message)) {
+            for (const g of asArray(m.rowgroup)) {
+                if (!g || g.$name !== 'info_item_title') continue;
+                for (const row of asArray(g.row)) {
+                    if (row && row.$name) out[row.$name] = fieldVal(row);
+                }
+            }
+        }
+    }
+    return out;
+}
+
 async function loadTraffic(force) {
     if (!alive || !extensionAlive() || !settings.trafficEnabled || !onBillmgr()) return;
     const key = currentTicketKey();
@@ -2711,16 +2730,31 @@ async function loadTraffic(force) {
             // Резерв: збіг за IP вибраної послуги (якщо id не зійшовся).
             if (!match && svc.ip) match = elems.find((e) => fieldVal(e.ip) === svc.ip);
             if (!match && elems.length === 1) match = elems[0];
-            trafficData = match
-                ? {
+            if (match) {
+                trafficData = {
                     key,
                     id: fieldVal(match.id),
                     name: fieldVal(match.pricelist) || fieldVal(match.name) || svc.name || '',
+                    ip: fieldVal(match.ip) || svc.ip || '',
                     used: fieldVal(match.used_traffic),
                     paid: fieldVal(match.paid_traffic),
                     service: buildService(match),
+                };
+            } else {
+                // Послуга не з instances — розпізнаємо з info-блоку вже завантаженого тікета.
+                const info = parseTicketServiceInfo(ticket);
+                if (info.panel_enumeration || info.info_item_serverid || info.info_item_ostempl || info.info_item_ip) {
+                    trafficData = {
+                        key,
+                        id: item || info.info_item_serverid || '',
+                        name: info.panel_enumeration || svc.name || '',
+                        ip: info.info_item_ip || svc.ip || '',
+                        source: 'ticketinfo', // лише розпізнавання — без полів у блоці
+                    };
+                } else {
+                    trafficData = { key, notFound: true, name: svc.name || '', ip: svc.ip || '' };
                 }
-                : { key, notFound: true, name: svc.name || '' };
+            }
         }
         injectInfo();
     } catch (e) {
@@ -2741,7 +2775,7 @@ function maybeTraffic() {
     if (!key) return;
     // Дані вже є (успіх або «немає послуги») — лише перемалювати: Angular міг
     // стерти наш DOM при ре-рендері блоку.
-    const resolved = trafficData && trafficData.key === key && (trafficData.none || trafficData.service != null);
+    const resolved = trafficData && trafficData.key === key && (trafficData.none || trafficData.service != null || trafficData.source === 'ticketinfo');
     if (resolved) { injectInfo(); return; }
     // Ще не вийшло (блок ще не відрендерився / тимчасовий збій) — повторюємо до
     // кількох спроб, поки не підтягнеться. Без хибного 15-хв блокування.
