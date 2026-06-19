@@ -1218,7 +1218,8 @@ function renderPremiumList(arr) {
             badge = makeEl('span', { className: 'ti-age ' + (t.frtMs > slaMs ? 'ti-frt-breach' : 'ti-frt-ok'), textContent: fmtWaitMs(t.frtMs) });
         }
         item.appendChild(badge);
-        item.appendChild(makeEl('span', { className: 'ti-text', textContent: truncate(t.subject || '', 30) }));
+        item.appendChild(makeEl('span', { className: 'ti-text', textContent: truncate(t.subject || '', 28) }));
+        if (t.support) item.appendChild(makeEl('span', { className: 'ti-support', textContent: truncate(t.support, 16) }));
         makeClickable(item, t.url);
         box.appendChild(item);
     });
@@ -1386,52 +1387,19 @@ $('refreshStale').addEventListener('click', () => {
     });
 });
 
-// --- Premium: вибір періоду + «Оновити» (скан важкий → лише активна вкладка) ---
-function setActivePeriod(pp) {
-    document.querySelectorAll('.premium-period [data-pp]').forEach((b) => b.classList.toggle('active', b.dataset.pp === pp));
-    const range = document.querySelector('.premium-range');
-    if (range) range.hidden = (pp !== 'range');
-}
-function currentPeriodType() {
-    const b = document.querySelector('.premium-period [data-pp].active');
-    return (b && b.dataset.pp) || '24h';
-}
-function computePremiumRange() {
-    const now = Date.now();
-    const type = currentPeriodType();
-    if (type === 'today') { const d = new Date(); d.setHours(0, 0, 0, 0); return { from: d.getTime(), to: now }; }
-    if (type === '7d') return { from: now - 7 * 86400000, to: now };
-    if (type === 'range') {
-        const fv = ($('premiumFrom') && $('premiumFrom').value) || '';
-        const tv = ($('premiumTo') && $('premiumTo').value) || '';
-        return { from: fv ? new Date(fv + 'T00:00:00').getTime() : (now - 86400000), to: tv ? new Date(tv + 'T23:59:59').getTime() : now };
-    }
-    return { from: now - 86400000, to: now }; // 24h
-}
+// --- Premium: «Оновити» (читає активний фільтр billmgr; скан важкий → активна вкладка) ---
 function premiumRefresh() {
-    const { from, to } = computePremiumRange();
-    try { chrome.storage.local.set({ premiumPeriod: { type: currentPeriodType(), from: (($('premiumFrom') || {}).value) || '', to: (($('premiumTo') || {}).value) || '' } }); } catch (e) { /* ignore */ }
     const st = $('premiumStatus'); if (st) st.textContent = 'Перевіряю…';
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
         const tab = tabs && tabs[0];
         if (!tab) { renderPremiumStatus({ note: 'відкрийте вкладку панелі Zomro' }); return; }
-        chrome.tabs.sendMessage(tab.id, { action: 'scanPremium', from, to }, () => {
+        chrome.tabs.sendMessage(tab.id, { action: 'scanPremium' }, () => {
             if (chrome.runtime.lastError) renderPremiumStatus({ note: 'відкрийте вкладку панелі Zomro' });
         });
     });
 }
-document.querySelectorAll('.premium-period [data-pp]').forEach((b) => {
-    b.addEventListener('click', () => { setActivePeriod(b.dataset.pp); if (b.dataset.pp !== 'range') premiumRefresh(); });
-});
-['premiumFrom', 'premiumTo'].forEach((id) => { const el = $(id); if (el) el.addEventListener('change', () => { if (currentPeriodType() === 'range') premiumRefresh(); }); });
 const _refreshPremiumBtn = $('refreshPremium');
 if (_refreshPremiumBtn) _refreshPremiumBtn.addEventListener('click', premiumRefresh);
-chrome.storage.local.get('premiumPeriod', (d) => {
-    const p = (d && d.premiumPeriod) || {};
-    if (p.type) setActivePeriod(p.type);
-    if (p.from && $('premiumFrom')) $('premiumFrom').value = p.from;
-    if (p.to && $('premiumTo')) $('premiumTo').value = p.to;
-});
 // Живий лічильник очікування для невідписаних (поки попап відкрито).
 setInterval(() => {
     if (document.visibilityState !== 'visible') return;

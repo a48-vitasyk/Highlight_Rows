@@ -348,6 +348,7 @@ body[data-view="panel"] .stale-list { max-height: 300px; }
 .ti-frt-ok { color: var(--ok); font-weight: 700; }
 .ti-frt-breach { color: var(--danger); font-weight: 700; }
 .ti-frt-wait { color: var(--accent-2); font-weight: 700; }
+.ti-support { flex: none; max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--primary); font-size: 10.5px; }
 .list-empty { color: var(--muted); text-align: center; padding: 12px 0; font-size: 10.5px; }
 .stale-item .ti-act {
     flex: none; display: inline-flex; align-items: center; justify-content: center;

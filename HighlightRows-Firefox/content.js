@@ -1739,39 +1739,50 @@ let premiumScanRunning = false;
 function setPremiumStatus(o) { try { chrome.storage.local.set({ premiumScanStatus: o }); } catch (e) { /* ignore */ } }
 
 function premiumMsgTimes(det) {
-    let firstIn = null, firstOut = null;
+    let firstIn = null, firstOut = null, firstOutAuthor = '';
     const msgs = asArray(det.mlist).flatMap((m) => asArray(m.message));
     for (const msg of msgs) {
         if (!msg) continue;
         const t = parseServerDate(fieldVal(msg.date_post));
         if (t === null) continue;
         if (msg.$type === 'incoming') { if (firstIn === null || t < firstIn) firstIn = t; }
-        else if (msg.$type === 'outcoming') { if (firstOut === null || t < firstOut) firstOut = t; }
+        else if (msg.$type === 'outcoming') {
+            if (firstOut === null || t < firstOut) {
+                firstOut = t;
+                // Ім'я сапорта, що першим відповів (поле точно не знаю — пробуємо кілька).
+                firstOutAuthor = fieldVal(msg.user) || fieldVal(msg.from) || fieldVal(msg.name) ||
+                    fieldVal(msg.employee) || fieldVal(msg.author) || '';
+            }
+        }
     }
-    return { firstIn, firstOut };
+    return { firstIn, firstOut, firstOutAuthor };
+}
+// Ім'я з blocked_by ("Эдвард Г., 2026-06-19 10:47:42") — частина до коми.
+function blockedByName(s) {
+    const v = String(s || '').trim();
+    if (!v) return '';
+    return v.split(',')[0].trim();
 }
 function isPremiumDept(responsible) {
     const r = String(responsible || '').toLowerCase();
     return (settings.premiumDepartments || []).some((d) => d && r.indexOf(String(d).toLowerCase()) !== -1);
 }
 
-async function scanPremium(fromMs, toMs) {
+async function scanPremium() {
     if (!alive || !extensionAlive() || premiumScanRunning) return;
     if (!onBillmgr()) { setPremiumStatus({ scanning: false, note: 'відкрийте сторінку панелі (billmgr)' }); return; }
     if (sessionInCooldown()) { setPremiumStatus({ scanning: false, note: 'панель розлогінено — оновіть сторінку' }); return; }
-    const from = Number(fromMs) || 0;
-    const to = Number(toMs) || Date.now();
 
     premiumScanRunning = true;
     let sessionLost = false, note = '';
     const found = [];
+    const seen = new Set(); // дедуп: billmgr клемпить p_num на останню сторінку й повторює її
     try {
         try { chrome.storage.local.set({ premiumScan: [] }); } catch (e) { /* ignore */ }
-        setPremiumStatus({ scanning: true, loading: true, total: 0, scanned: 0, at: Date.now(), from, to });
+        setPremiumStatus({ scanning: true, loading: true, total: 0, scanned: 0, at: Date.now() });
 
-        // 1) Гортаємо ticket_all, доки last_message не стане < from. Список
-        //    відсортований за last_message спадаюче, а «створено в періоді» ⟹
-        //    last_message ≥ created ≥ from, тож далі нічого нашого не буде.
+        // 1) Читаємо ПОТОЧНИЙ (відфільтрований у billmgr) вид ticket_all. Період/відділ
+        //    задає користувач фільтром billmgr. Гортаємо, доки сторінка дає нові id.
         const MAX_PAGES = 50;
         for (let p = 1; p <= MAX_PAGES; p++) {
             if (!alive || !extensionAlive()) break;
@@ -1779,45 +1790,52 @@ async function scanPremium(fromMs, toMs) {
             if (p === 1) updatePanelLabelsFrom(list);
             const elems = asArray(list.elem);
             if (!elems.length) break;
-            let pageAllOld = true;
+            let newOnPage = 0;
             for (const el of elems) {
-                const lm = parseServerDate(fieldVal(el.last_message));
-                if (lm === null || lm >= from) pageAllOld = false;
-                const created = parseServerDate(fieldVal(el.date_start));
-                if (created !== null && created >= from && created <= to && isPremiumDept(fieldVal(el.responsible))) {
-                    found.push({ elid: fieldVal(el.id), subject: fieldVal(el.name), client: fieldVal(el.client), createdAt: created });
-                }
+                const id = fieldVal(el.id);
+                if (!id || seen.has(id)) continue; // дубль (клемп) — пропускаємо
+                seen.add(id);
+                newOnPage++;
+                if (!isPremiumDept(fieldVal(el.responsible))) continue; // блок лишається «Premium»
+                found.push({
+                    elid: id,
+                    subject: fieldVal(el.name),
+                    client: fieldVal(el.client),
+                    createdAt: parseServerDate(fieldVal(el.date_start)),
+                    blockedBy: blockedByName(fieldVal(el.blocked_by)),
+                });
             }
-            setPremiumStatus({ scanning: true, loading: true, total: found.length, scanned: 0, at: Date.now(), from, to });
-            if (pageAllOld) break;
-            if (p === MAX_PAGES) note = 'показано останні сторінки — звузьте період';
+            setPremiumStatus({ scanning: true, loading: true, total: found.length, scanned: 0, at: Date.now() });
+            if (newOnPage === 0) break; // сторінка без нових id → кінець (клемп/повтор)
+            if (p === MAX_PAGES) note = 'показано перші ' + MAX_PAGES + ' стор.';
         }
 
-        // 2) Для кожного — FRT через ticket_all.edit (кеп, щоб не довбати білінг).
+        // 2) Для кожного — час першої відповіді + ім'я сапорта через ticket_all.edit.
         const CAP = 100;
         if (found.length > CAP) note = 'забагато тікетів — показано перші ' + CAP;
-        const work = found.slice(0, CAP).sort((a, b) => b.createdAt - a.createdAt);
+        const work = found.slice(0, CAP).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
         const result = [];
         let scanned = 0;
         for (const f of work) {
             if (!alive || !extensionAlive()) break;
             scanned++;
-            let frtMs = null, client0 = f.createdAt;
+            let frtMs = null, client0 = f.createdAt, support = f.blockedBy || '';
             try {
                 const det = await fetchBillmgr('func=ticket_all.edit&elid=' + encodeURIComponent(f.elid));
                 const tm = premiumMsgTimes(det);
                 if (tm.firstIn !== null) client0 = tm.firstIn;
-                if (tm.firstOut !== null) frtMs = Math.max(0, tm.firstOut - client0);
+                if (tm.firstOut !== null) frtMs = Math.max(0, tm.firstOut - (client0 != null ? client0 : tm.firstOut));
+                if (tm.firstOutAuthor) support = tm.firstOutAuthor;
             } catch (e) {
                 if (e && e.message === 'session-redirect') { sessionLost = true; break; }
             }
             result.push({
                 ticketId: f.elid, subject: f.subject, client: f.client,
-                createdAt: f.createdAt, client0, frtMs,
+                createdAt: f.createdAt, client0, frtMs, support,
                 url: location.origin + '/billmgr?startform=ticket_all.edit&elid=' + encodeURIComponent(f.elid),
             });
             try { chrome.storage.local.set({ premiumScan: result.slice() }); } catch (e) { /* ignore */ }
-            setPremiumStatus({ scanning: true, total: work.length, scanned, at: Date.now(), from, to, note });
+            setPremiumStatus({ scanning: true, total: work.length, scanned, at: Date.now(), note });
             await sleep(STALE_FETCH_GAP_MS);
         }
         try { chrome.storage.local.set({ premiumScan: result }); } catch (e) { /* ignore */ }
@@ -1825,8 +1843,8 @@ async function scanPremium(fromMs, toMs) {
         if (e && e.message === 'session-redirect') sessionLost = true;
     } finally {
         premiumScanRunning = false;
-        if (sessionLost) setPremiumStatus({ scanning: false, note: 'панель розлогінено — оновіть сторінку', from, to });
-        else setPremiumStatus({ scanning: false, total: found.length, at: Date.now(), from, to, note });
+        if (sessionLost) setPremiumStatus({ scanning: false, note: 'панель розлогінено — оновіть сторінку' });
+        else setPremiumStatus({ scanning: false, total: found.length, at: Date.now(), note });
     }
 }
 
@@ -2983,7 +3001,7 @@ function init() {
                 if (req.action === 'scanStaleTickets') scanStaleTickets(true);
                 else if (req.action === 'scanMatches') scanMatches(true);
                 else if (req.action === 'scanAwaiting') scanAwaiting();
-                else if (req.action === 'scanPremium') scanPremium(req.from, req.to);
+                else if (req.action === 'scanPremium') scanPremium();
                 else if (req.action === 'awRecheckNow') awForceRecheck();
                 else if (req.action === 'openTicket') openTicketByNumber(req.ticketId);
                 else if (req.action === 'refreshTraffic') loadTraffic(true);
