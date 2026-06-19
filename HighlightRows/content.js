@@ -1779,7 +1779,9 @@ async function scanPremium(fromMs, toMs) {
         for (let p = 1; p <= MAX_PAGES; p++) {
             if (!alive || !extensionAlive()) break;
             if (premiumStopRequested) { stopped = true; break; }
-            const list = await fetchBillmgr('func=ticket_all&p_num=' + p);
+            // Сортуємо за датою СТВОРЕННЯ (а не last_message) — щоб період був суцільним
+            // зрізом і рання зупинка працювала для будь-якого діапазону (мин. місяць, рік…).
+            const list = await fetchBillmgr('func=ticket_all&p_sort=date_start&p_order=desc&p_num=' + p);
             if (p === 1) updatePanelLabelsFrom(list);
             const elems = asArray(list.elem);
             if (!elems.length) break;
@@ -1789,9 +1791,10 @@ async function scanPremium(fromMs, toMs) {
                 if (!id || seen.has(id)) continue; // дубль (клемп) — пропускаємо
                 seen.add(id);
                 newOnPage++;
-                const lm = parseServerDate(fieldVal(el.last_message));
-                if (lm === null || lm >= from) pageAllOld = false;
                 const created = parseServerDate(fieldVal(el.date_start));
+                // Сортування за date_start спадаюче: доки трапляються тікети з created ≥ from,
+                // ми ще не пройшли період (новіші за `to` — пропускаємо, але не зупиняємось).
+                if (created !== null && created >= from) pageAllOld = false;
                 if (created === null || created < from || created > to) continue; // поза періодом
                 if (!isPremiumDept(fieldVal(el.responsible))) continue; // лише Premium-відділ
                 found.push({
