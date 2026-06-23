@@ -1211,6 +1211,83 @@ function makeElc(tag, cls, text) {
     if (text != null) el.textContent = text;
     return el;
 }
+
+// --- Виправлення розкладки (Punto-lite): кнопка «⇄» + Ctrl+Shift+L ----------
+// QWERTY-клавіша → кирилиця. База спільна для UA/RU; відмінності окремо.
+const QW_CYR_BASE = {
+    q: 'й', w: 'ц', e: 'у', r: 'к', t: 'е', y: 'н', u: 'г', i: 'ш', o: 'щ', p: 'з', '[': 'х',
+    a: 'ф', d: 'в', f: 'а', g: 'п', h: 'р', j: 'о', k: 'л', l: 'д', ';': 'ж',
+    z: 'я', x: 'ч', c: 'с', v: 'м', b: 'и', n: 'т', m: 'ь', ',': 'б', '.': 'ю',
+};
+const QW_CYR_UA = Object.assign({}, QW_CYR_BASE, { s: 'і', ']': 'ї', "'": 'є' });
+const QW_CYR_RU = Object.assign({}, QW_CYR_BASE, { s: 'ы', ']': 'ъ', "'": 'э' });
+// Кирилиця → QWERTY-клавіша (інверсія обох розкладок).
+const CYR_TO_LAT = (function () {
+    const m = {};
+    [QW_CYR_UA, QW_CYR_RU].forEach((map) => { for (const k in map) if (!(map[k] in m)) m[map[k]] = k; });
+    return m;
+})();
+function convChar(ch, toLat) {
+    const low = ch.toLowerCase();
+    const table = toLat ? CYR_TO_LAT : (settings.myLang === 'ru' ? QW_CYR_RU : QW_CYR_UA);
+    const out = table[low];
+    if (out == null) return ch; // невідомий символ лишаємо як є
+    return (ch !== low) ? out.toUpperCase() : out;
+}
+// Авто-напрям: більше кирилиці → користувач хотів латиницю (і навпаки).
+function convertLayout(text) {
+    let cyr = 0, lat = 0;
+    for (const ch of text) {
+        if (/[а-яёіїєґ]/i.test(ch)) cyr++;
+        else if (/[a-z]/i.test(ch)) lat++;
+    }
+    if (!cyr && !lat) return text;
+    const toLat = cyr >= lat;
+    let out = '';
+    for (const ch of text) out += convChar(ch, toLat);
+    return out;
+}
+function isEditableField(el) {
+    if (!el) return false;
+    if (el.tagName === 'TEXTAREA') return true;
+    return el.tagName === 'INPUT' && /^(text|search|)$/i.test(el.type || '');
+}
+function fixLayoutInField(el) {
+    if (!isEditableField(el) || el.value == null || el.selectionStart == null) return;
+    let s = el.selectionStart, e = el.selectionEnd;
+    if (s === e) { s = 0; e = el.value.length; } // нема виділення → усе поле
+    const seg = el.value.slice(s, e);
+    if (!seg) return;
+    const fixed = convertLayout(seg);
+    if (fixed === seg) return;
+    el.value = el.value.slice(0, s) + fixed + el.value.slice(e);
+    try { el.setSelectionRange(s, s + fixed.length); } catch (err) { /* ignore */ }
+    el.focus();
+    el.dispatchEvent(new Event('input', { bubbles: true })); // щоб Angular ngModel підхопив
+}
+function injectLayoutFixBtn() {
+    const ta = document.querySelector('textarea.ispui-input__textarea');
+    const bar = ta && ta.closest('isp-chat-input') ? ta.closest('isp-chat-input').querySelector('.isp-buttons-block') : null;
+    if (!bar) return;
+    const existing = document.getElementById('hr-layoutfix');
+    if (existing && existing.isConnected && bar.contains(existing)) return; // вже стоїть
+    if (existing) existing.remove();
+    const btn = makeElc('button', 'hr-layoutfix', '⇄');
+    btn.id = 'hr-layoutfix';
+    btn.type = 'button';
+    btn.title = 'Виправити розкладку: виділене або все поле (Ctrl+Shift+L)';
+    btn.addEventListener('mousedown', (e) => e.preventDefault()); // не губити виділення
+    btn.addEventListener('click', (e) => { e.preventDefault(); fixLayoutInField(document.querySelector('textarea.ispui-input__textarea')); });
+    bar.appendChild(btn);
+}
+// Гаряча клавіша Ctrl+Shift+L. Саме e.code — при кривій розкладці e.key буде кирилицею.
+document.addEventListener('keydown', (e) => {
+    if (!alive || !e.ctrlKey || !e.shiftKey || e.altKey || e.code !== 'KeyL') return;
+    const el = document.activeElement;
+    if (!isEditableField(el)) return;
+    e.preventDefault();
+    fixLayoutInField(el);
+}, true);
 // --- Панель форматування у полі відповіді (Markdown, як у BILLmanager) -----
 const HR_FMT = { bold: ['**', '**'], italic: ['_', '_'], strike: ['~~', '~~'], code: ['`', '`'] };
 function hrFmtWrap(ta, pre, post) {
@@ -1471,6 +1548,7 @@ function refresh() {
     injectSnippetButton();
     injectMsgTranslate();
     injectSnippetSuggest();
+    injectLayoutFixBtn();
 
     // Підстраховка висоти поля відповіді (стильову таблицю міг перебити inline).
     const ta = document.querySelector('textarea.ispui-input__textarea');
