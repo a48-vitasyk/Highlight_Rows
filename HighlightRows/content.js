@@ -1917,26 +1917,38 @@ async function scanPremium(period, startStr, endStr) {
         try { chrome.storage.local.set({ premiumScan: [] }); } catch (e) { /* ignore */ }
         setPremiumStatus({ scanning: true, loading: true, total: 0, scanned: 0, at: Date.now() });
 
-        // 0) Виставляємо фільтр у самому billmgr (як кнопка «Найти»): відповідальний =
-        //    Premium-відділ + «Дата сообщения» = період. Далі читаємо ВЖЕ відфільтрований
-        //    список — число збігається з білінгом. (m.date_post, не дата створення.)
-        let setUrl = 'func=ticket_all.setfilter&responsible=' + encodeURIComponent(settings.premiumDeptId || '493041') +
-            '&message_post=' + encodeURIComponent(period);
-        if (period === 'other') {
-            setUrl += '&message_poststart=' + encodeURIComponent(startStr || '') +
-                '&message_postend=' + encodeURIComponent(endStr || '');
+        // 0) Виставляємо фільтр billmgr: відповідальний = Premium-відділ + «Дата
+        //    сообщения» = період. Точний спосіб застосування невідомий, тож пробуємо
+        //    кілька й перевіряємо p_filter (І відділ, І дата) — беремо той, що спрацював.
+        const fparams = 'responsible=' + encodeURIComponent(settings.premiumDeptId || '493041') +
+            '&message_post=' + encodeURIComponent(period) +
+            (period === 'other'
+                ? '&message_poststart=' + encodeURIComponent(startStr || '') + '&message_postend=' + encodeURIComponent(endStr || '')
+                : '');
+        const filterOk = (doc) => {
+            const pf = fieldVal(doc && doc.p_filter);
+            const deptOk = /преми|премі|premium/i.test(pf);
+            const dateOk = period === 'nodate' ? true : (period === 'other' ? /\d{4}-\d{2}-\d{2}/.test(pf) : /сообщени|сообщения/i.test(pf));
+            return deptOk && dateOk;
+        };
+        // suffix — що додавати до func=ticket_all&p_num=N (для inline-стратегії).
+        let suffix = '', probe = null;
+        // Стратегія A: filter-параметри прямо на список.
+        try {
+            const a = await fetchBillmgr('func=ticket_all&' + fparams + '&p_num=1');
+            if (filterOk(a)) { suffix = '&' + fparams; probe = a; }
+        } catch (e) { if (e && e.message === 'session-redirect') { sessionLost = true; throw e; } }
+        // Стратегія B: окремий setfilter, далі звичайний список (сесійний фільтр).
+        if (!probe) {
+            try { await fetchBillmgr('func=ticket_all.setfilter&' + fparams); } catch (e) { if (e && e.message === 'session-redirect') { sessionLost = true; throw e; } }
+            try { await fetchBillmgr('func=ticket_all.setfilter&clicked_button=ok&' + fparams); } catch (e) { /* спроба з токеном кнопки */ }
+            const b = await fetchBillmgr('func=ticket_all&p_num=1');
+            if (filterOk(b)) { suffix = ''; probe = b; }
+            else { pfStr = fieldVal(b.p_filter); }
         }
-        try { await fetchBillmgr(setUrl); } catch (e) { if (e && e.message === 'session-redirect') { sessionLost = true; throw e; } }
-
-        // Верифікація: фільтр справді застосувався — перевіряємо І відділ, І дату
-        // (інакше показали б хибне число замість мовчазної помилки).
-        const probe = await fetchBillmgr('func=ticket_all&p_num=1');
+        if (!probe) { note = 'не вдалося застосувати фільтр billmgr: ' + (pfStr || '—'); throw new Error('filter-not-applied'); }
         updatePanelLabelsFrom(probe);
-        const pf = fieldVal(probe.p_filter);
-        pfStr = pf;
-        const deptOk = /преми|премі|premium/i.test(pf);
-        const dateOk = period === 'nodate' ? true : (period === 'other' ? /\d{4}-\d{2}-\d{2}/.test(pf) : /сообщени|сообщения/i.test(pf));
-        if (!deptOk || !dateOk) { note = 'фільтр застосувався не повністю: ' + (pf || '—'); throw new Error('filter-not-applied'); }
+        pfStr = fieldVal(probe.p_filter);
 
         // 1) Пейджимо ВЕСЬ відфільтрований список (білінг уже відфільтрував — без
         //    клієнтського фільтра дат/відділу). Дедуп за id; стоп на порожній/без нових.
@@ -1944,7 +1956,7 @@ async function scanPremium(period, startStr, endStr) {
         for (let p = 1; p <= MAX_PAGES; p++) {
             if (!alive || !extensionAlive()) break;
             if (premiumStopRequested) { stopped = true; break; }
-            const list = p === 1 ? probe : await fetchBillmgr('func=ticket_all&p_num=' + p);
+            const list = p === 1 ? probe : await fetchBillmgr('func=ticket_all' + suffix + '&p_num=' + p);
             const elems = asArray(list.elem);
             if (!elems.length) break;
             let newOnPage = 0;
