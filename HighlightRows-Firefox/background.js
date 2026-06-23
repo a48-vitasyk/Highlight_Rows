@@ -235,6 +235,20 @@ chrome.runtime.onMessage.addListener((req, sender, sendResponse) => {
                 const rows = await SB.listAwaitingLogs(req.limit);
                 sendResponse({ ok: true, rows: rows || [] });
                 return;
+            } else if (req.sb === 'aiPull') {
+                if (!(await SB.loggedIn())) { sendResponse({ ok: false, error: 'not-logged-in' }); return; }
+                const rows = await SB.pullAiHandoffs();
+                sendResponse({ ok: true, rows: rows || [] });
+                return;
+            } else if (req.sb === 'aiUpsert') {
+                await SB.upsertAiHandoff(req.handoff || {});
+                await SB.pullAiHandoffs();
+            } else if (req.sb === 'aiClaim') {
+                await SB.claimAiHandoff(req.ticketId);
+                await SB.pullAiHandoffs();
+            } else if (req.sb === 'aiResolve') {
+                await SB.resolveAiHandoff(req.ticketId);
+                await SB.pullAiHandoffs();
             }
             sendResponse({ ok: true });
         } catch (e) {
@@ -282,6 +296,7 @@ function rtSchedulePull() {
     rtPullTimer = setTimeout(() => {
         try { SB.pull(); } catch (e) { /* ignore */ }
         try { SB.pullAwaiting(); } catch (e) { /* ignore */ }
+        try { SB.pullAiHandoffs(); } catch (e) { /* ignore */ } // ZomBro AI хендофи — live для команди
         try { SB.pullSnippets(); } catch (e) { /* ignore */ } // шаблони — live для всіх залогінених
         try { SB.pullCategories(); } catch (e) { /* ignore */ }
     }, 800);
@@ -324,6 +339,7 @@ async function rtConnect() {
                 postgres_changes: [
                     { event: '*', schema: 'public', table: 'reminders' },
                     { event: '*', schema: 'public', table: 'awaiting_reply' },
+                    { event: '*', schema: 'public', table: 'ai_handoffs' },
                     { event: '*', schema: 'public', table: 'snippets' },
                     { event: '*', schema: 'public', table: 'snippet_categories' },
                 ],

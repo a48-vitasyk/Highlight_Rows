@@ -1251,7 +1251,7 @@ function renderZomAiList(state) {
         item.appendChild(makeEl('span', { className: 'ti-num', textContent: '#' + x.ticketId }));
         item.appendChild(makeEl('span', {
             className: 'ti-age ' + (x.taken ? 'ti-frt-ok' : 'ti-frt-breach'),
-            textContent: x.taken ? 'взято' : 'новий',
+            textContent: x.takenByEmail ? ('взяв ' + x.takenByEmail.split('@')[0]) : (x.taken ? 'взято' : 'новий'),
         }));
         item.appendChild(makeEl('span', { className: 'ti-text', textContent: truncate(x.subject || '', 30) }));
         makeClickable(item, x.url);

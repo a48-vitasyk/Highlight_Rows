@@ -209,6 +209,47 @@ const SB = {
         return rows;
     },
 
+    // --- ZomBro AI: спільні хендофи бота (як awaiting + взяв/відписав із reminders) ---
+    listAiHandoffs() { return SB.rest('ai_handoffs?select=*&order=detected_at.asc'); },
+    async upsertAiHandoff(a) {
+        const sess = await SB.getSession();
+        const email = (sess && sess.user && sess.user.email) || null;
+        // merge-duplicates по ticket_id: owner/taken НЕ передаємо → при апдейті
+        // зберігаються (хто вже взяв — лишається). Оновлюємо sig/subject/url.
+        return SB.rest('ai_handoffs', {
+            method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
+            body: JSON.stringify({
+                ticket_id: a.ticketId, sig: a.sig || '', subject: a.subject || '', url: a.url || '',
+                detected_at: new Date(a.detectedAt || Date.now()).toISOString(), detected_by_email: email,
+            }),
+        });
+    },
+    async claimAiHandoff(ticketId) {
+        const sess = await SB.getSession();
+        const email = (sess && sess.user && sess.user.email) || null;
+        const uid = (sess && sess.user && sess.user.id) || null;
+        return SB.rest('ai_handoffs?ticket_id=eq.' + encodeURIComponent(ticketId), {
+            method: 'PATCH', body: JSON.stringify({ owner_email: email, owner_uid: uid, taken_at: new Date().toISOString() }),
+        });
+    },
+    // «Відписав» = прибрати для всіх (як resolveAwaiting).
+    resolveAiHandoff(ticketId) { return SB.rest('ai_handoffs?ticket_id=eq.' + encodeURIComponent(ticketId), { method: 'DELETE' }); },
+    async mirrorAiHandoffs(rows) {
+        const aiHandoffsShared = (rows || []).map((x) => ({
+            id: x.id, ticketId: x.ticket_id, sig: x.sig || '',
+            subject: x.subject || '', url: x.url || '', ownerEmail: x.owner_email || '',
+            takenAt: x.taken_at ? Date.parse(x.taken_at) : 0,
+            detectedAt: x.detected_at ? Date.parse(x.detected_at) : 0,
+        }));
+        await new Promise((res) => { try { chrome.storage.local.set({ aiHandoffsShared }, res); } catch (e) { res(); } });
+    },
+    async pullAiHandoffs() {
+        if (!SB.configured() || !(await SB.loggedIn())) return null;
+        const rows = await SB.listAiHandoffs();
+        await SB.mirrorAiHandoffs(rows);
+        return rows;
+    },
+
     // --- Шаблони відповідей (спільні) ---
     listSnippets() { return SB.rest('snippets?select=*&order=sort.asc,updated_at.desc'); },
     async insertSnippet(s) {

@@ -27,6 +27,11 @@ let zomAiCandidates = []; // заблоковані ботом рядки пот
 let zomAiScanRunning = false;
 let zomAiAutoAt = 0;
 const zomAiChecked = {}; // № тікета → коли востаннє читали summary (троттл)
+// Спільний синк (Supabase): дзеркало ai_handoffs зі storage.local; вливаємо owner/
+// видалення у zomAiState. aiSharedSeen — № тікетів, що були в спільному списку
+// (щоб відрізнити «команда відписала» від «ще не впсертнули»).
+let aiHandoffsShared = [];
+const aiSharedSeen = new Set();
 
 // «Без відповіді понад N год» — через API billmgr (same-origin). Скан лише вручну.
 const STALE_POLL_DEDUP_MS = 28 * 60 * 1000;    // не сканувати, якщо інша вкладка щойно сканувала
@@ -1977,6 +1982,44 @@ function zomAiActiveList() {
 function persistZomAiState() { try { chrome.storage.local.set({ zomAiState }); } catch (e) { /* ignore */ } }
 function setZomAiStatus(o) { try { chrome.storage.local.set({ zomAiStatus: o }); } catch (e) { /* ignore */ } }
 
+// Вливає спільний список (Supabase → storage.local.aiHandoffsShared) у локальний
+// zomAiState — щоб «взяв/відписав» бачила вся команда, а хендофи, помічені колегами,
+// зʼявлялись і в мене. Рендер лишається з одного джерела (zomAiState).
+function reconcileZomAiShared(rows) {
+    aiHandoffsShared = Array.isArray(rows) ? rows : [];
+    const nowIds = new Set(aiHandoffsShared.map((r) => r.ticketId));
+    let changed = false;
+    // 1) Накладаємо owner + додаємо хендофи, помічені колегами (яких у мене ще нема).
+    for (const r of aiHandoffsShared) {
+        aiSharedSeen.add(r.ticketId);
+        let x = zomAiState[r.ticketId];
+        if (!x) {
+            zomAiState[r.ticketId] = {
+                ticketId: r.ticketId, elid: '', subject: r.subject || '', handoff: true,
+                sig: r.sig || '', summary: '', url: r.url || '',
+                detectedAt: r.detectedAt || Date.now(),
+                taken: !!r.ownerEmail, takenAt: r.takenAt || 0, takenByEmail: r.ownerEmail || '',
+                done: false,
+            };
+            changed = true;
+        } else {
+            if (r.ownerEmail && (!x.taken || x.takenByEmail !== r.ownerEmail)) {
+                x.taken = true; x.takenByEmail = r.ownerEmail; if (!x.takenAt) x.takenAt = r.takenAt || Date.now(); changed = true;
+            }
+            if (r.subject && !x.subject) { x.subject = r.subject; changed = true; }
+            if (r.url && !x.url) { x.url = r.url; changed = true; }
+        }
+    }
+    // 2) Зникло зі спільного (а було) → команда відписала → прибираємо й у мене.
+    for (const tid of aiSharedSeen) {
+        if (!nowIds.has(tid) && zomAiState[tid] && !zomAiState[tid].done) {
+            zomAiState[tid].done = true; zomAiState[tid].doneAt = Date.now(); changed = true;
+        }
+    }
+    if (changed) persistZomAiState();
+    updateZomAiBanner();
+}
+
 // Прибрати давно відписані записи, щоб мапа не росла нескінченно.
 function pruneZomAiState() {
     const now = Date.now();
@@ -2048,6 +2091,12 @@ async function scanZomAi(force) {
                 ticket: newOnes[0].ticketId, url: newOnes[0].url, soundWhich: 'zomai',
             });
         }
+        // Спільний синк: новий/змінений хендоф → у базу (для команди). Лише залогінений.
+        if (newOnes.length && myEmail) {
+            for (const x of newOnes) {
+                sbSend({ sb: 'aiUpsert', handoff: { ticketId: x.ticketId, sig: x.sig, subject: x.subject, url: x.url, detectedAt: x.detectedAt } });
+            }
+        }
     } catch (e) {
         if (e && e.message === 'session-redirect') sessionLost = true;
     } finally {
@@ -2072,8 +2121,9 @@ function maybeScanZomAi() {
 function zomAiTakeOne(ticketId) {
     const x = zomAiState[ticketId];
     if (!x) return;
-    x.taken = true; x.takenAt = Date.now();
+    x.taken = true; x.takenAt = Date.now(); if (myEmail) x.takenByEmail = myEmail;
     persistZomAiState();
+    if (myEmail) sbSend({ sb: 'aiClaim', ticketId }); // команда побачить «взяв <email>»
     updateZomAiBanner();
 }
 function zomAiDoneOne(ticketId) {
@@ -2081,6 +2131,7 @@ function zomAiDoneOne(ticketId) {
     if (!x) return;
     x.done = true; x.doneAt = Date.now();
     persistZomAiState();
+    if (myEmail) sbSend({ sb: 'aiResolve', ticketId }); // прибрати для всієї команди
     updateZomAiBanner();
     try { openTicketByNumber(ticketId); } catch (e) { /* ignore */ } // відкрити, щоб відписати
 }
@@ -3372,7 +3423,8 @@ function init() {
         loadFromStorage('local', 'awSnooze', {}),
         loadFromStorage('local', 'ticketElids', {}),
         loadFromStorage('local', 'zomAiState', {}),
-    ]).then(([loadedSettings, loadedTimers, loadedReminderState, loadedLabels, loadedMatchState, loadedMatchTickets, loadedAwaiting, loadedAwShared, loadedAwSnooze, loadedElids, loadedZomAi]) => {
+        loadFromStorage('local', 'aiHandoffsShared', []),
+    ]).then(([loadedSettings, loadedTimers, loadedReminderState, loadedLabels, loadedMatchState, loadedMatchTickets, loadedAwaiting, loadedAwShared, loadedAwSnooze, loadedElids, loadedZomAi, loadedAiShared]) => {
         if (!extensionAlive()) { teardown(); return; }
 
         settings = loadedSettings;
@@ -3386,6 +3438,7 @@ function init() {
         awSnooze = loadedAwSnooze && typeof loadedAwSnooze === 'object' ? loadedAwSnooze : {};
         knownElids = loadedElids && typeof loadedElids === 'object' ? loadedElids : {};
         zomAiState = loadedZomAi && typeof loadedZomAi === 'object' ? loadedZomAi : {};
+        if (Array.isArray(loadedAiShared) && loadedAiShared.length) reconcileZomAiShared(loadedAiShared);
         applyPanelTweaks();
         loadMyEmail();
         loadCustomSounds();
@@ -3436,6 +3489,8 @@ function init() {
                 } else if (area === 'local' && changes.zomAiState) {
                     zomAiState = changes.zomAiState.newValue || {};
                     updateZomAiBanner();
+                } else if (area === 'local' && changes.aiHandoffsShared) {
+                    reconcileZomAiShared(changes.aiHandoffsShared.newValue || []);
                 }
             });
 
@@ -3494,8 +3549,8 @@ function init() {
 
             // Спільні будильники: періодично підтягувати зі спільної бази
             // (фактичний fetch робить background; тут лише тригеримо з активної вкладки).
-            setTimeout(() => { if (tabVisible()) { sbSend({ sb: 'pull' }); sbSend({ sb: 'awPull' }); } }, 4000);
-            sbPullIntervalRef = setInterval(() => { if (tabVisible()) { sbSend({ sb: 'pull' }); sbSend({ sb: 'awPull' }); } }, MATCH_POLL_INTERVAL_MS);
+            setTimeout(() => { if (tabVisible()) { sbSend({ sb: 'pull' }); sbSend({ sb: 'awPull' }); sbSend({ sb: 'aiPull' }); } }, 4000);
+            sbPullIntervalRef = setInterval(() => { if (tabVisible()) { sbSend({ sb: 'pull' }); sbSend({ sb: 'awPull' }); sbSend({ sb: 'aiPull' }); } }, MATCH_POLL_INTERVAL_MS);
 
             // Коли вкладка стає активною — довантажити що треба (кожен виклик
             // поважає власний дедуп/кеш, тож без сплеску).
@@ -3503,6 +3558,7 @@ function init() {
                 if (!alive || !tabVisible()) return;
                 maybeTraffic();
                 sbSend({ sb: 'pull' });
+                sbSend({ sb: 'aiPull' });
             });
         } catch (e) {
             teardown();
