@@ -1748,6 +1748,18 @@ function refresh() {
 
     // ZomBro AI: банер активних хендофів + троттлений до-читання summary кандидатів.
     zomAiCandidates = zomAiRows;
+    // Авто-зняття: тікет видно в черзі, але вже БЕЗ блоку ZomBro AI (хтось узяв /
+    // опрацював) → прибираємо сигнал, щоб не нагадував вічно (як live-clear «Мої
+    // тікети»). Невидимі не чіпаємо — могли просто бути на іншій сторінці.
+    const zomAiBlockedIds = new Set(zomAiRows.map((c) => c.ticketId));
+    let zomAiCleared = false;
+    for (const k of Object.keys(zomAiState)) {
+        const x = zomAiState[k];
+        if (x && x.handoff && !x.done && visible.has(x.ticketId) && !zomAiBlockedIds.has(x.ticketId)) {
+            x.done = true; x.doneAt = Date.now(); x.autoCleared = true; zomAiCleared = true;
+        }
+    }
+    if (zomAiCleared) persistZomAiState();
     updateZomAiBanner();
     maybeScanZomAi();
 }
