@@ -955,10 +955,20 @@ function fillSnippet(snip) {
 }
 // Tab-розгортання: токен перед курсором → шаблон, чия назва починається з токена
 // (або будь-яке слово назви починається з нього). Повертає true, якщо розгорнули.
+// Скорочення може містити кілька варіантів через «|» (напр. «перезапуск|gthtpfgecr»),
+// щоб спрацьовувало навіть із забутою розкладкою. Повертає список варіантів (lowercase).
+function shortcutAliases(s) {
+    return String((s && s.shortcut) || '').split('|').map((a) => a.trim().toLowerCase()).filter(Boolean);
+}
+// Перший варіант (оригінальний регістр) — для показу в підказці.
+function shortcutLabel(s) {
+    const first = String((s && s.shortcut) || '').split('|').map((a) => a.trim()).filter(Boolean)[0];
+    return first || '';
+}
 function findSnippetByToken(token, allowTitle) {
     const t = token.toLowerCase();
-    // 1) точний збіг по скороченню (тригер) — працює навіть для 1 літери
-    let m = snippets.find((s) => (s.shortcut || '').trim().toLowerCase() === t);
+    // 1) точний збіг по скороченню (будь-який варіант) — працює навіть для 1 літери
+    let m = snippets.find((s) => shortcutAliases(s).indexOf(t) !== -1);
     if (!m && allowTitle) {
         // 2) назва починається з токена
         m = snippets.find((s) => (s.title || '').toLowerCase().startsWith(t));
@@ -1007,7 +1017,7 @@ function findSnippetMatches(token) {
     const seen = new Set();
     const out = [];
     const add = (s) => { const k = s.id || s.title; if (s && !seen.has(k)) { seen.add(k); out.push(s); } };
-    snippets.forEach((s) => { if ((s.shortcut || '').trim().toLowerCase().startsWith(t)) add(s); });
+    snippets.forEach((s) => { if (shortcutAliases(s).some((a) => a.startsWith(t))) add(s); });
     snippets.forEach((s) => { if ((s.title || '').toLowerCase().startsWith(t)) add(s); });
     snippets.forEach((s) => { if ((s.title || '').toLowerCase().split(/\s+/).some((w) => w.startsWith(t))) add(s); });
     return out.slice(0, 8);
@@ -1018,7 +1028,7 @@ function renderAc(ta) {
     acEl.textContent = '';
     acItems.forEach((s, i) => {
         const it = makeElc('div', 'hr-snip-ac-item' + (i === acIndex ? ' sel' : ''));
-        if (s.shortcut) it.appendChild(makeElc('span', 'hr-snip-ac-sc', s.shortcut));
+        if (s.shortcut) it.appendChild(makeElc('span', 'hr-snip-ac-sc', shortcutLabel(s)));
         it.appendChild(makeElc('span', 'hr-snip-ac-title', s.title || (s.body || '').slice(0, 40)));
         it.addEventListener('mousedown', (e) => { e.preventDefault(); applySnippetAtCursor(ta, s); hideAc(); });
         acEl.appendChild(it);
@@ -1059,11 +1069,11 @@ function paletteMatches(q) {
     const scored = [];
     snippets.forEach((s) => {
         const title = (s.title || '').toLowerCase();
-        const sc = (s.shortcut || '').trim().toLowerCase();
+        const aliases = shortcutAliases(s);
         const body = (s.body || '').toLowerCase();
         let score = 0;
-        if (sc && sc === q) score = 100;
-        else if (sc && sc.startsWith(q)) score = 80;
+        if (aliases.indexOf(q) !== -1) score = 100;
+        else if (aliases.some((a) => a.startsWith(q))) score = 80;
         else if (title.startsWith(q)) score = 60;
         else if (title.includes(q)) score = 40;
         else if (body.includes(q)) score = 20;
@@ -1080,7 +1090,7 @@ function renderPaletteList() {
     if (!palItems.length) { list.appendChild(makeElc('div', 'hr-pal-empty', 'Нічого не знайдено')); return; }
     palItems.forEach((s, i) => {
         const it = makeElc('div', 'hr-pal-item' + (i === palIndex ? ' sel' : ''));
-        if (s.shortcut) it.appendChild(makeElc('span', 'hr-snip-ac-sc', s.shortcut));
+        if (s.shortcut) it.appendChild(makeElc('span', 'hr-snip-ac-sc', shortcutLabel(s)));
         it.appendChild(makeElc('span', 'hr-pal-title', s.title || (s.body || '').slice(0, 60)));
         it.appendChild(makeElc('span', 'hr-pal-prev', (s.body || '').replace(/\s+/g, ' ').slice(0, 90)));
         it.addEventListener('mousedown', (e) => { e.preventDefault(); choosePalette(i); });

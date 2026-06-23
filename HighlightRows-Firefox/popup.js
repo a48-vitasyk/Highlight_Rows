@@ -1896,7 +1896,7 @@ function snipEditRow(s) {
     const head = makeEl('div', { className: 'snip-head' });
     const title = makeEl('input', { type: 'text', className: 'snip-title', placeholder: 'Назва' });
     title.value = s.title || '';
-    const sc = makeEl('input', { type: 'text', className: 'snip-sc-input', placeholder: 'скор.', title: 'Скорочення: введіть у полі відповіді й натисніть Tab' });
+    const sc = makeEl('input', { type: 'text', className: 'snip-sc-input', placeholder: 'скор.', title: 'Скорочення: Tab у полі відповіді. Кілька варіантів через | (напр. перезапуск|gthtpfgecr) — спрацює будь-який, навіть із забутою розкладкою.' });
     sc.value = s.shortcut || '';
     const cat = snipCatSelector(s.category || '');
     head.appendChild(title);
