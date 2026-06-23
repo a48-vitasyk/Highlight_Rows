@@ -1233,10 +1233,12 @@ function renderPremiumStatus(s) {
     if (stop) stop.hidden = !scanning;      // ⏹ показуємо лише під час збору
     if (!el) return;
     if (!s) { el.textContent = ''; el.title = ''; return; }
-    if (s.note) { el.textContent = s.note; el.title = s.note; return; }
     if (s.loading) { el.textContent = 'Збираю тікети… ' + (s.total || 0); return; }
     if (s.scanning) { el.textContent = 'Збір ' + (s.scanned || 0) + '/' + (s.total || 0); return; }
-    el.textContent = 'Знайдено: ' + (s.total || 0);
+    // Помилка без результату (фільтр не застосувався / розлогінено) — лише напис.
+    if (s.note && !(s.total > 0)) { el.textContent = s.note; el.title = s.note; return; }
+    // Є результат: завжди показуємо число; note (напр. «показано перші 100») — поряд.
+    el.textContent = 'Знайдено: ' + (s.total || 0) + (s.note ? ' · ' + s.note : '');
     el.title = s.filter ? ('Фільтр billmgr: ' + s.filter) : ''; // звірка з білінгом (наведення)
 }
 

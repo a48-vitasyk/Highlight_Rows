@@ -1938,15 +1938,14 @@ async function scanPremium(period, startStr, endStr) {
             const a = await fetchBillmgr('func=ticket_all&' + fparams + '&p_num=1');
             if (filterOk(a)) { suffix = '&' + fparams; probe = a; }
         } catch (e) { if (e && e.message === 'session-redirect') { sessionLost = true; throw e; } }
-        // Стратегія B: окремий setfilter, далі звичайний список (сесійний фільтр).
-        // ISPmanager застосовує фільтр сабмітом форми; вирішальний токен — sok=ok
-        // (без нього форма лише повертається, фільтр не зберігається). Пробуємо
-        // варіанти й перевіряємо p_filter після кожного — беремо той, що спрацював.
+        // Стратегія B: сабміт форми фільтра ticket_all.filter (це і є справжній «Фільтр»;
+        // ticket_all.setfilter — то інша кнопка «По клиенту»). Вирішальний токен — sok=ok
+        // (без нього форма лише повертається, фільтр не зберігається). Пробуємо варіанти й
+        // перевіряємо p_filter після кожного — беремо той, що спрацював.
         if (!probe) {
             const variants = [
-                'func=ticket_all.setfilter&sok=ok&' + fparams,
-                'func=ticket_all.setfilter&clicked_button=ok&' + fparams,
-                'func=ticket_all.setfilter&' + fparams,
+                'func=ticket_all.filter&sok=ok&' + fparams,
+                'func=ticket_all.filter&clicked_button=ok&' + fparams,
             ];
             for (const v of variants) {
                 try { await fetchBillmgr(v); } catch (e) { if (e && e.message === 'session-redirect') { sessionLost = true; throw e; } continue; }
