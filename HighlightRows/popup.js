@@ -37,6 +37,7 @@ const DEFAULT_SETTINGS = {
     premiumSlaMinutes: 30,
     premiumDeptId: '493041',
     zomAiSoundMode: 'once',
+    zomAiSound: 'beep',
     trafficEnabled: false,
     serviceShow: { status: true, os: true, cost: true, expiredate: true, traffic: true },
     reverseEnabled: false,
@@ -521,6 +522,7 @@ function fillForm(s, reminderState) {
     if ($('premiumDepartments')) $('premiumDepartments').value = (Array.isArray(s.premiumDepartments) ? s.premiumDepartments : DEFAULT_SETTINGS.premiumDepartments).join(', ');
     if ($('premiumDeptId')) $('premiumDeptId').value = s.premiumDeptId || DEFAULT_SETTINGS.premiumDeptId;
     if ($('zomAiSoundMode')) $('zomAiSoundMode').value = ['off', 'once', 'loop'].indexOf(s.zomAiSoundMode) !== -1 ? s.zomAiSoundMode : 'once';
+    if ($('zomAiSound')) $('zomAiSound').value = s.zomAiSound || 'beep';
     if ($('awaitWaitMinutes')) $('awaitWaitMinutes').value = s.awaitWaitMinutes || DEFAULT_SETTINGS.awaitWaitMinutes;
     $('trafficEnabled').checked = s.trafficEnabled;
     $('reverseEnabled').checked = s.reverseEnabled;
@@ -661,6 +663,7 @@ function readForm() {
         premiumDepartments: (($('premiumDepartments') && $('premiumDepartments').value) || '').split(',').map((d) => d.trim()).filter(Boolean),
         premiumDeptId: (($('premiumDeptId') && $('premiumDeptId').value) || '').trim() || DEFAULT_SETTINGS.premiumDeptId,
         zomAiSoundMode: $('zomAiSoundMode') ? $('zomAiSoundMode').value : 'once',
+        zomAiSound: $('zomAiSound') ? $('zomAiSound').value : 'beep',
         trafficEnabled: $('trafficEnabled').checked,
         reverseEnabled: $('reverseEnabled').checked,
         resizeEnabled: $('resizeEnabled').checked,
@@ -1611,7 +1614,7 @@ const SOUND_BUILTIN = {
     falling: 'sounds/falling.wav', knock: 'sounds/knock.wav', bubble: 'sounds/bubble.wav',
 };
 function popupPlaySound(which) {
-    const selId = which === 'reminder' ? 'reminderSound' : which === 'reply' ? 'replySound' : 'alertSound';
+    const selId = which === 'reminder' ? 'reminderSound' : which === 'reply' ? 'replySound' : which === 'zomai' ? 'zomAiSound' : 'alertSound';
     const sel = $(selId).value;
     if (sel === 'none') return; // «Без звуку»
     const vol = Math.min(1, Math.max(0, (Number($('soundVolume').value) || 100) / 100));
@@ -1625,7 +1628,7 @@ function popupPlaySound(which) {
 if ($('testReminderSound')) $('testReminderSound').addEventListener('click', () => popupPlaySound('reminder'));
 if ($('testAlertSound')) $('testAlertSound').addEventListener('click', () => popupPlaySound('alert'));
 if ($('testReplySound')) $('testReplySound').addEventListener('click', () => popupPlaySound('reply'));
-if ($('testZomAiSound')) $('testZomAiSound').addEventListener('click', () => popupPlaySound('alert'));
+if ($('testZomAiSound')) $('testZomAiSound').addEventListener('click', () => popupPlaySound('zomai'));
 if ($('testNotify')) $('testNotify').addEventListener('click', () => {
     const st = $('status');
     if (st) st.textContent = 'Перевірка…';
@@ -1670,9 +1673,11 @@ function wireSoundUpload(which, inputId, selectId) {
 wireSoundUpload('reminder', 'reminderSoundFile', 'reminderSound');
 wireSoundUpload('alert', 'alertSoundFile', 'alertSound');
 wireSoundUpload('reply', 'replySoundFile', 'replySound');
+wireSoundUpload('zomai', 'zomAiSoundFile', 'zomAiSound');
 if ($('reminderSoundUpload')) $('reminderSoundUpload').addEventListener('click', () => $('reminderSoundFile').click());
 if ($('alertSoundUpload')) $('alertSoundUpload').addEventListener('click', () => $('alertSoundFile').click());
 if ($('replySoundUpload')) $('replySoundUpload').addEventListener('click', () => $('replySoundFile').click());
+if ($('zomAiSoundUpload')) $('zomAiSoundUpload').addEventListener('click', () => $('zomAiSoundFile').click());
 
 if ($('notifyMode')) $('notifyMode').addEventListener('change', () => { $('notifyMax').disabled = $('notifyMode').value === 'replace'; });
 

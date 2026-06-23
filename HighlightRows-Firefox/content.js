@@ -108,6 +108,7 @@ const DEFAULT_SETTINGS = {
     premiumSlaMinutes: 30,
     premiumDeptId: '493041', // id відділу (responsible) для серверного фільтра billmgr
     zomAiSoundMode: 'once', // звук на хендоф ZomBro AI: off | once | loop
+    zomAiSound: 'beep',     // тон сигналу ZomBro AI (як reminderSound; 'custom' — свій файл)
     // показувати дані послуги в тікеті (майстер-тогл) + які саме поля
     trafficEnabled: false,
     serviceShow: { status: true, os: true, cost: true, expiredate: true, traffic: true },
@@ -438,20 +439,22 @@ const BUILTIN_SOUNDS = {
     digital: 'sounds/digital.wav', triple: 'sounds/triple.wav', rising: 'sounds/rising.wav',
     falling: 'sounds/falling.wav', knock: 'sounds/knock.wav', bubble: 'sounds/bubble.wav',
 };
-let customSounds = { reminder: '', alert: '', reply: '' }; // data URL зі storage.local
+let customSounds = { reminder: '', alert: '', reply: '', zomai: '' }; // data URL зі storage.local
 function loadCustomSounds() {
     try {
         chrome.storage.local.get('soundData', (d) => {
             const sd = (d && d.soundData) || {};
-            customSounds = { reminder: sd.reminder || '', alert: sd.alert || '', reply: sd.reply || '' };
+            customSounds = { reminder: sd.reminder || '', alert: sd.alert || '', reply: sd.reply || '', zomai: sd.zomai || '' };
             if (reminderAudio) { try { reminderAudio.pause(); } catch (e) { /* ignore */ } reminderAudio = null; }
+            if (zomAiAudio) { try { zomAiAudio.pause(); } catch (e) { /* ignore */ } zomAiAudio = null; }
         });
     } catch (e) { /* ignore */ }
 }
 function soundSrc(which) {
     const key = which === 'reminder' ? settings.reminderSound
         : which === 'reply' ? settings.replySound
-            : settings.alertSound;
+            : which === 'zomai' ? settings.zomAiSound
+                : settings.alertSound;
     if (key === 'custom') return customSounds[which] || chrome.runtime.getURL('beep.wav');
     return chrome.runtime.getURL(BUILTIN_SOUNDS[key] || 'beep.wav');
 }
@@ -509,7 +512,7 @@ function stopReminderAudio() {
 let zomAiAudio = null;
 function startZomAiAudio() {
     try {
-        const src = soundSrc('alert');
+        const src = soundSrc('zomai');
         if (!zomAiAudio || zomAiAudio._hrSrc !== src) {
             if (zomAiAudio) { try { zomAiAudio.pause(); } catch (e) { /* ignore */ } }
             zomAiAudio = new Audio(src);
@@ -2042,7 +2045,7 @@ async function scanZomAi(force) {
             const more = newOnes.length > 1 ? ' +' + (newOnes.length - 1) : '';
             fireAlert('#' + newOnes[0].ticketId + more, {
                 sound: mode === 'once', notify: true, kind: 'zomai',
-                ticket: newOnes[0].ticketId, url: newOnes[0].url, soundWhich: 'alert',
+                ticket: newOnes[0].ticketId, url: newOnes[0].url, soundWhich: 'zomai',
             });
         }
     } catch (e) {
