@@ -106,6 +106,41 @@
 #hr-reminder-banner .hr-rb-done { color: #1e7e34; }
 #hr-reminder-banner .hr-reminder-banner-btn[hidden] { display: none; }
 
+/* Банер ZomBro AI — ФІОЛЕТОВИЙ (щоб відрізнявся від червоного будильника).
+   Структуру рядків переюзує ті самі класи (.hr-rb-*), що й банер будильника,
+   тож дублюємо лише розкладку + інший колір фону. */
+#hr-zomai-banner {
+    position: fixed;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 2147483646;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 560px;
+    max-width: 92vw;
+    padding: 10px 12px;
+    background: #7c3aed;
+    color: #fff;
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    font: 600 13px/1.3 system-ui, sans-serif;
+}
+#hr-zomai-banner .hr-rb-head { display: flex; align-items: center; gap: 10px; }
+#hr-zomai-banner .hr-rb-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#hr-zomai-banner .hr-rb-list { display: flex; flex-direction: column; gap: 6px; max-height: 40vh; overflow-y: auto; }
+#hr-zomai-banner .hr-rb-row { display: flex; align-items: center; gap: 8px; padding: 5px 7px; background: rgba(255, 255, 255, 0.16); border-radius: 6px; }
+#hr-zomai-banner .hr-rb-row-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#hr-zomai-banner .hr-rb-row-acts { flex: none; display: flex; gap: 5px; }
+#hr-zomai-banner .hr-reminder-banner-btn {
+    flex: none; border: none; background: #fff; color: #5b21b6;
+    font: 600 11.5px system-ui, sans-serif; padding: 4px 8px; border-radius: 6px;
+    cursor: pointer; white-space: nowrap;
+}
+#hr-zomai-banner .hr-rb-take { color: #1a5fb4; }
+#hr-zomai-banner .hr-rb-done { color: #1e7e34; }
+
 /* Кнопка «Шаблони ▾» біля поля відповіді + випадайка. */
 .hr-snip-wrap { position: relative; display: inline-block; margin: 0 0 6px; }
 .hr-snip-btn {

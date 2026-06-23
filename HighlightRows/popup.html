@@ -45,13 +45,15 @@
     <div id="awaitingList" class="stale-list"></div>
 </div>
 
-<div class="card" data-card="tags">
+<div class="card" data-card="zomai">
     <div class="card-head">
-        <span class="card-icon"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41 13.42 20.59a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></span>
-        <h2 class="card-title">Правила за тегами</h2>
+        <span class="card-icon"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="11" rx="2"/><path d="M12 8V4"/><circle cx="9" cy="13" r="1"/><circle cx="15" cy="13" r="1"/><line x1="9" y1="17" x2="15" y2="17"/></svg></span>
+        <h2 class="card-title">ZomBro AI</h2>
+        <span id="zomAiStatus" class="hint"></span>
+        <button type="button" class="small icon-btn" id="refreshZomAi" title="Перевірити чергу зараз"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></button>
     </div>
-    <div id="tagRules"></div>
-    <button type="button" class="add" id="addTagRule">+ Додати правило</button>
+    <div id="zomAiList" class="stale-list"></div>
+    <div class="hint">Тікети, заблоковані ботом ZomBro AI, де в summary зʼявився <b>[HANDOFF]</b> — бот передав вам. На сторінці панелі сигналить фіолетова плашка з кнопками «Взяв»/«Відписати». Сканує поточну сторінку черги.</div>
 </div>
 
 <div class="card" data-card="reminders">
@@ -186,6 +188,14 @@
             <button type="button" id="soundEnabled" class="itoggle" title="Звук сигналу"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg></button>
         </div>
         </div>
+    </div>
+    <div class="card" data-card="tags">
+        <div class="card-head">
+            <span class="card-icon"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41 13.42 20.59a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></span>
+            <h2 class="card-title">Правила за тегами</h2>
+        </div>
+        <div id="tagRules"></div>
+        <button type="button" class="add" id="addTagRule">+ Додати правило</button>
     </div>
     <div class="card" data-card="service">
         <div class="card-head">

@@ -1226,6 +1226,41 @@ function renderPremiumList(arr) {
         box.appendChild(item);
     });
 }
+// --- ZomBro AI: блок хендофів (читає zomAiState, дії — на плашці) ----------
+function renderZomAiList(state) {
+    const box = $('zomAiList');
+    if (!box) return;
+    const map = state && typeof state === 'object' ? state : {};
+    // Активні (з [HANDOFF], не відписані); невзяті зверху, далі взяті; новіші вище.
+    const list = Object.keys(map).map((k) => map[k])
+        .filter((x) => x && x.handoff && !x.done)
+        .sort((a, b) => {
+            if (!!a.taken !== !!b.taken) return a.taken ? 1 : -1;
+            return (b.detectedAt || 0) - (a.detectedAt || 0);
+        });
+    box.innerHTML = '';
+    if (!list.length) { box.appendChild(makeEl('div', { className: 'list-empty', textContent: 'Поки порожньо' })); return; }
+    list.forEach((x) => {
+        const item = makeEl('div', { className: 'stale-item', title: x.summary || '' });
+        item.appendChild(makeEl('span', { className: 'ti-num', textContent: '#' + x.ticketId }));
+        item.appendChild(makeEl('span', {
+            className: 'ti-age ' + (x.taken ? 'ti-frt-ok' : 'ti-frt-breach'),
+            textContent: x.taken ? 'взято' : 'новий',
+        }));
+        item.appendChild(makeEl('span', { className: 'ti-text', textContent: truncate(x.subject || '', 30) }));
+        makeClickable(item, x.url);
+        box.appendChild(item);
+    });
+}
+function renderZomAiStatus(s) {
+    const el = $('zomAiStatus'); const btn = $('refreshZomAi');
+    if (btn) btn.disabled = !!(s && s.scanning);
+    if (!el) return;
+    if (!s) { el.textContent = ''; return; }
+    if (s.note) { el.textContent = s.note; return; }
+    if (s.scanning) { el.textContent = 'Перевіряю…'; return; }
+    el.textContent = 'Активних: ' + (s.count || 0);
+}
 function renderPremiumStatus(s) {
     const el = $('premiumStatus'); const btn = $('refreshPremium'); const stop = $('stopPremium');
     const scanning = !!(s && s.scanning);
@@ -1290,7 +1325,7 @@ function awaitingClearAll() {
 const _clearAwaitingBtn = $('clearAwaiting');
 if (_clearAwaitingBtn) _clearAwaitingBtn.addEventListener('click', awaitingClearAll);
 
-chrome.storage.local.get(['staleTickets', 'matchTickets', 'staleScanStatus', 'matchScanStatus', 'myTickets', 'awaitingScan', 'awaitingScanStatus', 'premiumScan', 'premiumScanStatus'], (d) => {
+chrome.storage.local.get(['staleTickets', 'matchTickets', 'staleScanStatus', 'matchScanStatus', 'myTickets', 'awaitingScan', 'awaitingScanStatus', 'premiumScan', 'premiumScanStatus', 'zomAiState', 'zomAiStatus'], (d) => {
     renderStaleTickets((d && d.staleTickets) || []);
     renderMatchTickets((d && d.matchTickets) || []);
     renderStaleStatus(d && d.staleScanStatus);
@@ -1300,6 +1335,8 @@ chrome.storage.local.get(['staleTickets', 'matchTickets', 'staleScanStatus', 'ma
     renderAwaitingScanStatus(d && d.awaitingScanStatus);
     renderPremiumList((d && d.premiumScan) || []);
     renderPremiumStatus(d && d.premiumScanStatus);
+    renderZomAiList((d && d.zomAiState) || {});
+    renderZomAiStatus(d && d.zomAiStatus);
 });
 // Статус скану «Клієнт чекає»: примітки/помилки + лічильник; стан кнопки.
 function renderAwaitingScanStatus(s) {
@@ -1348,6 +1385,8 @@ chrome.storage.onChanged.addListener((changes, area) => {
     }
     if (changes.premiumScan) renderPremiumList(changes.premiumScan.newValue || []);
     if (changes.premiumScanStatus) renderPremiumStatus(changes.premiumScanStatus.newValue);
+    if (changes.zomAiState) renderZomAiList(changes.zomAiState.newValue || {});
+    if (changes.zomAiStatus) renderZomAiStatus(changes.zomAiStatus.newValue);
     if (changes.staleScanStatus) {
         const st = changes.staleScanStatus.newValue;
         renderStaleStatus(st);
@@ -1390,6 +1429,19 @@ $('refreshStale').addEventListener('click', () => {
                 setRefreshing(false);
                 renderStaleStatus({ note: 'відкрийте вкладку панелі Zomro' });
             }
+        });
+    });
+});
+
+// Ручна перевірка черги на хендофи ZomBro AI (активна вкладка панелі).
+const _refreshZomAiBtn = $('refreshZomAi');
+if (_refreshZomAiBtn) _refreshZomAiBtn.addEventListener('click', () => {
+    renderZomAiStatus({ scanning: true });
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        const tab = tabs && tabs[0];
+        if (!tab) { renderZomAiStatus({ note: 'відкрийте вкладку панелі Zomro' }); return; }
+        chrome.tabs.sendMessage(tab.id, { action: 'scanZomAi' }, () => {
+            if (chrome.runtime.lastError) renderZomAiStatus({ note: 'відкрийте вкладку панелі Zomro' });
         });
     });
 });
