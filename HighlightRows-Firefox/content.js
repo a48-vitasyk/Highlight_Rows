@@ -88,6 +88,7 @@ const DEFAULT_SETTINGS = {
     // Premium-тікети (вкладка «Тікети»): відділи (підрядки responsible) + SLA першої відповіді
     premiumDepartments: ['Премиум', 'Преміум', 'Premium'],
     premiumSlaMinutes: 30,
+    premiumDeptId: '493041', // id відділу (responsible) для серверного фільтра billmgr
     // показувати дані послуги в тікеті (майстер-тогл) + які саме поля
     trafficEnabled: false,
     serviceShow: { status: true, os: true, cost: true, expiredate: true, traffic: true },
@@ -214,6 +215,7 @@ function normalizeSettings(raw) {
     if (!s.premiumDepartments.length) s.premiumDepartments = DEFAULT_SETTINGS.premiumDepartments.slice();
     s.premiumSlaMinutes = Number(s.premiumSlaMinutes);
     if (!(s.premiumSlaMinutes > 0)) s.premiumSlaMinutes = DEFAULT_SETTINGS.premiumSlaMinutes;
+    s.premiumDeptId = String(s.premiumDeptId || '').trim() || DEFAULT_SETTINGS.premiumDeptId;
     s.trafficEnabled = !!s.trafficEnabled;
     s.reverseEnabled = !!s.reverseEnabled;
     s.resizeEnabled = !!s.resizeEnabled;
@@ -1899,63 +1901,68 @@ function premiumMsgTimes(det) {
     }
     return { firstIn, firstOut };
 }
-function isPremiumDept(responsible) {
-    const r = String(responsible || '').toLowerCase();
-    return (settings.premiumDepartments || []).some((d) => d && r.indexOf(String(d).toLowerCase()) !== -1);
-}
 
-async function scanPremium(fromMs, toMs) {
+async function scanPremium(period, startStr, endStr) {
     if (!alive || !extensionAlive() || premiumScanRunning) return;
     if (!onBillmgr()) { setPremiumStatus({ scanning: false, note: 'відкрийте сторінку панелі (billmgr)' }); return; }
     if (sessionInCooldown()) { setPremiumStatus({ scanning: false, note: 'панель розлогінено — оновіть сторінку' }); return; }
-    const from = Number(fromMs) || 0;
-    const to = Number(toMs) || Date.now();
+    period = String(period || 'currentmonth');
 
     premiumScanRunning = true;
     premiumStopRequested = false;
-    let sessionLost = false, note = '', stopped = false;
+    let sessionLost = false, note = '', stopped = false, pfStr = '';
     const found = [];
     const seen = new Set(); // дедуп: billmgr клемпить p_num на останню сторінку й повторює її
     try {
         try { chrome.storage.local.set({ premiumScan: [] }); } catch (e) { /* ignore */ }
         setPremiumStatus({ scanning: true, loading: true, total: 0, scanned: 0, at: Date.now() });
 
-        // 1) Гортаємо ticket_all (за last_message спадаюче). Фільтр у розширенні: відділ
-        //    Premium + дата СТВОРЕННЯ в [from,to]. Рання зупинка: коли вся сторінка має
-        //    last_message < from (created ≤ last_message ⟹ далі нічого з періоду).
-        const MAX_PAGES = 50;
+        // 0) Виставляємо фільтр у самому billmgr (як кнопка «Найти»): відповідальний =
+        //    Premium-відділ + «Дата сообщения» = період. Далі читаємо ВЖЕ відфільтрований
+        //    список — число збігається з білінгом. (m.date_post, не дата створення.)
+        let setUrl = 'func=ticket_all.setfilter&responsible=' + encodeURIComponent(settings.premiumDeptId || '493041') +
+            '&message_post=' + encodeURIComponent(period);
+        if (period === 'other') {
+            setUrl += '&message_poststart=' + encodeURIComponent(startStr || '') +
+                '&message_postend=' + encodeURIComponent(endStr || '');
+        }
+        try { await fetchBillmgr(setUrl); } catch (e) { if (e && e.message === 'session-redirect') { sessionLost = true; throw e; } }
+
+        // Верифікація: фільтр справді застосувався — перевіряємо І відділ, І дату
+        // (інакше показали б хибне число замість мовчазної помилки).
+        const probe = await fetchBillmgr('func=ticket_all&p_num=1');
+        updatePanelLabelsFrom(probe);
+        const pf = fieldVal(probe.p_filter);
+        pfStr = pf;
+        const deptOk = /преми|премі|premium/i.test(pf);
+        const dateOk = period === 'nodate' ? true : (period === 'other' ? /\d{4}-\d{2}-\d{2}/.test(pf) : /сообщени|сообщения/i.test(pf));
+        if (!deptOk || !dateOk) { note = 'фільтр застосувався не повністю: ' + (pf || '—'); throw new Error('filter-not-applied'); }
+
+        // 1) Пейджимо ВЕСЬ відфільтрований список (білінг уже відфільтрував — без
+        //    клієнтського фільтра дат/відділу). Дедуп за id; стоп на порожній/без нових.
+        const MAX_PAGES = 60;
         for (let p = 1; p <= MAX_PAGES; p++) {
             if (!alive || !extensionAlive()) break;
             if (premiumStopRequested) { stopped = true; break; }
-            // Сортуємо за `id` спадаюче. id тікета монотонно зростає з часом створення
-            // (date_start НЕ сортована колонка, тож billmgr її ігнорує), тож це фактично
-            // порядок створення — період стає суцільним зрізом, рання зупинка працює.
-            const list = await fetchBillmgr('func=ticket_all&p_sort=id&p_order=desc&p_num=' + p);
-            if (p === 1) updatePanelLabelsFrom(list);
+            const list = p === 1 ? probe : await fetchBillmgr('func=ticket_all&p_num=' + p);
             const elems = asArray(list.elem);
             if (!elems.length) break;
-            let newOnPage = 0, pageAllOld = true;
+            let newOnPage = 0;
             for (const el of elems) {
                 const id = fieldVal(el.id);
                 if (!id || seen.has(id)) continue; // дубль (клемп) — пропускаємо
                 seen.add(id);
                 newOnPage++;
-                const created = parseServerDate(fieldVal(el.date_start));
-                // Сортування за date_start спадаюче: доки трапляються тікети з created ≥ from,
-                // ми ще не пройшли період (новіші за `to` — пропускаємо, але не зупиняємось).
-                if (created !== null && created >= from) pageAllOld = false;
-                if (created === null || created < from || created > to) continue; // поза періодом
-                if (!isPremiumDept(fieldVal(el.responsible))) continue; // лише Premium-відділ
                 found.push({
                     elid: id,
                     subject: fieldVal(el.name),
                     client: fieldVal(el.client),
-                    createdAt: created,
+                    createdAt: parseServerDate(fieldVal(el.date_start)),
                 });
             }
             setPremiumStatus({ scanning: true, loading: true, total: found.length, scanned: 0, at: Date.now() });
-            if (newOnPage === 0 || pageAllOld) break; // кінець: клемп/повтор або все старіше за період
-            if (p === MAX_PAGES) note = 'показано перші ' + MAX_PAGES + ' стор. — звузьте період';
+            if (newOnPage === 0) break; // сторінка без нових id → кінець (клемп/повтор)
+            if (p === MAX_PAGES) note = 'показано перші ' + MAX_PAGES + ' стор.';
         }
 
         // 2) Для кожного — час першої відповіді + ім'я сапорта через ticket_all.edit.
@@ -1993,7 +2000,7 @@ async function scanPremium(fromMs, toMs) {
         premiumScanRunning = false;
         premiumStopRequested = false;
         if (sessionLost) setPremiumStatus({ scanning: false, note: 'панель розлогінено — оновіть сторінку' });
-        else setPremiumStatus({ scanning: false, total: found.length, at: Date.now(), note: stopped ? 'зупинено' : note });
+        else setPremiumStatus({ scanning: false, total: found.length, at: Date.now(), note: stopped ? 'зупинено' : note, filter: pfStr });
     }
 }
 
@@ -3150,7 +3157,7 @@ function init() {
                 if (req.action === 'scanStaleTickets') scanStaleTickets(true);
                 else if (req.action === 'scanMatches') scanMatches(true);
                 else if (req.action === 'scanAwaiting') scanAwaiting();
-                else if (req.action === 'scanPremium') scanPremium(req.from, req.to);
+                else if (req.action === 'scanPremium') scanPremium(req.period, req.start, req.end);
                 else if (req.action === 'stopPremium') premiumStopRequested = true;
                 else if (req.action === 'awRecheckNow') awForceRecheck();
                 else if (req.action === 'openTicket') openTicketByNumber(req.ticketId);

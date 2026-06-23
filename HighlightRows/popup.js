@@ -35,6 +35,7 @@ const DEFAULT_SETTINGS = {
     awaitWaitMinutes: 30,
     premiumDepartments: ['Премиум', 'Преміум', 'Premium'],
     premiumSlaMinutes: 30,
+    premiumDeptId: '493041',
     trafficEnabled: false,
     serviceShow: { status: true, os: true, cost: true, expiredate: true, traffic: true },
     reverseEnabled: false,
@@ -517,6 +518,7 @@ function fillForm(s, reminderState) {
     if ($('premiumSlaMinutes')) $('premiumSlaMinutes').value = s.premiumSlaMinutes || DEFAULT_SETTINGS.premiumSlaMinutes;
     if (premiumCache.length) renderPremiumList(premiumCache);
     if ($('premiumDepartments')) $('premiumDepartments').value = (Array.isArray(s.premiumDepartments) ? s.premiumDepartments : DEFAULT_SETTINGS.premiumDepartments).join(', ');
+    if ($('premiumDeptId')) $('premiumDeptId').value = s.premiumDeptId || DEFAULT_SETTINGS.premiumDeptId;
     if ($('awaitWaitMinutes')) $('awaitWaitMinutes').value = s.awaitWaitMinutes || DEFAULT_SETTINGS.awaitWaitMinutes;
     $('trafficEnabled').checked = s.trafficEnabled;
     $('reverseEnabled').checked = s.reverseEnabled;
@@ -655,6 +657,7 @@ function readForm() {
         awaitWaitMinutes: ($('awaitWaitMinutes') && Number($('awaitWaitMinutes').value) > 0) ? Number($('awaitWaitMinutes').value) : DEFAULT_SETTINGS.awaitWaitMinutes,
         premiumSlaMinutes: ($('premiumSlaMinutes') && Number($('premiumSlaMinutes').value) > 0) ? Number($('premiumSlaMinutes').value) : DEFAULT_SETTINGS.premiumSlaMinutes,
         premiumDepartments: (($('premiumDepartments') && $('premiumDepartments').value) || '').split(',').map((d) => d.trim()).filter(Boolean),
+        premiumDeptId: (($('premiumDeptId') && $('premiumDeptId').value) || '').trim() || DEFAULT_SETTINGS.premiumDeptId,
         trafficEnabled: $('trafficEnabled').checked,
         reverseEnabled: $('reverseEnabled').checked,
         resizeEnabled: $('resizeEnabled').checked,
@@ -1229,11 +1232,12 @@ function renderPremiumStatus(s) {
     if (btn) btn.disabled = scanning;       // ↻ = старт (вимкнено під час збору)
     if (stop) stop.hidden = !scanning;      // ⏹ показуємо лише під час збору
     if (!el) return;
-    if (!s) { el.textContent = ''; return; }
-    if (s.note) { el.textContent = s.note; return; }
+    if (!s) { el.textContent = ''; el.title = ''; return; }
+    if (s.note) { el.textContent = s.note; el.title = s.note; return; }
     if (s.loading) { el.textContent = 'Збираю тікети… ' + (s.total || 0); return; }
     if (s.scanning) { el.textContent = 'Збір ' + (s.scanned || 0) + '/' + (s.total || 0); return; }
     el.textContent = 'Знайдено: ' + (s.total || 0);
+    el.title = s.filter ? ('Фільтр billmgr: ' + s.filter) : ''; // звірка з білінгом (наведення)
 }
 
 // Прибрати тікет із локального списку (не чіпає Supabase — список локальний).
@@ -1389,34 +1393,26 @@ $('refreshStale').addEventListener('click', () => {
 });
 
 // --- Premium: вибір періоду (за датою створення) + «Оновити» (активна вкладка) ---
-function premiumPeriodRange(period) {
-    const now = new Date();
-    const sod = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
-    const monday = (d) => { const x = sod(d); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x; };
-    const to = now.getTime();
-    if (period === 'thisWeek') return { from: monday(now).getTime(), to };
-    if (period === 'lastWeek') { const tw = monday(now); const lw = new Date(tw); lw.setDate(tw.getDate() - 7); return { from: lw.getTime(), to: tw.getTime() }; }
-    if (period === 'thisMonth') return { from: new Date(now.getFullYear(), now.getMonth(), 1).getTime(), to };
-    if (period === 'lastMonth') return { from: new Date(now.getFullYear(), now.getMonth() - 1, 1).getTime(), to: new Date(now.getFullYear(), now.getMonth(), 1).getTime() };
-    if (period === 'quarter') return { from: new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1).getTime(), to };
-    if (period === '6m') return { from: new Date(now.getFullYear(), now.getMonth() - 6, now.getDate()).getTime(), to };
-    if (period === '1y') return { from: new Date(now.getFullYear() - 1, now.getMonth(), now.getDate()).getTime(), to };
-    if (period === 'range') {
-        const fv = ($('premiumFrom') && $('premiumFrom').value) || '';
-        const tv = ($('premiumTo') && $('premiumTo').value) || '';
-        return { from: fv ? new Date(fv + 'T00:00:00').getTime() : monday(now).getTime(), to: tv ? new Date(tv + 'T23:59:59').getTime() : to };
-    }
-    return { from: monday(now).getTime(), to };
-}
+// Випадайка розширення → ключ періоду billmgr (message_post = «Дата сообщения»).
+const PREMIUM_PERIOD_MAP = {
+    thisWeek: 'currentweek', lastWeek: 'lastweek', thisMonth: 'currentmonth',
+    lastMonth: 'lastmonth', quarter: 'quarter', '6m': 'halfyear', '1y': 'year', range: 'other',
+};
 function premiumRefresh() {
-    const period = ($('premiumPeriod') && $('premiumPeriod').value) || 'thisWeek';
-    const { from, to } = premiumPeriodRange(period);
-    try { chrome.storage.local.set({ premiumPeriod: period }); } catch (e) { /* ignore */ }
+    const sel = ($('premiumPeriod') && $('premiumPeriod').value) || 'thisWeek';
+    const period = PREMIUM_PERIOD_MAP[sel] || 'currentmonth';
+    const msg = { action: 'scanPremium', period };
+    if (period === 'other') { // діапазон → billmgr message_poststart/end (YYYY-MM-DD)
+        msg.start = ($('premiumFrom') && $('premiumFrom').value) || '';
+        msg.end = ($('premiumTo') && $('premiumTo').value) || '';
+        if (!msg.start || !msg.end) { renderPremiumStatus({ note: 'оберіть обидві дати діапазону' }); return; }
+    }
+    try { chrome.storage.local.set({ premiumPeriod: sel }); } catch (e) { /* ignore */ }
     const st = $('premiumStatus'); if (st) st.textContent = 'Перевіряю…';
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
         const tab = tabs && tabs[0];
         if (!tab) { renderPremiumStatus({ note: 'відкрийте вкладку панелі Zomro' }); return; }
-        chrome.tabs.sendMessage(tab.id, { action: 'scanPremium', from, to }, () => {
+        chrome.tabs.sendMessage(tab.id, msg, () => {
             if (chrome.runtime.lastError) renderPremiumStatus({ note: 'відкрийте вкладку панелі Zomro' });
         });
     });
