@@ -1939,12 +1939,21 @@ async function scanPremium(period, startStr, endStr) {
             if (filterOk(a)) { suffix = '&' + fparams; probe = a; }
         } catch (e) { if (e && e.message === 'session-redirect') { sessionLost = true; throw e; } }
         // Стратегія B: окремий setfilter, далі звичайний список (сесійний фільтр).
+        // ISPmanager застосовує фільтр сабмітом форми; вирішальний токен — sok=ok
+        // (без нього форма лише повертається, фільтр не зберігається). Пробуємо
+        // варіанти й перевіряємо p_filter після кожного — беремо той, що спрацював.
         if (!probe) {
-            try { await fetchBillmgr('func=ticket_all.setfilter&' + fparams); } catch (e) { if (e && e.message === 'session-redirect') { sessionLost = true; throw e; } }
-            try { await fetchBillmgr('func=ticket_all.setfilter&clicked_button=ok&' + fparams); } catch (e) { /* спроба з токеном кнопки */ }
-            const b = await fetchBillmgr('func=ticket_all&p_num=1');
-            if (filterOk(b)) { suffix = ''; probe = b; }
-            else { pfStr = fieldVal(b.p_filter); }
+            const variants = [
+                'func=ticket_all.setfilter&sok=ok&' + fparams,
+                'func=ticket_all.setfilter&clicked_button=ok&' + fparams,
+                'func=ticket_all.setfilter&' + fparams,
+            ];
+            for (const v of variants) {
+                try { await fetchBillmgr(v); } catch (e) { if (e && e.message === 'session-redirect') { sessionLost = true; throw e; } continue; }
+                const b = await fetchBillmgr('func=ticket_all&p_num=1');
+                if (filterOk(b)) { suffix = ''; probe = b; break; }
+                pfStr = fieldVal(b.p_filter);
+            }
         }
         if (!probe) { note = 'не вдалося застосувати фільтр billmgr: ' + (pfStr || '—'); throw new Error('filter-not-applied'); }
         updatePanelLabelsFrom(probe);
