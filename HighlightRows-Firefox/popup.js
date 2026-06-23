@@ -1625,6 +1625,7 @@ function popupPlaySound(which) {
 if ($('testReminderSound')) $('testReminderSound').addEventListener('click', () => popupPlaySound('reminder'));
 if ($('testAlertSound')) $('testAlertSound').addEventListener('click', () => popupPlaySound('alert'));
 if ($('testReplySound')) $('testReplySound').addEventListener('click', () => popupPlaySound('reply'));
+if ($('testZomAiSound')) $('testZomAiSound').addEventListener('click', () => popupPlaySound('alert'));
 if ($('testNotify')) $('testNotify').addEventListener('click', () => {
     const st = $('status');
     if (st) st.textContent = 'Перевірка…';
