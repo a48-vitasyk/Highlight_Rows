@@ -107,6 +107,7 @@ const DEFAULT_SETTINGS = {
     premiumDepartments: ['Премиум', 'Преміум', 'Premium'],
     premiumSlaMinutes: 30,
     premiumDeptId: '493041', // id відділу (responsible) для серверного фільтра billmgr
+    zomAiSoundMode: 'once', // звук на хендоф ZomBro AI: off | once | loop
     // показувати дані послуги в тікеті (майстер-тогл) + які саме поля
     trafficEnabled: false,
     serviceShow: { status: true, os: true, cost: true, expiredate: true, traffic: true },
@@ -193,6 +194,7 @@ function teardown() {
     if (observerRef) { observerRef.disconnect(); observerRef = null; }
     clearTimeout(debounceTimer);
     stopReminderAudio();
+    stopZomAiAudio();
     removeReminderBanner();
     removeAwaitingBanner();
     awRemoveTimer();
@@ -234,6 +236,7 @@ function normalizeSettings(raw) {
     s.premiumSlaMinutes = Number(s.premiumSlaMinutes);
     if (!(s.premiumSlaMinutes > 0)) s.premiumSlaMinutes = DEFAULT_SETTINGS.premiumSlaMinutes;
     s.premiumDeptId = String(s.premiumDeptId || '').trim() || DEFAULT_SETTINGS.premiumDeptId;
+    s.zomAiSoundMode = ['off', 'once', 'loop'].includes(s.zomAiSoundMode) ? s.zomAiSoundMode : DEFAULT_SETTINGS.zomAiSoundMode;
     s.trafficEnabled = !!s.trafficEnabled;
     s.reverseEnabled = !!s.reverseEnabled;
     s.resizeEnabled = !!s.resizeEnabled;
@@ -495,6 +498,35 @@ function stopReminderAudio() {
         if (reminderAudio && !reminderAudio.paused) {
             reminderAudio.pause();
             reminderAudio.currentTime = 0;
+        }
+    } catch (e) {
+        // ігноруємо
+    }
+}
+
+// Безперервний звук ZomBro AI (режим loop) — окремий аудіо-елемент, щоб не
+// конфліктувати з лупом будильника. Тон — генеральний alert-звук.
+let zomAiAudio = null;
+function startZomAiAudio() {
+    try {
+        const src = soundSrc('alert');
+        if (!zomAiAudio || zomAiAudio._hrSrc !== src) {
+            if (zomAiAudio) { try { zomAiAudio.pause(); } catch (e) { /* ignore */ } }
+            zomAiAudio = new Audio(src);
+            zomAiAudio._hrSrc = src;
+            zomAiAudio.loop = true;
+        }
+        zomAiAudio.volume = settings.soundVolume;
+        if (zomAiAudio.paused) zomAiAudio.play().catch(() => {});
+    } catch (e) {
+        // ігноруємо
+    }
+}
+function stopZomAiAudio() {
+    try {
+        if (zomAiAudio && !zomAiAudio.paused) {
+            zomAiAudio.pause();
+            zomAiAudio.currentTime = 0;
         }
     } catch (e) {
         // ігноруємо
@@ -1967,6 +1999,7 @@ async function scanZomAi(force) {
 
     zomAiScanRunning = true;
     let sessionLost = false, changed = false;
+    const newOnes = []; // нові/змінені хендофи цього скану — для звуку/сповіщення
     setZomAiStatus({ scanning: true, count: zomAiActiveList().length, at: Date.now() });
     try {
         const now = Date.now();
@@ -1995,12 +2028,23 @@ async function scanZomAi(force) {
                     detectedAt: Date.now(), taken: false, takenAt: 0, done: false,
                 };
                 changed = true;
+                newOnes.push(zomAiState[c.ticketId]);
             } else if (c.subject && prev.subject !== c.subject) {
                 prev.subject = c.subject; changed = true;
             }
             await sleep(STALE_FETCH_GAP_MS);
         }
         if (changed) persistZomAiState();
+        // Сигнал на новий/змінений хендоф: один на весь пакет (без серії біпів).
+        // once → біп + сповіщення; loop → лише сповіщення (звук веде луп); off → нічого.
+        const mode = settings.zomAiSoundMode || 'once';
+        if (newOnes.length && mode !== 'off') {
+            const more = newOnes.length > 1 ? ' +' + (newOnes.length - 1) : '';
+            fireAlert('#' + newOnes[0].ticketId + more, {
+                sound: mode === 'once', notify: true, kind: 'zomai',
+                ticket: newOnes[0].ticketId, url: newOnes[0].url, soundWhich: 'alert',
+            });
+        }
     } catch (e) {
         if (e && e.message === 'session-redirect') sessionLost = true;
     } finally {
@@ -2049,6 +2093,9 @@ function zomAiBannerSig(list) {
 function updateZomAiBanner() {
     // У банер — активні, ще НЕ взяті (взяв = ти на ньому, більше не нагадуємо).
     const active = zomAiActiveList().filter((x) => !x.taken);
+    // Режим loop: безперервний звук, поки є невзятий хендоф (інакше — стоп).
+    if (settings.zomAiSoundMode === 'loop' && active.length) startZomAiAudio();
+    else stopZomAiAudio();
     if (!active.length) { removeZomAiBanner(); return; }
     if (!document.body) return;
     let banner = document.getElementById('hr-zomai-banner');

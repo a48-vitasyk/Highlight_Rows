@@ -36,6 +36,7 @@ const DEFAULT_SETTINGS = {
     premiumDepartments: ['Премиум', 'Преміум', 'Premium'],
     premiumSlaMinutes: 30,
     premiumDeptId: '493041',
+    zomAiSoundMode: 'once',
     trafficEnabled: false,
     serviceShow: { status: true, os: true, cost: true, expiredate: true, traffic: true },
     reverseEnabled: false,
@@ -519,6 +520,7 @@ function fillForm(s, reminderState) {
     if (premiumCache.length) renderPremiumList(premiumCache);
     if ($('premiumDepartments')) $('premiumDepartments').value = (Array.isArray(s.premiumDepartments) ? s.premiumDepartments : DEFAULT_SETTINGS.premiumDepartments).join(', ');
     if ($('premiumDeptId')) $('premiumDeptId').value = s.premiumDeptId || DEFAULT_SETTINGS.premiumDeptId;
+    if ($('zomAiSoundMode')) $('zomAiSoundMode').value = ['off', 'once', 'loop'].indexOf(s.zomAiSoundMode) !== -1 ? s.zomAiSoundMode : 'once';
     if ($('awaitWaitMinutes')) $('awaitWaitMinutes').value = s.awaitWaitMinutes || DEFAULT_SETTINGS.awaitWaitMinutes;
     $('trafficEnabled').checked = s.trafficEnabled;
     $('reverseEnabled').checked = s.reverseEnabled;
@@ -658,6 +660,7 @@ function readForm() {
         premiumSlaMinutes: ($('premiumSlaMinutes') && Number($('premiumSlaMinutes').value) > 0) ? Number($('premiumSlaMinutes').value) : DEFAULT_SETTINGS.premiumSlaMinutes,
         premiumDepartments: (($('premiumDepartments') && $('premiumDepartments').value) || '').split(',').map((d) => d.trim()).filter(Boolean),
         premiumDeptId: (($('premiumDeptId') && $('premiumDeptId').value) || '').trim() || DEFAULT_SETTINGS.premiumDeptId,
+        zomAiSoundMode: $('zomAiSoundMode') ? $('zomAiSoundMode').value : 'once',
         trafficEnabled: $('trafficEnabled').checked,
         reverseEnabled: $('reverseEnabled').checked,
         resizeEnabled: $('resizeEnabled').checked,
@@ -1249,7 +1252,19 @@ function renderZomAiList(state) {
         }));
         item.appendChild(makeEl('span', { className: 'ti-text', textContent: truncate(x.subject || '', 30) }));
         makeClickable(item, x.url);
+        if (!x.taken) item.appendChild(listActBtn('Взяв', 'Я взяв цей', () => zomAiSend('zomAiTake', x.ticketId)));
+        item.appendChild(listActBtn('Відписати', 'Відкрити тікет і прибрати сигнал', () => zomAiSend('zomAiDone', x.ticketId)));
         box.appendChild(item);
+    });
+}
+// Дія над хендофом → активній вкладці панелі (content.js володіє zomAiState).
+function zomAiSend(action, ticketId) {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        const tab = tabs && tabs[0];
+        if (!tab) { renderZomAiStatus({ note: 'відкрийте вкладку панелі Zomro' }); return; }
+        chrome.tabs.sendMessage(tab.id, { action, ticketId: String(ticketId) }, () => {
+            if (chrome.runtime.lastError) renderZomAiStatus({ note: 'відкрийте вкладку панелі Zomro' });
+        });
     });
 }
 function renderZomAiStatus(s) {

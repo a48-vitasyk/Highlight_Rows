@@ -371,6 +371,14 @@
             <input type="file" id="replySoundFile" accept="audio/*" hidden>
         </div>
         <div class="field row">
+            <label for="zomAiSoundMode" title="Звук, коли ZomBro AI передає тікет ([HANDOFF])">ZomBro AI</label>
+            <select id="zomAiSoundMode">
+                <option value="off">Без звуку</option>
+                <option value="once">Один сигнал</option>
+                <option value="loop">Поки не відреагуєш</option>
+            </select>
+        </div>
+        <div class="field row">
             <label for="soundVolume">Гучність:</label>
             <input type="range" id="soundVolume" min="0" max="100" step="5" style="flex:1">
         </div>
