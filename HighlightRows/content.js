@@ -535,49 +535,80 @@ function notifyReminder(reminder, now) {
 // Плаваючий банер угорі панелі з кнопкою «Заглушити» (снуз 10 хв). Звук
 // будильника йде зі сторінки, тож кнопка глушіння теж тут — працює однаково
 // в Chrome і Firefox.
+function rbMkBtn(cls, label, title, onClick) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'hr-reminder-banner-btn ' + cls;
+    b.textContent = label;
+    if (title) b.title = title;
+    b.addEventListener('click', (e) => { e.preventDefault(); onClick(); });
+    return b;
+}
+// Сигнатура активних — щоб перебудовувати список лише коли він змінився (анти-флікер).
+function rbSignature(active) {
+    return active.map((r) => r.id + ':' + (r.scope || '') + ':' + (r.ownerEmail || '')).join('|');
+}
 function ensureReminderBanner(active) {
     if (!document.body) return;
     let banner = document.getElementById('hr-reminder-banner');
     if (!banner) {
         banner = document.createElement('div');
         banner.id = 'hr-reminder-banner';
-        const text = document.createElement('span');
-        text.className = 'hr-reminder-banner-text';
-        banner.appendChild(text);
-        const mkBtn = (cls, onClick) => {
-            const b = document.createElement('button');
-            b.type = 'button';
-            b.className = 'hr-reminder-banner-btn ' + cls;
-            b.addEventListener('click', (e) => { e.preventDefault(); onClick(); });
-            banner.appendChild(b);
-            return b;
-        };
-        mkBtn('hr-rb-take', claimActiveShared);
-        mkBtn('hr-rb-done', doneActiveShared);
-        mkBtn('hr-rb-snooze', snoozeActiveReminders);
+        const head = document.createElement('div');
+        head.className = 'hr-rb-head';
+        const title = document.createElement('span');
+        title.className = 'hr-rb-title';
+        head.appendChild(title);
+        const acts = document.createElement('div');
+        acts.className = 'hr-rb-head-acts';
+        acts.appendChild(rbMkBtn('hr-rb-take', 'Взяти всі', 'Взяти всі (клавіша T)', claimActiveShared));
+        acts.appendChild(rbMkBtn('hr-rb-done', 'Відписав всі', 'Відписав всі (клавіша D)', doneActiveShared));
+        acts.appendChild(rbMkBtn('hr-rb-snooze', 'Відкласти всі', 'Заглушити всі (клавіша S)', snoozeActiveReminders));
+        head.appendChild(acts);
+        banner.appendChild(head);
+        const list = document.createElement('div');
+        list.className = 'hr-rb-list';
+        banner.appendChild(list);
         document.body.appendChild(banner);
     }
-    const label = active
-        .map((r) => {
-            let s = '#' + r.ticketId + (r.note ? ' — ' + r.note : '');
-            if (r.scope === 'shared' && r.ownerEmail) s += ' (взяв ' + r.ownerEmail.split('@')[0] + ')';
-            return s;
-        })
-        .join(' · ');
-    const full = '⏰ ' + label;
-    const textEl = banner.querySelector('.hr-reminder-banner-text');
-    if (textEl.textContent !== full) textEl.textContent = full;
-    // «Взяти»/«Відписав» — лише коли серед активних є спільні й ми залогінені.
+    // Шапка: заголовок + видимість гуртових «взяти/відписав» (лише якщо є спільні).
     const hasShared = !!myEmail && active.some((r) => r.scope === 'shared');
-    const takeBtn = banner.querySelector('.hr-rb-take');
-    const doneBtn = banner.querySelector('.hr-rb-done');
-    const snoozeBtn = banner.querySelector('.hr-rb-snooze');
-    if (takeBtn) { takeBtn.hidden = !hasShared; if (takeBtn.textContent !== 'Взяти') takeBtn.textContent = 'Взяти'; takeBtn.title = 'Взяти (клавіша T)'; }
-    if (doneBtn) { doneBtn.hidden = !hasShared; if (doneBtn.textContent !== 'Відписав') doneBtn.textContent = 'Відписав'; doneBtn.title = 'Відписав (клавіша D)'; }
-    if (snoozeBtn) {
-        const sl = 'Відкласти на ' + settings.snoozeMinutes + ' хв';
-        if (snoozeBtn.textContent !== sl) snoozeBtn.textContent = sl;
-        snoozeBtn.title = 'Заглушити (клавіша S)';
+    const titleEl = banner.querySelector('.hr-rb-title');
+    const titleTxt = '⏰ Будильники (' + active.length + ')';
+    if (titleEl.textContent !== titleTxt) titleEl.textContent = titleTxt;
+    const takeAll = banner.querySelector('.hr-rb-head .hr-rb-take');
+    const doneAll = banner.querySelector('.hr-rb-head .hr-rb-done');
+    const snoozeAll = banner.querySelector('.hr-rb-head .hr-rb-snooze');
+    if (takeAll) takeAll.hidden = !hasShared;
+    if (doneAll) doneAll.hidden = !hasShared;
+    if (snoozeAll) { const sl = 'Відкласти всі (' + settings.snoozeMinutes + ' хв)'; if (snoozeAll.textContent !== sl) snoozeAll.textContent = sl; }
+    // Рядки — перебудовуємо лише коли змінилась сигнатура (анти-флікер).
+    const list = banner.querySelector('.hr-rb-list');
+    const sig = rbSignature(active);
+    if (list.dataset.sig === sig) return;
+    list.dataset.sig = sig;
+    list.innerHTML = '';
+    const snoozeLabel = '× ' + settings.snoozeMinutes + ' хв';
+    for (const r of active) {
+        const row = document.createElement('div');
+        row.className = 'hr-rb-row';
+        const txt = document.createElement('span');
+        txt.className = 'hr-rb-row-text';
+        let s = '#' + r.ticketId + (r.note ? ' — ' + r.note : '');
+        if (r.scope === 'shared' && r.ownerEmail) s += (r.ownerEmail === myEmail ? ' (ви)' : ' (взяв ' + r.ownerEmail.split('@')[0] + ')');
+        txt.textContent = s;
+        row.appendChild(txt);
+        const acts = document.createElement('div');
+        acts.className = 'hr-rb-row-acts';
+        if (r.scope === 'shared' && myEmail && r.ownerEmail !== myEmail) {
+            acts.appendChild(rbMkBtn('hr-rb-take', 'Взяв', 'Взяти цей', () => claimReminderOne(r.id)));
+        }
+        if (r.scope === 'shared' && myEmail) {
+            acts.appendChild(rbMkBtn('hr-rb-done', 'Відписав', 'Відписав цей', () => doneReminderOne(r.id)));
+        }
+        acts.appendChild(rbMkBtn('hr-rb-snooze', snoozeLabel, 'Відкласти цей', () => snoozeReminderOne(r.id)));
+        row.appendChild(acts);
+        list.appendChild(row);
     }
 }
 
@@ -641,6 +672,35 @@ function doneActiveShared() {
     sbSend({ sb: 'done', ids: active.map((r) => r.id) });
     stopReminderAudio();
     removeReminderBanner();
+    refresh();
+}
+
+// --- Дії над ОДНИМ будильником у банері (адресно за id) -------------------
+// Оптимістично оновлюємо локально, шлемо в базу (ids:[id]), а refresh() сам
+// вирішує: лишились інші активні → звук і банер тривають; ні → стоп.
+function claimReminderOne(id) {
+    if (!myEmail) return;
+    const r = settings.reminders.find((x) => x.id === id);
+    if (!r || r.scope !== 'shared' || r.ownerEmail === myEmail) return;
+    r.ownerEmail = myEmail; r.takenAt = Date.now();
+    sbSend({ sb: 'claim', ids: [id] });
+    refresh();
+}
+function doneReminderOne(id) {
+    if (!myEmail) return;
+    const r = settings.reminders.find((x) => x.id === id);
+    if (!r || r.scope !== 'shared') return;
+    r.doneAt = Date.now(); r.doneByEmail = myEmail;
+    sbSend({ sb: 'done', ids: [id] });
+    refresh();
+}
+function snoozeReminderOne(id) {
+    const r = settings.reminders.find((x) => x.id === id);
+    if (!r) return;
+    const until = Date.now() + Math.round(settings.snoozeMinutes * 60 * 1000);
+    reminderState[id] = { ...(reminderState[id] || {}), snoozeUntil: until };
+    try { chrome.storage.local.set({ reminderState }); } catch (e) { teardown(); return; }
+    sbSend({ sb: 'snooze', ids: [id], until });
     refresh();
 }
 
