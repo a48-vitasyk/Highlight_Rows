@@ -169,6 +169,9 @@ function promptLogin() {
 // Незбережені правки в секції будильників — щоб live-оновлення не перетирало їх.
 let remindersDirty = false;
 function markRemindersDirty() { remindersDirty = true; }
+// Кеш повних обʼєктів будильників (за id) — readForm зливає службові поля звідси,
+// бо в DOM-рядку їх немає (інакше Зберегти «обрізало» б doneAt/ownerEmail тощо).
+let reminderCache = {};
 // Список будильників: email поточного юзера (для «Мої»), фільтр і стан згортання груп.
 let myEmailPopup = '';
 let remFilter = 'all'; // 'all' | 'mine'
@@ -558,6 +561,10 @@ function fillForm(s, reminderState) {
     $('tagRules').innerHTML = '';
     (s.tagRules || []).forEach(addTagRuleRow);
     $('reminders').innerHTML = '';
+    // Кеш повних обʼєктів будильників (за id) — щоб readForm не губив службові поля
+    // (doneAt/ownerEmail/takenAt/...), яких немає в DOM-рядку.
+    reminderCache = {};
+    (s.reminders || []).forEach((r) => { if (r && r.id) reminderCache[r.id] = r; });
     // Стабільне сортування за датою+часом (щоб не «стрибали»), далі — групи за днем.
     const rems = (s.reminders || []).slice().sort((a, b) => {
         const ka = whenKey(a.time), kb = whenKey(b.time);
@@ -641,8 +648,11 @@ function readForm() {
             const t = (row.querySelector('.rm-time').value || '').trim();
             const dEl = row.querySelector('.rm-date');
             const d = ((dEl && dEl.value) || '').trim() || ymdToday();
+            const id = row.dataset.id || genId();
+            const base = reminderCache[id] || {}; // зберегти doneAt/ownerEmail/takenAt/creatorEmail/doneByEmail
             return {
-                id: row.dataset.id || genId(),
+                ...base,
+                id,
                 ticketId: row.querySelector('.rm-ticket').value.trim(),
                 time: t ? (d + 'T' + t) : '', // дата+час разом ("YYYY-MM-DDTHH:MM")
                 note: row.querySelector('.rm-note').value,
