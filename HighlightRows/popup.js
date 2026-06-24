@@ -38,6 +38,7 @@ const DEFAULT_SETTINGS = {
     premiumDeptId: '493041',
     zomAiSoundMode: 'once',
     zomAiSound: 'beep',
+    zomAiScanAllMinutes: 15,
     trafficEnabled: false,
     serviceShow: { status: true, os: true, cost: true, expiredate: true, traffic: true },
     reverseEnabled: false,
@@ -523,6 +524,7 @@ function fillForm(s, reminderState) {
     if ($('premiumDeptId')) $('premiumDeptId').value = s.premiumDeptId || DEFAULT_SETTINGS.premiumDeptId;
     if ($('zomAiSoundMode')) $('zomAiSoundMode').value = ['off', 'once', 'loop'].indexOf(s.zomAiSoundMode) !== -1 ? s.zomAiSoundMode : 'once';
     if ($('zomAiSound')) $('zomAiSound').value = s.zomAiSound || 'beep';
+    if ($('zomAiScanAllMinutes')) $('zomAiScanAllMinutes').value = String([0, 5, 10, 15, 30, 60].indexOf(Number(s.zomAiScanAllMinutes)) !== -1 ? Number(s.zomAiScanAllMinutes) : 15);
     if ($('awaitWaitMinutes')) $('awaitWaitMinutes').value = s.awaitWaitMinutes || DEFAULT_SETTINGS.awaitWaitMinutes;
     $('trafficEnabled').checked = s.trafficEnabled;
     $('reverseEnabled').checked = s.reverseEnabled;
@@ -664,6 +666,7 @@ function readForm() {
         premiumDeptId: (($('premiumDeptId') && $('premiumDeptId').value) || '').trim() || DEFAULT_SETTINGS.premiumDeptId,
         zomAiSoundMode: $('zomAiSoundMode') ? $('zomAiSoundMode').value : 'once',
         zomAiSound: $('zomAiSound') ? $('zomAiSound').value : 'beep',
+        zomAiScanAllMinutes: $('zomAiScanAllMinutes') ? (Number($('zomAiScanAllMinutes').value) || 0) : 15,
         trafficEnabled: $('trafficEnabled').checked,
         reverseEnabled: $('reverseEnabled').checked,
         resizeEnabled: $('resizeEnabled').checked,

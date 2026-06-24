@@ -114,6 +114,7 @@ const DEFAULT_SETTINGS = {
     premiumDeptId: '493041', // id відділу (responsible) для серверного фільтра billmgr
     zomAiSoundMode: 'once', // звук на хендоф ZomBro AI: off | once | loop
     zomAiSound: 'beep',     // тон сигналу ZomBro AI (як reminderSound; 'custom' — свій файл)
+    zomAiScanAllMinutes: 15, // авто-скан усієї черги на хендофи: 0(вручну)|5|10|15|30|60
     // показувати дані послуги в тікеті (майстер-тогл) + які саме поля
     trafficEnabled: false,
     serviceShow: { status: true, os: true, cost: true, expiredate: true, traffic: true },
@@ -196,6 +197,7 @@ function teardown() {
     if (intervalRef) { clearInterval(intervalRef); intervalRef = null; }
     if (sbPullIntervalRef) { clearInterval(sbPullIntervalRef); sbPullIntervalRef = null; }
     if (matchIntervalRef) { clearInterval(matchIntervalRef); matchIntervalRef = null; }
+    if (zomAiAllInterval) { clearInterval(zomAiAllInterval); zomAiAllInterval = null; }
     if (awTimerInterval) { clearInterval(awTimerInterval); awTimerInterval = null; }
     if (observerRef) { observerRef.disconnect(); observerRef = null; }
     clearTimeout(debounceTimer);
@@ -243,6 +245,7 @@ function normalizeSettings(raw) {
     if (!(s.premiumSlaMinutes > 0)) s.premiumSlaMinutes = DEFAULT_SETTINGS.premiumSlaMinutes;
     s.premiumDeptId = String(s.premiumDeptId || '').trim() || DEFAULT_SETTINGS.premiumDeptId;
     s.zomAiSoundMode = ['off', 'once', 'loop'].includes(s.zomAiSoundMode) ? s.zomAiSoundMode : DEFAULT_SETTINGS.zomAiSoundMode;
+    s.zomAiScanAllMinutes = [0, 5, 10, 15, 30, 60].includes(Number(s.zomAiScanAllMinutes)) ? Number(s.zomAiScanAllMinutes) : DEFAULT_SETTINGS.zomAiScanAllMinutes;
     s.trafficEnabled = !!s.trafficEnabled;
     s.reverseEnabled = !!s.reverseEnabled;
     s.resizeEnabled = !!s.resizeEnabled;
@@ -2044,64 +2047,132 @@ async function scanZomAi(force) {
     if (!cands.length) { setZomAiStatus({ scanning: false, count: zomAiActiveList().length, at: Date.now() }); return; }
 
     zomAiScanRunning = true;
-    let sessionLost = false, changed = false;
-    const newOnes = []; // нові/змінені хендофи цього скану — для звуку/сповіщення
     setZomAiStatus({ scanning: true, count: zomAiActiveList().length, at: Date.now() });
+    let res = {};
     try {
-        const now = Date.now();
-        for (const c of cands) {
-            if (!alive || !extensionAlive()) break;
-            if (!c.elid) continue;
-            if (!force && zomAiChecked[c.ticketId] && now - zomAiChecked[c.ticketId] < ZOMAI_RECHECK_MS) continue;
-            let summary = '';
-            try {
-                const det = await fetchBillmgr('func=ticket.edit&elid=' + encodeURIComponent(c.elid));
-                summary = fieldVal(det.summary) || '';
-            } catch (e) {
-                if (e && e.message === 'session-redirect') { sessionLost = true; break; }
-                continue; // мережа/парсинг — спробуємо наступного разу
-            }
-            zomAiChecked[c.ticketId] = Date.now();
-            if (summary.indexOf(ZOMAI_HANDOFF_MARK) < 0) continue; // немає хендофа — пропускаємо
-            const sig = hashString(summary);
-            const prev = zomAiState[c.ticketId];
-            if (!prev || prev.sig !== sig) {
-                // новий або змінений хендоф → (пере)створюємо, скидаємо taken/done
-                zomAiState[c.ticketId] = {
-                    ticketId: c.ticketId, elid: c.elid, subject: c.subject || (prev && prev.subject) || '',
-                    handoff: true, sig, summary: summary.slice(0, 400),
-                    url: location.origin + '/billmgr?func=ticket.edit&elid=' + encodeURIComponent(c.elid),
-                    detectedAt: Date.now(), taken: false, takenAt: 0, done: false,
-                };
-                changed = true;
-                newOnes.push(zomAiState[c.ticketId]);
-            } else if (c.subject && prev.subject !== c.subject) {
-                prev.subject = c.subject; changed = true;
-            }
-            await sleep(STALE_FETCH_GAP_MS);
-        }
-        if (changed) persistZomAiState();
-        // Сигнал на новий/змінений хендоф: один на весь пакет (без серії біпів).
-        // once → біп + сповіщення; loop → лише сповіщення (звук веде луп); off → нічого.
-        const mode = settings.zomAiSoundMode || 'once';
-        if (newOnes.length && mode !== 'off') {
-            const more = newOnes.length > 1 ? ' +' + (newOnes.length - 1) : '';
-            fireAlert('#' + newOnes[0].ticketId + more, {
-                sound: mode === 'once', notify: true, kind: 'zomai',
-                ticket: newOnes[0].ticketId, url: newOnes[0].url, soundWhich: 'zomai',
-            });
-        }
-        // Спільний синк: новий/змінений хендоф → у базу (для команди). Лише залогінений.
-        if (newOnes.length && myEmail) {
-            for (const x of newOnes) {
-                sbSend({ sb: 'aiUpsert', handoff: { ticketId: x.ticketId, sig: x.sig, subject: x.subject, url: x.url, detectedAt: x.detectedAt } });
-            }
-        }
+        res = await processZomAiCandidates(cands, force);
     } catch (e) {
-        if (e && e.message === 'session-redirect') sessionLost = true;
+        if (e && e.message === 'session-redirect') res.sessionLost = true;
     } finally {
         zomAiScanRunning = false;
-        if (sessionLost) setZomAiStatus({ scanning: false, note: 'панель розлогінено — оновіть сторінку' });
+        if (res.sessionLost) setZomAiStatus({ scanning: false, note: 'панель розлогінено — оновіть сторінку' });
+        else setZomAiStatus({ scanning: false, count: zomAiActiveList().length, at: Date.now() });
+        updateZomAiBanner();
+    }
+}
+
+// Спільний цикл: для кожного кандидата відкриває ticket.edit, шукає [HANDOFF],
+// оновлює zomAiState, дає звук/сповіщення на нові та апсертить у спільну базу.
+// Використовується і поточно-сторінковим scanZomAi, і повночерговим scanZomAiAll.
+async function processZomAiCandidates(cands, force) {
+    let sessionLost = false, changed = false;
+    const newOnes = []; // нові/змінені хендофи цього скану — для звуку/сповіщення
+    const now = Date.now();
+    for (const c of cands) {
+        if (!alive || !extensionAlive()) break;
+        if (!c.elid) continue;
+        if (!force && zomAiChecked[c.ticketId] && now - zomAiChecked[c.ticketId] < ZOMAI_RECHECK_MS) continue;
+        let summary = '';
+        try {
+            const det = await fetchBillmgr('func=ticket.edit&elid=' + encodeURIComponent(c.elid));
+            summary = fieldVal(det.summary) || '';
+        } catch (e) {
+            if (e && e.message === 'session-redirect') { sessionLost = true; break; }
+            continue; // мережа/парсинг — спробуємо наступного разу
+        }
+        zomAiChecked[c.ticketId] = Date.now();
+        if (summary.indexOf(ZOMAI_HANDOFF_MARK) < 0) continue; // немає хендофа — пропускаємо
+        const sig = hashString(summary);
+        const prev = zomAiState[c.ticketId];
+        if (!prev || prev.sig !== sig) {
+            // новий або змінений хендоф → (пере)створюємо, скидаємо taken/done
+            zomAiState[c.ticketId] = {
+                ticketId: c.ticketId, elid: c.elid, subject: c.subject || (prev && prev.subject) || '',
+                handoff: true, sig, summary: summary.slice(0, 400),
+                url: location.origin + '/billmgr?func=ticket.edit&elid=' + encodeURIComponent(c.elid),
+                detectedAt: Date.now(), taken: false, takenAt: 0, done: false,
+            };
+            changed = true;
+            newOnes.push(zomAiState[c.ticketId]);
+        } else if (c.subject && prev.subject !== c.subject) {
+            prev.subject = c.subject; changed = true;
+        }
+        await sleep(STALE_FETCH_GAP_MS);
+    }
+    if (changed) persistZomAiState();
+    // Сигнал на новий/змінений хендоф: один на весь пакет (без серії біпів).
+    // once → біп + сповіщення; loop → лише сповіщення (звук веде луп); off → нічого.
+    const mode = settings.zomAiSoundMode || 'once';
+    if (newOnes.length && mode !== 'off') {
+        const more = newOnes.length > 1 ? ' +' + (newOnes.length - 1) : '';
+        fireAlert('#' + newOnes[0].ticketId + more, {
+            sound: mode === 'once', notify: true, kind: 'zomai',
+            ticket: newOnes[0].ticketId, url: newOnes[0].url, soundWhich: 'zomai',
+        });
+    }
+    // Спільний синк: новий/змінений хендоф → у базу (для команди). Лише залогінений.
+    if (newOnes.length && myEmail) {
+        for (const x of newOnes) {
+            sbSend({ sb: 'aiUpsert', handoff: { ticketId: x.ticketId, sig: x.sig, subject: x.subject, url: x.url, detectedAt: x.detectedAt } });
+        }
+    }
+    return { sessionLost };
+}
+
+// Повночерговий скан: гортає ВСЮ чергу (func=ticket, усі сторінки) і знаходить тікети,
+// заблоковані «ZomBro AI», за полем blocked_by зі списку — без відкриття кожного тікета.
+// Далі — звичайна перевірка summary на [HANDOFF] для знайдених. Покриває інші сторінки.
+async function scanZomAiAll(force) {
+    if (!alive || !extensionAlive() || zomAiScanRunning) return;
+    if (!onBillmgr()) { if (force) setZomAiStatus({ scanning: false, note: 'відкрийте сторінку панелі (billmgr)' }); return; }
+    if (!force && sessionInCooldown()) return;
+    if (!force && !tabVisible()) return;
+    // Крос-вкладковий дедуп (ручний force ігнорує): не гортати чергу частіше, ніж раз
+    // на ~інтервал. dedup трохи менший за інтервал, щоб наступний таймер не пропускався.
+    const minutes = Number(settings.zomAiScanAllMinutes) || 0;
+    if (!force) {
+        const dedupMs = Math.max(60 * 1000, minutes * 60 * 1000 - 60 * 1000);
+        const last = await loadFromStorage('local', 'zomAiAllPollAt', 0);
+        if (Date.now() - (last || 0) < dedupMs) return;
+    }
+    try { chrome.storage.local.set({ zomAiAllPollAt: Date.now() }); } catch (e) { return; }
+    pruneZomAiState();
+
+    zomAiScanRunning = true;
+    setZomAiStatus({ scanning: true, loading: true, count: zomAiActiveList().length, at: Date.now() });
+    let res = {};
+    try {
+        const all = await fetchAllTickets();
+        const seen = new Set();
+        const cands = [];
+        for (const el of all) {
+            const blk = fieldVal(el.blocked_by);
+            if (!blk || !/zombro ai/i.test(blk)) continue; // заблоковано ботом? (як scanMatches)
+            const ticketId = fieldVal(el.ticket);
+            if (!ticketId || seen.has(ticketId)) continue;
+            seen.add(ticketId);
+            cands.push({ ticketId, elid: fieldVal(el.id), subject: fieldVal(el.name) });
+        }
+        res = await processZomAiCandidates(cands, force);
+        // Авто-зняття по ВСІЙ черзі: мій локально-знайдений активний хендоф (має elid),
+        // якого вже НЕМА серед заблокованих ботом → done. Лише при успішному скані
+        // (отримали чергу й сесія жива). Чужі (синк, без elid) не чіпаємо — їх веде синк.
+        if (all.length && !res.sessionLost) {
+            let cleared = false;
+            for (const k of Object.keys(zomAiState)) {
+                const x = zomAiState[k];
+                if (x && x.handoff && !x.done && x.elid && !seen.has(x.ticketId)) {
+                    x.done = true; x.doneAt = Date.now(); x.autoCleared = true; cleared = true;
+                    if (myEmail) sbSend({ sb: 'aiResolve', ticketId: x.ticketId });
+                }
+            }
+            if (cleared) persistZomAiState();
+        }
+    } catch (e) {
+        if (e && e.message === 'session-redirect') res.sessionLost = true;
+    } finally {
+        zomAiScanRunning = false;
+        if (res.sessionLost) setZomAiStatus({ scanning: false, note: 'панель розлогінено — оновіть сторінку' });
         else setZomAiStatus({ scanning: false, count: zomAiActiveList().length, at: Date.now() });
         updateZomAiBanner();
     }
@@ -2115,6 +2186,17 @@ function maybeScanZomAi() {
     if (now - zomAiAutoAt < ZOMAI_AUTO_GAP_MS) return;
     zomAiAutoAt = now;
     scanZomAi(false);
+}
+
+// Періодичний повночерговий скан за налаштуванням zomAiScanAllMinutes (0 = вручну).
+// Переналаштовується при зміні settings (init + onChanged). Лише видима вкладка.
+let zomAiAllInterval = null;
+function setupZomAiAllTimer() {
+    if (zomAiAllInterval) { clearInterval(zomAiAllInterval); zomAiAllInterval = null; }
+    const minutes = Number(settings.zomAiScanAllMinutes) || 0;
+    if (minutes > 0) {
+        zomAiAllInterval = setInterval(() => { if (tabVisible()) scanZomAiAll(false); }, minutes * 60 * 1000);
+    }
 }
 
 // --- Дії над хендофом ----------------------------------------------------
@@ -3445,6 +3527,10 @@ function init() {
         loadSnippets();
         refresh();
         pingNewShared();
+        setupZomAiAllTimer();
+        // Початковий повночерговий скан (якщо не «вручну») — трохи згодом, щоб не збігтися
+        // зі стартовим сплеском запитів.
+        setTimeout(() => { if (alive && Number(settings.zomAiScanAllMinutes) > 0 && tabVisible()) scanZomAiAll(false); }, 8000);
 
         try {
             chrome.storage.onChanged.addListener((changes, area) => {
@@ -3454,6 +3540,7 @@ function init() {
                     settings = normalizeSettings(changes.settings.newValue);
                     applyPanelTweaks();
                     pingNewShared();
+                    setupZomAiAllTimer(); // інтервал міг змінитися
                     if (!settings.staleEnabled) {
                         // Вимкнули монітор — прибираємо застарілий список і статус.
                         try { chrome.storage.local.set({ staleTickets: [], staleScanStatus: null }); } catch (e) {}
@@ -3503,7 +3590,7 @@ function init() {
                 else if (req.action === 'scanPremium') scanPremium(req.period, req.start, req.end);
                 else if (req.action === 'stopPremium') premiumStopRequested = true;
                 else if (req.action === 'awRecheckNow') awForceRecheck();
-                else if (req.action === 'scanZomAi') scanZomAi(true);
+                else if (req.action === 'scanZomAi') scanZomAiAll(true);
                 else if (req.action === 'zomAiTake') zomAiTakeOne(String(req.ticketId));
                 else if (req.action === 'zomAiDone') zomAiDoneOne(String(req.ticketId));
                 else if (req.action === 'openTicket') openTicketByNumber(req.ticketId);
@@ -3559,6 +3646,7 @@ function init() {
                 maybeTraffic();
                 sbSend({ sb: 'pull' });
                 sbSend({ sb: 'aiPull' });
+                if (Number(settings.zomAiScanAllMinutes) > 0) scanZomAiAll(false); // дедупиться сам
             });
         } catch (e) {
             teardown();
